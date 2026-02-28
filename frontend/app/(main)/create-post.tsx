@@ -18,7 +18,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Video, ResizeMode } from 'expo-av';
-import api from '../../src/services/api';
+import api, { uploadFile } from '../../src/services/api';
 import { useAuthStore } from '../../src/store/authStore';
 
 const { width } = Dimensions.get('window');
@@ -28,14 +28,12 @@ export default function CreatePostScreen() {
   const refreshUser = useAuthStore((state) => state.refreshUser);
   
   const [caption, setCaption] = useState('');
-  const [media, setMedia] = useState<string | null>(null);
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'photo' | 'video'>('photo');
   const [isLoading, setIsLoading] = useState(false);
   
   const pickMedia = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
     if (!permissionResult.granted) {
       Alert.alert('Permesso richiesto', 'Consenti accesso alla galleria');
       return;
@@ -45,28 +43,19 @@ export default function CreatePostScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsEditing: true,
       aspect: [9, 16],
-      quality: 0.15,
-      base64: true,
+      quality: 0.5,
       videoMaxDuration: 10,
     });
     
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
-      if (asset.type === 'video') {
-        setMediaType('video');
-        setMedia(asset.uri);
-        setMediaUri(asset.uri);
-      } else if (asset.base64) {
-        setMediaType('photo');
-        setMedia(`data:image/jpeg;base64,${asset.base64}`);
-        setMediaUri(asset.uri);
-      }
+      setMediaType(asset.type === 'video' ? 'video' : 'photo');
+      setMediaUri(asset.uri);
     }
   };
   
   const takePhoto = async () => {
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-    
     if (!permissionResult.granted) {
       Alert.alert('Permesso richiesto', 'Consenti accesso alla fotocamera');
       return;
@@ -75,20 +64,17 @@ export default function CreatePostScreen() {
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       aspect: [9, 16],
-      quality: 0.15,
-      base64: true,
+      quality: 0.5,
     });
     
-    if (!result.canceled && result.assets[0].base64) {
+    if (!result.canceled && result.assets[0]) {
       setMediaType('photo');
-      setMedia(`data:image/jpeg;base64,${result.assets[0].base64}`);
       setMediaUri(result.assets[0].uri);
     }
   };
 
   const takeVideo = async () => {
     const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
-    
     if (!cameraPermission.granted) {
       Alert.alert('Permesso richiesto', 'Consenti accesso a fotocamera');
       return;
@@ -102,30 +88,34 @@ export default function CreatePostScreen() {
     
     if (!result.canceled && result.assets[0]) {
       setMediaType('video');
-      setMedia(result.assets[0].uri);
       setMediaUri(result.assets[0].uri);
     }
   };
   
   const handlePost = async () => {
-    if (!media && !caption) {
+    if (!mediaUri && !caption) {
       Alert.alert('Post vuoto', 'Aggiungi una foto, un video o un testo');
       return;
     }
     
     setIsLoading(true);
     try {
+      let serverUrl: string | null = null;
+      if (mediaUri) {
+        serverUrl = await uploadFile(mediaUri);
+      }
+      
       await api.post('/posts', {
         type: mediaType,
-        media: media,
+        media: serverUrl,
         caption,
       });
       
       await refreshUser();
-      router.back();
+      router.replace('/(main)/home');
     } catch (error: any) {
       console.error('Post error:', error.response?.data || error.message);
-      Alert.alert('Errore', 'Impossibile creare il post. Prova con un file più piccolo.');
+      Alert.alert('Errore', 'Impossibile creare il post. Riprova.');
     } finally {
       setIsLoading(false);
     }
@@ -140,14 +130,14 @@ export default function CreatePostScreen() {
         <Text style={styles.headerTitle}>Nuovo Post</Text>
         <TouchableOpacity
           onPress={handlePost}
-          disabled={isLoading || (!media && !caption)}
+          disabled={isLoading || (!mediaUri && !caption)}
         >
           {isLoading ? (
             <ActivityIndicator color="#FF6978" />
           ) : (
             <Text style={[
               styles.shareButton,
-              (!media && !caption) && styles.shareButtonDisabled
+              (!mediaUri && !caption) && styles.shareButtonDisabled
             ]}>
               Pubblica
             </Text>
@@ -160,11 +150,11 @@ export default function CreatePostScreen() {
         style={styles.content}
       >
         <ScrollView>
-          {media ? (
+          {mediaUri ? (
             <View style={styles.previewContainer}>
               {mediaType === 'video' ? (
                 <Video
-                  source={{ uri: mediaUri || media }}
+                  source={{ uri: mediaUri }}
                   style={styles.preview}
                   useNativeControls
                   resizeMode={ResizeMode.COVER}
@@ -172,11 +162,11 @@ export default function CreatePostScreen() {
                   shouldPlay
                 />
               ) : (
-                <Image source={{ uri: media }} style={styles.preview} resizeMode="cover" />
+                <Image source={{ uri: mediaUri }} style={styles.preview} resizeMode="cover" />
               )}
               <TouchableOpacity
                 style={styles.removeButton}
-                onPress={() => { setMedia(null); setMediaUri(null); }}
+                onPress={() => setMediaUri(null)}
               >
                 <Ionicons name="close-circle" size={32} color="#FF6978" />
               </TouchableOpacity>
@@ -187,7 +177,7 @@ export default function CreatePostScreen() {
                 </View>
               )}
             </View>
-          ) : (
+          ) : mediaUri === null ? (
             <View style={styles.mediaOptions}>
               <TouchableOpacity style={styles.mediaButton} onPress={takePhoto}>
                 <Ionicons name="camera" size={36} color="#FF6978" />
