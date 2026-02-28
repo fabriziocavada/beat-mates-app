@@ -101,3 +101,167 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "Test all the main API endpoints for the BEAT MATES dance social app"
+
+backend:
+  - task: "Authentication - Register endpoint"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "testing"
+        -comment: "Initial testing required for POST /api/auth/register endpoint"
+
+  - task: "Authentication - Login endpoint"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "testing"
+        -comment: "Initial testing required for POST /api/auth/login endpoint"
+
+  - task: "Authentication - Get current user"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "testing"
+        -comment: "Initial testing required for GET /api/users/me endpoint with auth token"
+
+  - task: "Dance Categories - Get all categories"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "testing"
+        -comment: "Initial testing required for GET /api/dance-categories endpoint (expecting 10 categories)"
+
+  - task: "User Profile - Update profile"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "testing"
+        -comment: "Initial testing required for PUT /api/users/me endpoint with dance_categories and is_available"
+
+  - task: "User Profile - Toggle availability"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "testing"
+        -comment: "Initial testing required for POST /api/users/me/toggle-availability endpoint"
+
+  - task: "Posts - Create post"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "testing"
+        -comment: "Initial testing required for POST /api/posts endpoint with type: 'text' and caption"
+
+  - task: "Posts - Get feed posts"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "testing"
+        -comment: "Initial testing required for GET /api/posts endpoint"
+
+  - task: "Available Teachers - Get list"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "testing"
+        -comment: "Initial testing required for GET /api/available-teachers endpoint"
+
+  - task: "Availability Slots - Create slot"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "testing"
+        -comment: "Initial testing required for POST /api/availability-slots endpoint"
+
+  - task: "Availability Slots - Get my slots"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "testing"
+        -comment: "Initial testing required for GET /api/availability-slots endpoint"
+
+frontend: []
+
+metadata:
+  created_by: "testing_agent"
+  version: "1.0"
+  test_sequence: 0
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Authentication - Register endpoint"
+    - "Authentication - Login endpoint"
+    - "Authentication - Get current user"
+    - "Dance Categories - Get all categories"
+    - "User Profile - Update profile"
+    - "User Profile - Toggle availability"
+    - "Posts - Create post"
+    - "Posts - Get feed posts"
+    - "Available Teachers - Get list"
+    - "Availability Slots - Create slot"
+    - "Availability Slots - Get my slots"
+  stuck_tasks: []
+  test_all: true
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "testing"
+    -message: "Starting comprehensive testing of BEAT MATES dance social app API endpoints. Will test authentication flow first, then all main features. Backend URL: https://choreflow-1.preview.emergentagent.com/api"
