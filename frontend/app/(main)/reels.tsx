@@ -18,45 +18,9 @@ import TabBar from '../../src/components/TabBar';
 import api, { getMediaUrl } from '../../src/services/api';
 import { Video, ResizeMode } from 'expo-av';
 
-// Component that plays video from data URL or fetches from server
+// Component that plays video directly from URL - no hooks, no state
 function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: boolean }) {
-  const [videoSource, setVideoSource] = React.useState<string | null>(null);
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    if (!mediaUrl) return;
-    if (mediaUrl.startsWith('data:') || mediaUrl.startsWith('http')) {
-      setVideoSource(mediaUrl);
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    fetch(mediaUrl)
-      .then(res => {
-        const ct = res.headers.get('content-type') || '';
-        if (ct.includes('application/json')) {
-          return res.json().then(data => {
-            if (!cancelled && data.data_url) setVideoSource(data.data_url);
-            setLoading(false);
-          });
-        } else {
-          if (!cancelled) setVideoSource(mediaUrl);
-          setLoading(false);
-        }
-      })
-      .catch(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [mediaUrl]);
-
-  if (loading) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#FF6978" />
-      </View>
-    );
-  }
-
-  if (!videoSource) {
+  if (!mediaUrl) {
     return (
       <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
         <Ionicons name="videocam-off-outline" size={48} color="#666" />
@@ -66,7 +30,7 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
 
   return (
     <Video
-      source={{ uri: videoSource }}
+      source={{ uri: mediaUrl }}
       style={{ width: '100%', height: '100%' }}
       resizeMode={ResizeMode.COVER}
       shouldPlay={isActive}
