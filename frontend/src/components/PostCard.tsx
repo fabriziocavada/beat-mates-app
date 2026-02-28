@@ -93,9 +93,11 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
             <Video
               source={{ uri: post.media }}
               style={styles.media}
-              useNativeControls
+              useNativeControls={false}
               resizeMode={ResizeMode.COVER}
               isLooping
+              shouldPlay
+              isMuted
             />
           ) : (
             <Image
@@ -103,6 +105,11 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
               style={styles.media}
               resizeMode="cover"
             />
+          )}
+          {isVideo && (
+            <View style={styles.videoIndicator}>
+              <Ionicons name="videocam" size={14} color="#FFF" />
+            </View>
           )}
         </View>
       )}
