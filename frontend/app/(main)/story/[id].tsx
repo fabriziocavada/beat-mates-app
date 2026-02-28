@@ -48,8 +48,8 @@ export default function ViewStoryScreen() {
     const interval = setInterval(() => {
       setProgress((prev) => {
         if (prev >= 100) {
-          router.back();
-          return prev;
+          clearInterval(interval);
+          return 100;
         }
         return prev + 2;
       });
@@ -57,6 +57,13 @@ export default function ViewStoryScreen() {
     
     return () => clearInterval(interval);
   }, [story]);
+
+  // Navigate back when story completes
+  useEffect(() => {
+    if (progress >= 100) {
+      router.back();
+    }
+  }, [progress]);
   
   const loadStory = async () => {
     try {
