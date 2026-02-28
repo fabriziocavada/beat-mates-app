@@ -18,7 +18,7 @@ import TabBar from '../../src/components/TabBar';
 import api, { getMediaUrl } from '../../src/services/api';
 import { Video, ResizeMode } from 'expo-av';
 
-// Component that fetches video data URL from server and plays with expo-av
+// Component that plays video from data URL or fetches from server
 function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: boolean }) {
   const [videoSource, setVideoSource] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -65,6 +65,21 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
     return (
       <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
         <Ionicons name="videocam-off-outline" size={48} color="#666" />
+      </View>
+    );
+  }
+
+  if (Platform.OS === 'web') {
+    return (
+      <View style={{ flex: 1 }}>
+        {React.createElement('video', {
+          src: videoSource,
+          style: { width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#000' },
+          autoPlay: isActive,
+          loop: true,
+          muted: true,
+          playsInline: true,
+        })}
       </View>
     );
   }
