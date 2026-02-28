@@ -143,19 +143,7 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
       {mediaUrl && (
         <View style={styles.mediaContainer}>
           {isVideo ? (
-            Platform.OS === 'web' ? (
-              <WebVideo
-                src={mediaUrl}
-                style={{ width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#000' }}
-                autoPlay
-                loop
-                muted
-              />
-            ) : (
-              <View style={[styles.media, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
-                <Ionicons name="play-circle" size={48} color="#FFF" />
-              </View>
-            )
+            <VideoPlayer mediaUrl={mediaUrl} autoPlay />
           ) : (
             <Image
               source={{ uri: mediaUrl }}
