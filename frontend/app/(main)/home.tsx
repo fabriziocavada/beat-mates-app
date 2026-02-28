@@ -162,6 +162,7 @@ export default function HomeScreen() {
         />
       )}
       
+      <LessonNotificationBanner />
       <TabBar activeTab="home" onTabPress={handleTabPress} />
     </SafeAreaView>
   );
