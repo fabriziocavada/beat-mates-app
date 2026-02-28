@@ -56,18 +56,13 @@ export default function AvailableScreen() {
   
   const handleTabPress = (tab: string) => {
     switch (tab) {
-      case 'home':
-        router.push('/(main)/home');
-        break;
-      case 'create':
-        router.push('/(main)/create-post');
-        break;
-      case 'available':
-        // Already on available
-        break;
-      case 'profile':
-        router.push('/(main)/profile');
-        break;
+      case 'home': router.push('/(main)/home'); break;
+      case 'create': router.push('/(main)/create-post'); break;
+      case 'available': break;
+      case 'reels': router.push('/(main)/reels'); break;
+      case 'profile': router.push('/(main)/profile'); break;
+    }
+  };
     }
   };
   
