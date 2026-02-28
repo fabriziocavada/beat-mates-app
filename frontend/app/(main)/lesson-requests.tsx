@@ -64,18 +64,18 @@ export default function LessonRequestsScreen() {
   const handleAccept = async (sessionId: string) => {
     setAcceptingId(sessionId);
     try {
-      await api.post(`/live-sessions/${sessionId}/accept`);
-      Alert.alert(
-        'Lezione Accettata!',
-        'La videolezione sta per iniziare...',
-        [
-          {
-            text: 'Inizia Video Call',
-            onPress: () => router.push(`/(main)/video-call/${sessionId}`),
-          },
-        ]
-      );
-      // Remove from list
+      const response = await api.post(`/live-sessions/${sessionId}/accept`);
+      const session = response.data;
+      if (session.room_url) {
+        // Room created - go directly to video call
+        router.push(`/(main)/video-call/${sessionId}`);
+      } else {
+        Alert.alert(
+          'Lezione Accettata!',
+          'La videolezione sta per iniziare...',
+          [{ text: 'OK', onPress: () => router.push(`/(main)/video-call/${sessionId}`) }]
+        );
+      }
       setRequests(prev => prev.filter(r => r.id !== sessionId));
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.detail || 'Failed to accept session');
