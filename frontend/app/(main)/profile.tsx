@@ -280,7 +280,15 @@ export default function ProfileScreen() {
           contentContainerStyle={styles.highlightsContent}
         >
           {highlights.map((highlight) => (
-            <TouchableOpacity key={highlight.id} style={styles.highlightItem}>
+            <TouchableOpacity 
+              key={highlight.id} 
+              style={styles.highlightItem}
+              onPress={() => {
+                if (highlight.isNew) {
+                  router.push('/(main)/create-story');
+                }
+              }}
+            >
               <View style={[
                 styles.highlightCircle,
                 highlight.isNew && styles.highlightCircleNew
