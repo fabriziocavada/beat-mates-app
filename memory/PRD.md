@@ -1,89 +1,100 @@
 # BEAT MATES - Product Requirements Document
 
-## Original Problem Statement
-Social media mobile app for dancers called "BEAT MATES" with:
-- User registration/login (email + Google social login)
-- Dance discipline selection with filtered feed
-- Instagram-like social feed (photos, videos, text posts) with video autoplay
-- Comments system
-- Instagram-like stories
-- Profile with picture updates
-- Paid dance lessons (live and pre-recorded)
-- Live lesson flow: student requests → teacher accepts → video call
-- Availability system (calendar + real-time toggle)
-- Vertical video recording (max 10 sec)
-- Dark theme with coral accent (#FF6978)
-- BEAT MATES splash screen
-- 6-icon tab bar
+## Problem Statement
+Social media mobile app for dancers called "BEAT MATES". Built with Expo (React Native) frontend and FastAPI/MongoDB backend.
 
-## Architecture
-- **Frontend:** React Native (Expo) running on web, TypeScript, Zustand, Expo Router
+## Core Requirements
+- **User System:** Register/login (email+password). Google social login planned.
+- **Dance Disciplines:** Multi-select. Feed filtered by disciplines.
+- **Social Feed:** Instagram-like feed (photos, videos, text). Videos autoplay.
+- **Comments & Likes:** Users can comment and like posts.
+- **Stories:** Instagram-like 24h stories.
+- **Profile:** Editable profile with picture upload.
+- **Paid Lessons:** Live and pre-recorded dance lessons. Teachers set own prices.
+- **Live Lesson Flow:** Student requests > Teacher accepts > Video call starts.
+- **Availability System:** Calendar + real-time toggle.
+- **Video & Camera:** Vertical video recording (max 10s) for posts/stories.
+- **Design:** Dark theme, coral accent (#FF6978), "BEAT MATES" branding, 6-icon tab bar.
+- **Notifications:** Real-time lesson request alerts with sound/vibration.
+
+## Tech Stack
+- **Frontend:** React Native (Expo), TypeScript, Zustand, Expo Router
 - **Backend:** Python, FastAPI
 - **Database:** MongoDB
-- **Media:** Server-side file upload system (`/api/upload` → `/api/uploads/` static serving)
+- **Media:** Images via file upload/static serve. Videos via file upload > ffmpeg conversion > base64 data URL in API response.
 
-## DB Schema
-- `users`: {id, username, email, password, profile_image, dance_categories, is_available, hourly_rate, ...}
-- `posts`: {id, user_id, type, media, caption, likes_count, comments_count, ...}
-- `stories`: {id, user_id, media, type, expires_at, ...}
-- `live_sessions`: {id, student_id, teacher_id, status, ...}
-- `comments`: {id, post_id, user_id, text, ...}
-- `follows`: {follower_id, following_id}
+## Architecture
+```
+/app
+├── backend/
+│   ├── uploads/        # Uploaded media files
+│   ├── server.py       # All API routes
+│   └── tests/
+└── frontend/
+    ├── app/
+    │   ├── (auth)/     # login, register, categories
+    │   ├── (main)/     # home, profile, create-post, reels, etc.
+    │   └── _layout.tsx # Root layout with splash screen
+    └── src/
+        ├── components/ # PostCard, Header, TabBar, StoriesBar, etc.
+        ├── services/   # api.ts (axios client, uploadFile, getMediaUrl)
+        ├── store/      # authStore.ts (Zustand)
+        └── constants/  # colors.ts
+```
 
-## What's Been Implemented
-### Phase 1 (Previous sessions)
-- Auth (login/register with email/username)
-- 6-icon tab bar, splash screen
-- Lesson request flow (student → teacher notifications)
-- Reels page (TikTok-style video feed)
-- Comments page
-- Video call simulation
+## What's Implemented (as of Feb 28, 2026)
+- User registration & login (email/password)
 - Dance category selection
+- Social feed with posts (photo, video, text)
+- Post creation with image/video upload
+- Like & comment system
+- Instagram-like stories (24h expiry)
+- User profiles with post count, followers
+- Follow/unfollow system
+- Teacher availability toggle
+- Live session request/accept/reject flow
+- Lesson request notification banner (visual + sound + vibration)
+- File upload with ffmpeg video conversion
+- 6-icon tab bar navigation
+- Splash screen with BEAT MATES logo
+- Auto-refresh on feed
 
-### Phase 2 (Feb 28, 2026)
-- **CRITICAL FIX: Complete media pipeline refactor** - base64 → server-side file upload
-  - Backend `/api/upload` endpoint with automatic QuickTime→H.264 video conversion (ffmpeg)
-  - Backend `/api/media/{filename}` endpoint for streaming + base64 data URL delivery
-  - Frontend `uploadFile()` helper (works on both web and native platforms)
-  - Frontend `getMediaUrl()` for URL resolution + `WebVideo` component for video playback
-  - Updated ALL components: PostCard, StoriesBar, TabBar, story viewer, comments, user profile, lesson requests, AvailableTeacherCard
-  - Stories backend converts base64 to files automatically
-  - Feed shows ALL posts (removed restrictive filter)
-  - Stories show ALL non-expired stories
-- **Notification Banner:** `LessonNotificationBanner` component with:
-  - 5-second polling for pending lesson requests
-  - Coral animated banner at bottom of screen
-  - Sound alert (Web Audio API beep) + vibration on new requests
-  - Visible on Home and Profile pages
-- **Auto-refresh:** Home and Profile pages refresh on navigation via `usePathname`
-- **Data cleanup:** Removed all broken old content, fresh database
-- **Loading overlay:** "Pubblicazione in corso..." during post/story creation
-
-## Test Results
-- Backend: 20/20 passed (100%)
-- Frontend: 95% (minor cosmetic issues only)
-- Test file: `/app/test_reports/iteration_1.json`
+## API Endpoints (all prefixed /api)
+- Auth: POST /auth/register, /auth/login
+- Users: GET/PUT /users/me, GET /users/{id}, POST /users/{id}/follow
+- Posts: GET/POST /posts, POST /posts/{id}/like, /posts/{id}/comments
+- Stories: GET/POST /stories
+- Categories: GET /dance-categories
+- Teachers: GET /available-teachers
+- Sessions: POST /live-sessions/request, /accept, /reject, /end
+- Bookings: GET/POST /bookings
+- Media: POST /upload, GET /media/{filename}
 
 ## Test Credentials
-All user passwords: `password123`
-- mario@test.com / mario_dancer
-- fabry, io, Veronica, Fabry
+- mario@test.com / password123 (username: mario_dancer)
+
+## Completed Bug Fixes (Feb 28, 2026)
+- Fixed missing VideoPlayer component in PostCard.tsx (was causing crash)
+- Fixed ReelVideoPlayer to handle base64 data URLs directly
+- Added platform-specific video rendering (native HTML video on web, expo-av on mobile)
+- Verified login works end-to-end (backend + frontend)
+- All 24 API endpoints tested and passing (100%)
 
 ## Pending/Upcoming Tasks
 ### P0
-- Video call PoC (real WebRTC - needs Agora/Daily.co/Twilio)
+- Implement functional Video Call (e.g., Daily.co integration)
 
 ### P1
-- Teacher-set lesson price UI (hourly_rate field exists in backend)
-- Post/story video recording (camera → max 10 sec vertical)
+- Teacher-set lesson prices UI
+- Post/Story video recording from camera
 
 ### P2
-- Availability calendar for teachers
-- Notification improvements (sound, faster polling)
+- Availability calendar for future slots
+- Verify Reels page functionality (video-only filter)
 
-### P3 (Backlog)
-- Payment flow (Stripe/PayPal)
+### P3/Backlog
+- Mock payment flow (Stripe/PayPal)
 - Google social login
-- Music page
-- Like/Follow/Unfollow
-- Real-time WebSocket notifications
+- Dedicated "Music" page
+- Like/Follow/Unfollow improvements
+- Code refactoring (split server.py into routes/models)
