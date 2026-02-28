@@ -12,12 +12,12 @@ import {
   FlatList,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Video, ResizeMode } from 'expo-av';
 import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
 import LessonNotificationBanner from '../../src/components/LessonNotificationBanner';
