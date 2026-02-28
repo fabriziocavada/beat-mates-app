@@ -629,25 +629,9 @@ async def create_story(data: StoryCreate, current_user: dict = Depends(get_curre
 
 @api_router.get("/stories", response_model=List[dict])
 async def get_stories(current_user: dict = Depends(get_current_user)):
-    # Get following users + users with same categories
-    following = await db.follows.find({"follower_id": current_user["id"]}).to_list(1000)
-    following_ids = [f["following_id"] for f in following]
-    
-    # Add users with matching dance categories
-    user_categories = current_user.get("dance_categories", [])
-    if user_categories:
-        category_users = await db.users.find({
-            "dance_categories": {"$in": user_categories}
-        }).to_list(1000)
-        category_user_ids = [u["id"] for u in category_users]
-        following_ids.extend(category_user_ids)
-    
-    following_ids = list(set(following_ids))
-    
-    # Get non-expired stories from these users
+    # Get non-expired stories from all users
     now = datetime.utcnow()
     stories = await db.stories.find({
-        "user_id": {"$in": following_ids},
         "expires_at": {"$gt": now}
     }).sort("created_at", -1).to_list(100)
     
