@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
-import api from '../../src/services/api';
+import api, { getMediaUrl } from '../../src/services/api';
 
 const { width, height } = Dimensions.get('window');
 const ITEM_HEIGHT = height - 130;
@@ -102,25 +102,24 @@ export default function ReelsScreen() {
 
   const renderReel = ({ item, index }: { item: ReelPost; index: number }) => {
     const isActive = index === currentIndex;
-    const isVideo = item.type === 'video';
     const isLiked = likedPosts.has(item.id) || item.is_liked;
+    const mediaUrl = getMediaUrl(item.media);
+    const profileUrl = getMediaUrl(item.user?.profile_image);
 
     return (
       <View style={[styles.reelContainer, { height: ITEM_HEIGHT }]}>
-        {isVideo && item.media ? (
+        {mediaUrl ? (
           <Video
-            source={{ uri: item.media }}
+            source={{ uri: mediaUrl }}
             style={styles.media}
             resizeMode={ResizeMode.COVER}
             shouldPlay={isActive}
             isLooping
             isMuted={false}
           />
-        ) : item.media ? (
-          <Image source={{ uri: item.media }} style={styles.media} resizeMode="cover" />
         ) : (
           <View style={[styles.media, styles.placeholder]}>
-            <Ionicons name="image-outline" size={48} color={Colors.textSecondary} />
+            <Ionicons name="videocam-outline" size={48} color={Colors.textSecondary} />
           </View>
         )}
         
@@ -133,8 +132,8 @@ export default function ReelsScreen() {
               onPress={() => router.push(`/(main)/user/${item.user_id}`)}
             >
               <View style={styles.reelAvatar}>
-                {item.user?.profile_image ? (
-                  <Image source={{ uri: item.user.profile_image }} style={styles.avatarImg} />
+                {profileUrl ? (
+                  <Image source={{ uri: profileUrl }} style={styles.avatarImg} />
                 ) : (
                   <Ionicons name="person" size={16} color="#FFF" />
                 )}
