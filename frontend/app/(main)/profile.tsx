@@ -14,7 +14,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Video, ResizeMode } from 'expo-av';
@@ -41,13 +41,14 @@ export default function ProfileScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'shop'>('posts');
   const [isUploadingPic, setIsUploadingPic] = useState(false);
+  const pathname = usePathname();
   
   useEffect(() => {
-    if (user?.id) {
+    if (user?.id && (pathname === '/profile' || pathname === '/(main)/profile')) {
       loadPosts();
       refreshUser();
     }
-  }, [user?.id]);
+  }, [user?.id, pathname]);
   
   const loadPosts = async () => {
     try {
