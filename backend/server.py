@@ -750,7 +750,9 @@ async def create_booking(data: BookingCreate, current_user: dict = Depends(get_c
     await db.bookings.insert_one(booking)
     await db.availability_slots.update_one({"id": data.slot_id}, {"$set": {"is_booked": True}})
     
-    booking["slot"] = slot
+    # Clean slot data to remove MongoDB ObjectIDs that can't be serialized
+    clean_slot = {k: v for k, v in slot.items() if k != "_id"}
+    booking["slot"] = clean_slot
     
     return BookingResponse(**booking)
 
