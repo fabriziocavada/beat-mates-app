@@ -518,8 +518,16 @@ async def get_comments(post_id: str, current_user: dict = Depends(get_current_us
 
 @api_router.get("/available-teachers", response_model=List[dict])
 async def get_available_teachers(current_user: dict = Depends(get_current_user)):
-    # Get users who are available now
-    users = await db.users.find({"is_available": True, "id": {"$ne": current_user["id"]}}).to_list(100)
+    # Get users who are available now AND share at least one category with current user
+    user_categories = current_user.get("dance_categories", [])
+    
+    query = {"is_available": True, "id": {"$ne": current_user["id"]}}
+    
+    # If user has categories, filter by matching categories
+    if user_categories:
+        query["dance_categories"] = {"$in": user_categories}
+    
+    users = await db.users.find(query).to_list(100)
     
     result = []
     for user in users:
