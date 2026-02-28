@@ -61,10 +61,15 @@ export async function uploadFile(uri: string): Promise<string> {
   return data.url;
 }
 
-// Resolve a media path to a full URL
+// Resolve a media path to a full URL (uses streaming endpoint for videos)
 export function getMediaUrl(path: string | null | undefined): string | null {
   if (!path) return null;
   if (path.startsWith('http') || path.startsWith('data:') || path.startsWith('blob:')) return path;
+  if (path.startsWith('/api/uploads/')) {
+    // Use the streaming endpoint for proper Range request support
+    const filename = path.replace('/api/uploads/', '');
+    return `${baseURL}/api/media/${filename}`;
+  }
   if (path.startsWith('/api/')) return `${baseURL}${path}`;
   return path;
 }
