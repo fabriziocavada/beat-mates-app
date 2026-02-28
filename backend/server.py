@@ -58,6 +58,10 @@ UPLOADS_DIR.mkdir(exist_ok=True)
 # Create the main app
 app = FastAPI(title="Beat Mates API")
 
+# Serve uploaded files
+from starlette.staticfiles import StaticFiles
+app.mount("/api/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
