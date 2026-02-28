@@ -448,22 +448,8 @@ async def create_post(data: PostCreate, current_user: dict = Depends(get_current
 
 @api_router.get("/posts", response_model=List[PostResponse])
 async def get_posts(current_user: dict = Depends(get_current_user)):
-    # Get posts from users in same dance categories or followed users
-    following = await db.follows.find({"follower_id": current_user["id"]}).to_list(1000)
-    following_ids = [f["following_id"] for f in following]
-    following_ids.append(current_user["id"])
-    
-    # Get users with matching dance categories
-    if current_user.get("dance_categories"):
-        category_users = await db.users.find({
-            "dance_categories": {"$in": current_user["dance_categories"]}
-        }).to_list(1000)
-        category_user_ids = [u["id"] for u in category_users]
-        following_ids.extend(category_user_ids)
-    
-    following_ids = list(set(following_ids))
-    
-    posts = await db.posts.find({"user_id": {"$in": following_ids}}).sort("created_at", -1).to_list(100)
+    # Get all posts, sorted by newest first (small community app)
+    posts = await db.posts.find().sort("created_at", -1).to_list(100)
     
     # Get likes for current user
     user_likes = await db.likes.find({"user_id": current_user["id"]}).to_list(1000)
