@@ -499,32 +499,6 @@ async def get_posts(current_user: dict = Depends(get_current_user)):
                 "profile_image": user.get("profile_image")
             }
         post["is_liked"] = post["id"] in liked_post_ids
-        # Convert video paths to data URLs for browser playback
-        post["media"] = resolve_media_to_data_url(post.get("media"))
-        result.append(PostResponse(**post))
-    
-    return result
-
-@api_router.get("/users/{user_id}/posts", response_model=List[PostResponse])
-async def get_user_posts(user_id: str, current_user: dict = Depends(get_current_user)):
-    posts = await db.posts.find({"user_id": user_id}).sort("created_at", -1).to_list(100)
-    
-    user = await db.users.find_one({"id": user_id})
-    user_likes = await db.likes.find({"user_id": current_user["id"]}).to_list(1000)
-    liked_post_ids = {l["post_id"] for l in user_likes}
-    
-    result = []
-    for post in posts:
-        if user:
-            post["user"] = {
-                "id": user["id"],
-                "username": user["username"],
-                "name": user["name"],
-                "profile_image": user.get("profile_image")
-            }
-        post["is_liked"] = post["id"] in liked_post_ids
-        # Convert video paths to data URLs for browser playback
-        post["media"] = resolve_media_to_data_url(post.get("media"))
         result.append(PostResponse(**post))
     
     return result
