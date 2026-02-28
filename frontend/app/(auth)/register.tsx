@@ -42,10 +42,12 @@ export default function RegisterScreen() {
     setIsLoading(true);
     try {
       await register(email, username, name, password);
-      router.replace('/(auth)/categories');
+      // Navigate directly to categories after successful registration
+      setTimeout(() => {
+        router.replace('/(auth)/categories');
+      }, 100);
     } catch (error: any) {
       Alert.alert('Error', error.message);
-    } finally {
       setIsLoading(false);
     }
   };
