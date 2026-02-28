@@ -21,14 +21,26 @@ interface AvailableTeacherCardProps {
 }
 
 export default function AvailableTeacherCard({ teacher, onPress, onBookPress }: AvailableTeacherCardProps) {
-  const getMinutesAvailable = () => {
-    if (!teacher.available_since) return 0;
-    const since = new Date(teacher.available_since);
-    const now = new Date();
-    return Math.floor((now.getTime() - since.getTime()) / (1000 * 60));
-  };
+  const [minutes, setMinutes] = useState(0);
   
-  const minutes = getMinutesAvailable();
+  useEffect(() => {
+    // Calculate initial minutes
+    const calcMinutes = () => {
+      if (!teacher.available_since) return 0;
+      const since = new Date(teacher.available_since);
+      const now = new Date();
+      return Math.floor((now.getTime() - since.getTime()) / (1000 * 60));
+    };
+    
+    setMinutes(calcMinutes());
+    
+    // Update every minute
+    const interval = setInterval(() => {
+      setMinutes(calcMinutes());
+    }, 60000);
+    
+    return () => clearInterval(interval);
+  }, [teacher.available_since]);
   
   const getTimerColor = () => {
     if (minutes < 5) return Colors.success;
