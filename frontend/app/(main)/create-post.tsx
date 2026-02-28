@@ -220,6 +220,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
   },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    zIndex: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    marginTop: 12,
+    fontWeight: '500',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
