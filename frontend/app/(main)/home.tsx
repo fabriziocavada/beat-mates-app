@@ -13,6 +13,7 @@ import Header from '../../src/components/Header';
 import TabBar from '../../src/components/TabBar';
 import StoriesBar from '../../src/components/StoriesBar';
 import PostCard from '../../src/components/PostCard';
+import LessonNotificationBanner from '../../src/components/LessonNotificationBanner';
 import api from '../../src/services/api';
 import { useAuthStore } from '../../src/store/authStore';
 
