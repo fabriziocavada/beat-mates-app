@@ -16,57 +16,54 @@ import { Ionicons } from '@expo/vector-icons';
 import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
 import api, { getMediaUrl } from '../../src/services/api';
+import { Video, ResizeMode } from 'expo-av';
 
-// Web video player that loads video via base64 data URL from API
-function WebVideo({ src, autoPlay, loop, muted, style }: any) {
-  const videoRef = React.useRef<HTMLVideoElement>(null);
-  const [dataUrl, setDataUrl] = React.useState<string | null>(null);
-  const [error, setError] = React.useState(false);
+// Component that fetches video data URL from server and plays with expo-av
+function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: boolean }) {
+  const [videoSource, setVideoSource] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    if (!src) return;
+    if (!mediaUrl) return;
     let cancelled = false;
-    
-    fetch(src)
+
+    fetch(mediaUrl)
       .then(res => res.json())
       .then(data => {
         if (!cancelled && data.data_url) {
-          setDataUrl(data.data_url);
+          setVideoSource(data.data_url);
         }
+        setLoading(false);
       })
-      .catch(() => { if (!cancelled) setError(true); });
-    
+      .catch(() => { if (!cancelled) setLoading(false); });
+
     return () => { cancelled = true; };
-  }, [src]);
+  }, [mediaUrl]);
 
-  React.useEffect(() => {
-    if (dataUrl && videoRef.current && autoPlay) {
-      videoRef.current.play().catch(() => {});
-    }
-  }, [dataUrl, autoPlay]);
-
-  if (error || !dataUrl) {
+  if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center' }}>
-        {error ? (
-          <Ionicons name="videocam-off-outline" size={48} color="#666" />
-        ) : (
-          <ActivityIndicator size="large" color="#FF6978" />
-        )}
+      <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color="#FF6978" />
+      </View>
+    );
+  }
+
+  if (!videoSource) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name="videocam-off-outline" size={48} color="#666" />
       </View>
     );
   }
 
   return (
-    <video
-      ref={videoRef}
-      src={dataUrl}
-      style={style}
-      autoPlay={autoPlay}
-      loop={loop}
-      muted={muted}
-      playsInline
-      controls
+    <Video
+      source={{ uri: videoSource }}
+      style={{ width: '100%', height: '100%' }}
+      resizeMode={ResizeMode.COVER}
+      shouldPlay={isActive}
+      isLooping
+      isMuted={false}
     />
   );
 }
@@ -163,19 +160,7 @@ export default function ReelsScreen() {
     return (
       <View style={[styles.reelContainer, { height: ITEM_HEIGHT }]}>
         {mediaUrl ? (
-          Platform.OS === 'web' ? (
-            <WebVideo
-              src={mediaUrl}
-              style={{ width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#000' }}
-              autoPlay={isActive}
-              loop
-              muted={false}
-            />
-          ) : (
-            <View style={[styles.media, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
-              <Ionicons name="play-circle" size={64} color="#FFF" />
-            </View>
-          )
+          <ReelVideoPlayer mediaUrl={mediaUrl} isActive={isActive} />
         ) : (
           <View style={[styles.media, styles.placeholder]}>
             <Ionicons name="videocam-outline" size={48} color={Colors.textSecondary} />
