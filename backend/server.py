@@ -616,6 +616,10 @@ async def get_story(story_id: str, current_user: dict = Depends(get_current_user
     await db.stories.update_one({"id": story_id}, {"$inc": {"views_count": 1}})
     
     user = await db.users.find_one({"id": story["user_id"]})
+    
+    # Remove MongoDB _id field
+    story.pop("_id", None)
+    
     story["user"] = {
         "id": user["id"],
         "username": user["username"],
