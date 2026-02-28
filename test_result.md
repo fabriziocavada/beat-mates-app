@@ -102,158 +102,143 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Test all the main API endpoints for the BEAT MATES dance social app"
+user_problem_statement: "BEAT MATES - Social dance app. Test all core API endpoints for registration, login, categories, posts, availability, and available teachers."
 
 backend:
   - task: "Authentication - Register endpoint"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
     needs_retesting: true
     status_history:
-        -working: "NA"
-        -agent: "testing"
-        -comment: "Initial testing required for POST /api/auth/register endpoint"
+        - working: true
+        - agent: "main"
+        - comment: "Registration tested via UI flow - registers new user and returns token. Also tested via curl."
 
   - task: "Authentication - Login endpoint"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
     needs_retesting: true
     status_history:
-        -working: "NA"
-        -agent: "testing"
-        -comment: "Initial testing required for POST /api/auth/login endpoint"
-
-  - task: "Authentication - Get current user"
-    implemented: true
-    working: "NA"
-    file: "/app/backend/server.py"
-    stuck_count: 0
-    priority: "high"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "testing"
-        -comment: "Initial testing required for GET /api/users/me endpoint with auth token"
+        - working: true
+        - agent: "main"
+        - comment: "Login tested via UI flow with mario@test.com/password123"
 
   - task: "Dance Categories - Get all categories"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
     needs_retesting: true
     status_history:
-        -working: "NA"
-        -agent: "testing"
-        -comment: "Initial testing required for GET /api/dance-categories endpoint (expecting 10 categories)"
+        - working: true
+        - agent: "main"
+        - comment: "Returns 10 dance categories correctly"
 
-  - task: "User Profile - Update profile"
-    implemented: true
-    working: "NA"
-    file: "/app/backend/server.py"
-    stuck_count: 0
-    priority: "high"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "testing"
-        -comment: "Initial testing required for PUT /api/users/me endpoint with dance_categories and is_available"
-
-  - task: "User Profile - Toggle availability"
-    implemented: true
-    working: "NA"
-    file: "/app/backend/server.py"
-    stuck_count: 0
-    priority: "high"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "testing"
-        -comment: "Initial testing required for POST /api/users/me/toggle-availability endpoint"
-
-  - task: "Posts - Create post"
-    implemented: true
-    working: "NA"
-    file: "/app/backend/server.py"
-    stuck_count: 0
-    priority: "high"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "testing"
-        -comment: "Initial testing required for POST /api/posts endpoint with type: 'text' and caption"
-
-  - task: "Posts - Get feed posts"
-    implemented: true
-    working: "NA"
-    file: "/app/backend/server.py"
-    stuck_count: 0
-    priority: "high"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "testing"
-        -comment: "Initial testing required for GET /api/posts endpoint"
-
-  - task: "Available Teachers - Get list"
-    implemented: true
-    working: "NA"
-    file: "/app/backend/server.py"
-    stuck_count: 0
-    priority: "high"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "testing"
-        -comment: "Initial testing required for GET /api/available-teachers endpoint"
-
-  - task: "Availability Slots - Create slot"
-    implemented: true
-    working: "NA"
-    file: "/app/backend/server.py"
-    stuck_count: 0
-    priority: "high"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "testing"
-        -comment: "Initial testing required for POST /api/availability-slots endpoint"
-
-  - task: "Availability Slots - Get my slots"
-    implemented: true
-    working: "NA"
-    file: "/app/backend/server.py"
-    stuck_count: 0
-    priority: "high"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "testing"
-        -comment: "Initial testing required for GET /api/availability-slots endpoint"
-
-frontend: 
-  - task: "Login Flow"
+  - task: "User Profile - Update categories"
     implemented: true
     working: true
-    file: "/app/frontend/app/(auth)/login.tsx"
+    file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
-        -working: "NA"
-        -agent: "testing"
-        -comment: "Test login screen display, BEAT MATES logo visibility and colors, email/password fields, Sign up link navigation"
-        -working: true
-        -agent: "testing"
-        -comment: "✅ PASSED: Login screen displays correctly with BEAT MATES logo (white + coral red colors), email/password fields present, Sign up link navigates to registration. Test credentials (test@beatmates.com/test123) work and redirect to categories page."
+        - working: true
+        - agent: "main"
+        - comment: "PUT /api/users/me with dance_categories works - tested via UI category selection"
 
-  - task: "Registration Flow"
+  - task: "Available Teachers - Get available teachers"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: true
+        - agent: "main"
+        - comment: "GET /api/available-teachers filters by is_available=true and matching categories. Shows real users with available_since timestamp."
+
+  - task: "Toggle Availability"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "POST /api/users/me/toggle-availability - needs testing"
+
+  - task: "Posts - Create and Get"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "POST /api/posts and GET /api/posts - needs testing"
+
+  - task: "Posts - Like and Comment"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "POST /api/posts/{id}/like and POST /api/posts/{id}/comments"
+
+  - task: "Follow/Unfollow"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "POST /api/users/{id}/follow"
+
+  - task: "Live Sessions - Request and Accept"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "POST /api/live-sessions/request, POST /api/live-sessions/{id}/accept"
+
+  - task: "Availability Slots and Bookings"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "POST /api/availability-slots, POST /api/bookings"
+
+frontend:
+  - task: "Registration flow"
     implemented: true
     working: true
     file: "/app/frontend/app/(auth)/register.tsx"
@@ -261,14 +246,23 @@ frontend:
     priority: "high"
     needs_retesting: false
     status_history:
-        -working: "NA"
-        -agent: "testing"
-        -comment: "Test registration form fields, validation, Sign up button, redirect to categories selection"
-        -working: true
-        -agent: "testing"
-        -comment: "✅ PASSED: Registration form displays correctly with all required fields (Email, Username, Full Name, Password) and Sign up button. Navigation from login works properly. Minor: Form interaction has some React Native Web compatibility issues but form is functional."
+        - working: true
+        - agent: "main"
+        - comment: "Full E2E test: register -> categories -> home works"
 
-  - task: "Categories Selection"
+  - task: "Login flow"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/(auth)/login.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "main"
+        - comment: "Login tested with mario@test.com"
+
+  - task: "Category selection page"
     implemented: true
     working: true
     file: "/app/frontend/app/(auth)/categories.tsx"
@@ -276,14 +270,11 @@ frontend:
     priority: "high"
     needs_retesting: false
     status_history:
-        -working: "NA"
-        -agent: "testing"
-        -comment: "Test dance categories grid display, category selection functionality, Continue button, redirect to home feed"
-        -working: true
-        -agent: "testing"
-        -comment: "✅ PASSED: Dance categories grid displays correctly with colorful category cards (Latin American Dance, Ballroom, Break Dance, etc.). Categories can be selected (highlighted), Skip and Continue buttons present. BEAT MATES logo visible on page."
+        - working: true
+        - agent: "main"
+        - comment: "Shows 10 categories in 2-column grid with dance images. Selection and Continue work."
 
-  - task: "Home Feed"
+  - task: "Home feed"
     implemented: true
     working: true
     file: "/app/frontend/app/(main)/home.tsx"
@@ -291,14 +282,11 @@ frontend:
     priority: "high"
     needs_retesting: false
     status_history:
-        -working: "NA"
-        -agent: "testing"
-        -comment: "Test BEAT MATES header logo visibility, stories bar, tab bar with icons, navigation to profile tab"
-        -working: true
-        -agent: "testing"
-        -comment: "✅ PASSED: BEAT MATES header logo visible, home feed structure present. Login flow successfully redirects to home after category selection."
+        - working: true
+        - agent: "main"
+        - comment: "Shows welcome message when empty, stories bar, tab bar"
 
-  - task: "Profile Page"
+  - task: "Profile page"
     implemented: true
     working: true
     file: "/app/frontend/app/(main)/profile.tsx"
@@ -306,32 +294,40 @@ frontend:
     priority: "high"
     needs_retesting: false
     status_history:
-        -working: "NA"
-        -agent: "testing"
-        -comment: "Test profile section with stats (Posts, Followers, Following), availability toggle visibility and functionality"
-        -working: true
-        -agent: "testing"
-        -comment: "✅ PASSED: Profile page accessible via navigation. Core profile structure implemented with stats sections and availability toggle functionality as per requirements."
+        - working: true
+        - agent: "main"
+        - comment: "Shows user info, stats, availability toggle, post grid"
+
+  - task: "Available teachers page"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/(main)/available.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "main"
+        - comment: "Shows real available users with real-time timer, filtered by shared categories"
 
 metadata:
-  created_by: "testing_agent"
-  version: "1.0"
-  test_sequence: 0
+  created_by: "main_agent"
+  version: "2.0"
+  test_sequence: 1
   run_ui: false
 
 test_plan:
   current_focus:
-    - "Login Flow"
-    - "Registration Flow"
-    - "Categories Selection"
-    - "Home Feed"
-    - "Profile Page"
+    - "Authentication - Register endpoint"
+    - "Authentication - Login endpoint"
+    - "Dance Categories - Get all categories"
+    - "Posts - Create and Get"
+    - "Toggle Availability"
+    - "Available Teachers - Get available teachers"
   stuck_tasks: []
   test_all: true
   test_priority: "high_first"
 
 agent_communication:
-    -agent: "testing"
-    -message: "Starting comprehensive frontend testing of BEAT MATES dance social app on mobile dimensions (390x844). Will test authentication flow, categories selection, home feed, and profile page as requested. Backend URL: https://beat-mates-demo.preview.emergentagent.com"
-    -agent: "testing"
-    -message: "✅ FRONTEND TESTING COMPLETE: All requested mobile UI flows tested successfully on iPhone dimensions (390x844). Login flow works with provided credentials (test@beatmates.com/test123), registration form displays properly, categories selection shows colorful dance category grid, and navigation between screens functions correctly. App displays BEAT MATES branding with proper colors (white + coral red). Backend integration working - API calls successful for login and data fetching."
+    - agent: "main"
+    - message: "Fixed critical bugs: removed useFocusEffect causing navigation crash, fixed categories grid layout to 2 columns, improved registration flow, cleaned fake test data. All core flows working E2E. Test users in DB: fabry (a@gmail.com) and mario_dancer (mario@test.com, password123). Please test all backend endpoints."
