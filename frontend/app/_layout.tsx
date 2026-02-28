@@ -15,10 +15,10 @@ export default function RootLayout() {
   useEffect(() => {
     loadUser().finally(() => setIsReady(true));
     
-    // Show splash for 2 seconds
+    // Show splash for 3 seconds
     const splashTimer = setTimeout(() => {
       setShowSplash(false);
-    }, 2000);
+    }, 3000);
     
     return () => clearTimeout(splashTimer);
   }, []);
