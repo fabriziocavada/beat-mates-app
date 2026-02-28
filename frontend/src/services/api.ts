@@ -1,10 +1,11 @@
 import axios from 'axios';
+import { Platform } from 'react-native';
 
 const baseURL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
 
 const api = axios.create({
   baseURL: `${baseURL}/api`,
-  timeout: 30000,
+  timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -19,23 +20,31 @@ api.interceptors.response.use(
   }
 );
 
-// Upload a file (base64 data URI or blob URI) to the server
+// Upload a file to the server - works on both web and native
 export async function uploadFile(uri: string): Promise<string> {
   const token = api.defaults.headers.common['Authorization'] as string;
   const formData = new FormData();
 
-  if (uri.startsWith('data:')) {
-    // base64 data URI → convert to blob
+  if (Platform.OS === 'web') {
+    // Web: fetch the URI (blob: or data:) and append as Blob
     const res = await fetch(uri);
     const blob = await res.blob();
-    const ext = blob.type?.split('/')[1] || 'jpg';
+    const mimeType = blob.type || 'application/octet-stream';
+    const ext = mimeType.includes('video') ? 'mp4' 
+      : mimeType.includes('png') ? 'png' 
+      : mimeType.includes('gif') ? 'gif' 
+      : 'jpg';
     formData.append('file', blob, `upload.${ext}`);
   } else {
-    // blob: or http: URI → fetch as blob
-    const res = await fetch(uri);
-    const blob = await res.blob();
-    const ext = blob.type?.split('/')[1]?.replace('quicktime', 'mov') || 'mp4';
-    formData.append('file', blob, `upload.${ext}`);
+    // Native (iOS/Android): use file URI directly with RN FormData
+    const isVideo = uri.toLowerCase().includes('.mp4') || uri.toLowerCase().includes('.mov') || uri.toLowerCase().includes('video');
+    const ext = isVideo ? 'mp4' : 'jpg';
+    const mimeType = isVideo ? 'video/mp4' : 'image/jpeg';
+    formData.append('file', {
+      uri: uri,
+      type: mimeType,
+      name: `upload.${ext}`,
+    } as any);
   }
 
   const response = await fetch(`${baseURL}/api/upload`, {
@@ -49,7 +58,7 @@ export async function uploadFile(uri: string): Promise<string> {
     throw new Error(`Upload failed: ${err}`);
   }
   const data = await response.json();
-  return data.url; // e.g. "/api/uploads/uuid.jpg"
+  return data.url;
 }
 
 // Resolve a media path to a full URL
