@@ -138,6 +138,7 @@ export default function ProfileScreen() {
   
   const renderPost = ({ item }: { item: Post }) => {
     const isVideo = item.type === 'video';
+    const mediaUrl = getMediaUrl(item.media);
     
     return (
       <TouchableOpacity 
@@ -148,11 +149,11 @@ export default function ProfileScreen() {
           }
         }}
       >
-        {item.media ? (
+        {mediaUrl ? (
           isVideo ? (
             <View style={styles.videoThumb}>
               <Video
-                source={{ uri: item.media }}
+                source={{ uri: mediaUrl }}
                 style={styles.postImage}
                 resizeMode={ResizeMode.COVER}
                 shouldPlay={false}
@@ -163,7 +164,7 @@ export default function ProfileScreen() {
               </View>
             </View>
           ) : (
-            <Image source={{ uri: item.media }} style={styles.postImage} />
+            <Image source={{ uri: mediaUrl }} style={styles.postImage} />
           )
         ) : (
           <View style={styles.postPlaceholder}>
