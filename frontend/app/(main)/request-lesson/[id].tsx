@@ -171,10 +171,10 @@ export default function RequestLessonScreen() {
               <View style={styles.statusContainer}>
                 <View style={styles.timerCircle}>
                   <Text style={styles.timerNumber}>{waitTime}</Text>
-                  <Text style={styles.timerLabel}>min</Text>
+                  <Text style={styles.timerLabel}>sec</Text>
                 </View>
-                <Text style={styles.waitingText}>Waiting for {user.name}</Text>
-                <Text style={styles.waitingText}>accept the request</Text>
+                <Text style={styles.waitingText}>In attesa che {user.name}</Text>
+                <Text style={styles.waitingText}>accetti la richiesta...</Text>
               </View>
             )}
           </View>
