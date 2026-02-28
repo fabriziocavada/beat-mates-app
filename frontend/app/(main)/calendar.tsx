@@ -389,6 +389,7 @@ const styles = StyleSheet.create({
   },
   timeBox: {
     flex: 1,
+    alignItems: 'center',
   },
   timeLabel: {
     color: Colors.primary,
@@ -399,6 +400,20 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontSize: 24,
     fontWeight: 'bold',
+    marginVertical: 4,
+  },
+  timePickerRow: {
+    alignItems: 'center',
+  },
+  timeArrow: {
+    padding: 6,
+  },
+  minuteRow: {
+    marginTop: 2,
+  },
+  minuteToggle: {
+    color: Colors.textSecondary,
+    fontSize: 12,
   },
   categoriesContainer: {
     flexDirection: 'row',
