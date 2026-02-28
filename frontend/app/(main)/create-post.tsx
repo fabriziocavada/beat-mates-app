@@ -177,7 +177,7 @@ export default function CreatePostScreen() {
                 </View>
               )}
             </View>
-          ) : mediaUri === null ? (
+          ) : (
             <View style={styles.mediaOptions}>
               <TouchableOpacity style={styles.mediaButton} onPress={takePhoto}>
                 <Ionicons name="camera" size={36} color="#FF6978" />
