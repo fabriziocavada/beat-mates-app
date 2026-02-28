@@ -306,21 +306,15 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Authentication - Register endpoint"
-    - "Authentication - Login endpoint"
-    - "Authentication - Get current user"
-    - "Dance Categories - Get all categories"
-    - "User Profile - Update profile"
-    - "User Profile - Toggle availability"
-    - "Posts - Create post"
-    - "Posts - Get feed posts"
-    - "Available Teachers - Get list"
-    - "Availability Slots - Create slot"
-    - "Availability Slots - Get my slots"
+    - "Login Flow"
+    - "Registration Flow"
+    - "Categories Selection"
+    - "Home Feed"
+    - "Profile Page"
   stuck_tasks: []
   test_all: true
   test_priority: "high_first"
 
 agent_communication:
     -agent: "testing"
-    -message: "Starting comprehensive testing of BEAT MATES dance social app API endpoints. Will test authentication flow first, then all main features. Backend URL: https://choreflow-1.preview.emergentagent.com/api"
+    -message: "Starting comprehensive frontend testing of BEAT MATES dance social app on mobile dimensions (390x844). Will test authentication flow, categories selection, home feed, and profile page as requested. Backend URL: https://choreflow-1.preview.emergentagent.com"
