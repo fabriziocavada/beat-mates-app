@@ -598,20 +598,36 @@ class StoryResponse(BaseModel):
 
 @api_router.post("/stories", response_model=StoryResponse)
 async def create_story(data: StoryCreate, current_user: dict = Depends(get_current_user)):
-    # Check media size (limit to ~5MB after base64)
-    if len(data.media) > 7_000_000:
-        raise HTTPException(status_code=400, detail="Media too large. Max 5MB")
-    
     story_id = str(uuid.uuid4())
     now = datetime.utcnow()
+    
+    # Convert base64 media to file if needed
+    media_value = data.media
+    if data.media and data.media.startswith('data:'):
+        try:
+            header, b64data = data.media.split(',', 1)
+            ext = 'jpg'
+            if 'video' in header:
+                ext = 'mp4'
+            elif 'png' in header:
+                ext = 'png'
+            filename = f"story_{story_id}.{ext}"
+            filepath = UPLOADS_DIR / filename
+            import base64 as b64mod
+            with open(filepath, 'wb') as f:
+                f.write(b64mod.b64decode(b64data))
+            media_value = f"/api/uploads/{filename}"
+        except Exception as e:
+            logger.error(f"Failed to save story media: {e}")
+    
     story = {
         "id": story_id,
         "user_id": current_user["id"],
-        "media": data.media,
+        "media": media_value,
         "type": data.type,
         "views_count": 0,
         "created_at": now,
-        "expires_at": now + timedelta(hours=24)  # Stories expire after 24h
+        "expires_at": now + timedelta(hours=24)
     }
     
     await db.stories.insert_one(story)
