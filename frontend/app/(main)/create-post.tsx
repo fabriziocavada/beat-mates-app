@@ -111,11 +111,11 @@ export default function CreatePostScreen() {
         caption,
       });
       
-      await refreshUser();
+      refreshUser();
       router.replace('/(main)/home');
     } catch (error: any) {
-      console.error('Post error:', error.response?.data || error.message);
-      Alert.alert('Errore', 'Impossibile creare il post. Riprova.');
+      console.error('Post error:', error?.message || error);
+      Alert.alert('Errore', 'Impossibile creare il post. Controlla la connessione e riprova.');
     } finally {
       setIsLoading(false);
     }
