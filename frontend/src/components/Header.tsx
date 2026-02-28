@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   matesText: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#FF4058',
+    color: '#FF6978',
   },
   rightIcons: {
     flexDirection: 'row',
