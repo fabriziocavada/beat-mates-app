@@ -42,11 +42,16 @@ export default function RequestLessonScreen() {
   
   useEffect(() => {
     let interval: NodeJS.Timeout;
+    let counter = 0;
     
     if (status === 'waiting' && waitTime > 0) {
       interval = setInterval(() => {
         setWaitTime((prev) => prev - 1);
-        checkSessionStatus();
+        counter++;
+        // Poll every 5 ticks instead of every tick
+        if (counter % 5 === 0) {
+          checkSessionStatus();
+        }
       }, 1000);
     } else if (waitTime === 0 && status === 'waiting') {
       Alert.alert('Timeout', 'The teacher did not respond. Please try again later.');
