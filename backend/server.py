@@ -446,6 +446,36 @@ async def create_post(data: PostCreate, current_user: dict = Depends(get_current
     
     return PostResponse(**post)
 
+# Helper to convert video file paths to base64 data URLs for browser playback
+def resolve_media_to_data_url(media_path: str | None) -> str | None:
+    """For videos stored as /api/uploads/xxx.mp4, convert to data:video/mp4;base64,..."""
+    if not media_path:
+        return None
+    if media_path.startswith('data:') or media_path.startswith('http'):
+        return media_path  # Already a data URL or external URL
+    if not media_path.startswith('/api/uploads/'):
+        return media_path  # Not a server path
+    
+    filename = media_path.replace('/api/uploads/', '')
+    filepath = UPLOADS_DIR / filename
+    if not filepath.exists():
+        return None
+    
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    
+    # Only convert videos to data URLs (images work fine as file URLs)
+    if ext in ['mp4', 'mov', 'webm']:
+        try:
+            with open(filepath, 'rb') as f:
+                data = f.read()
+            mime = 'video/mp4' if ext == 'mp4' else f'video/{ext}'
+            return f"data:{mime};base64,{base64.b64encode(data).decode()}"
+        except Exception as e:
+            logger.error(f"Failed to convert video to data URL: {e}")
+            return media_path
+    
+    return media_path  # Return path as-is for images
+
 @api_router.get("/posts", response_model=List[PostResponse])
 async def get_posts(current_user: dict = Depends(get_current_user)):
     # Get all posts, sorted by newest first (small community app)
@@ -466,6 +496,8 @@ async def get_posts(current_user: dict = Depends(get_current_user)):
                 "profile_image": user.get("profile_image")
             }
         post["is_liked"] = post["id"] in liked_post_ids
+        # Convert video paths to data URLs for browser playback
+        post["media"] = resolve_media_to_data_url(post.get("media"))
         result.append(PostResponse(**post))
     
     return result
@@ -488,6 +520,8 @@ async def get_user_posts(user_id: str, current_user: dict = Depends(get_current_
                 "profile_image": user.get("profile_image")
             }
         post["is_liked"] = post["id"] in liked_post_ids
+        # Convert video paths to data URLs for browser playback
+        post["media"] = resolve_media_to_data_url(post.get("media"))
         result.append(PostResponse(**post))
     
     return result
