@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import api, { getMediaUrl } from '../services/api';
@@ -31,6 +31,20 @@ interface PostCardProps {
 }
 
 function VideoPlayer({ mediaUrl, autoPlay }: { mediaUrl: string; autoPlay?: boolean }) {
+  if (Platform.OS === 'web') {
+    return (
+      <View style={{ width: '100%', height: '100%' }}>
+        {React.createElement('video', {
+          src: mediaUrl,
+          style: { width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#000' },
+          autoPlay: true,
+          loop: true,
+          muted: true,
+          playsInline: true,
+        })}
+      </View>
+    );
+  }
   return (
     <Video
       source={{ uri: mediaUrl }}
