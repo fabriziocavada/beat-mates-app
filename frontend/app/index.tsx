@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../src/store/authStore';
 
@@ -27,16 +27,19 @@ export default function SplashScreen() {
   
   return (
     <View style={styles.container}>
-      {/* Logo Box - Rounded square with infinity symbol */}
-      <View style={styles.logoBox}>
-        <Text style={styles.infinitySymbol}>∞</Text>
-      </View>
+      {/* Logo from Figma design */}
+      <Image
+        source={require('../assets/images/splash-logo.png')}
+        style={styles.logo}
+        resizeMode="contain"
+      />
       
-      {/* App Name */}
-      <View style={styles.nameContainer}>
-        <Text style={styles.beatText}>BEAT </Text>
-        <Text style={styles.matesText}>MATES</Text>
-      </View>
+      {/* Loading indicator */}
+      <ActivityIndicator
+        size="small"
+        color="#FF6978"
+        style={styles.loader}
+      />
     </View>
   );
 }
@@ -48,35 +51,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoBox: {
-    width: 150,
-    height: 130,
-    backgroundColor: '#FF6978',
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 30,
+  logo: {
+    width: 280,
+    height: 280,
+    marginBottom: 20,
   },
-  infinitySymbol: {
-    fontSize: 90,
-    color: '#FFFFFF',
-    fontWeight: '200',
-    marginTop: -10,
-  },
-  nameContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  beatText: {
-    fontSize: 40,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    letterSpacing: 1,
-  },
-  matesText: {
-    fontSize: 40,
-    fontWeight: 'bold',
-    color: '#FF6978',
-    letterSpacing: 1,
+  loader: {
+    marginTop: 30,
   },
 });
