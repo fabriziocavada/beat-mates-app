@@ -56,6 +56,13 @@ export default function HomeScreen() {
     loadData();
   }, []);
   
+  // Refresh data when screen comes into focus (e.g., after creating a post)
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
+  
   const loadData = async () => {
     try {
       const [postsRes, storiesRes] = await Promise.all([
