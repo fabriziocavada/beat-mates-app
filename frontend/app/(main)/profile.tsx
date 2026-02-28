@@ -154,13 +154,19 @@ export default function ProfileScreen() {
         {mediaUrl ? (
           isVideo ? (
             <View style={styles.videoThumb}>
-              <Video
-                source={{ uri: mediaUrl }}
-                style={styles.postImage}
-                resizeMode={ResizeMode.COVER}
-                shouldPlay={false}
-                positionMillis={500}
-              />
+              {Platform.OS === 'web' ? (
+                <video
+                  src={mediaUrl}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#000' }}
+                  muted
+                  playsInline
+                  preload="metadata"
+                />
+              ) : (
+                <View style={[styles.postImage, { backgroundColor: '#1a1a2e', justifyContent: 'center', alignItems: 'center' }]}>
+                  <Ionicons name="videocam" size={24} color="#FFF" />
+                </View>
+              )}
               <View style={styles.videoPlayOverlay}>
                 <Ionicons name="play" size={24} color="#FFF" />
               </View>
