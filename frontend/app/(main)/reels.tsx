@@ -17,42 +17,50 @@ import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
 import api, { getMediaUrl } from '../../src/services/api';
 
-// Web video player that loads video as blob to bypass proxy issues
+// Web video player that loads video via base64 data URL from API
 function WebVideo({ src, autoPlay, loop, muted, style }: any) {
   const videoRef = React.useRef<HTMLVideoElement>(null);
-  const [blobUrl, setBlobUrl] = React.useState<string | null>(null);
+  const [dataUrl, setDataUrl] = React.useState<string | null>(null);
+  const [error, setError] = React.useState(false);
 
   React.useEffect(() => {
     if (!src) return;
     let cancelled = false;
     
     fetch(src)
-      .then(res => res.blob())
-      .then(blob => {
-        if (!cancelled) {
-          setBlobUrl(URL.createObjectURL(blob));
+      .then(res => res.json())
+      .then(data => {
+        if (!cancelled && data.data_url) {
+          setDataUrl(data.data_url);
         }
       })
-      .catch(() => {});
+      .catch(() => { if (!cancelled) setError(true); });
     
-    return () => {
-      cancelled = true;
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-    };
+    return () => { cancelled = true; };
   }, [src]);
 
-  if (!blobUrl) {
+  React.useEffect(() => {
+    if (dataUrl && videoRef.current && autoPlay) {
+      videoRef.current.play().catch(() => {});
+    }
+  }, [dataUrl, autoPlay]);
+
+  if (error || !dataUrl) {
     return (
-      <div style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ color: '#888', fontSize: 14 }}>Caricamento video...</div>
-      </div>
+      <View style={{ flex: 1, backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center' }}>
+        {error ? (
+          <Ionicons name="videocam-off-outline" size={48} color="#666" />
+        ) : (
+          <ActivityIndicator size="large" color="#FF6978" />
+        )}
+      </View>
     );
   }
 
   return (
     <video
       ref={videoRef}
-      src={blobUrl}
+      src={dataUrl}
       style={style}
       autoPlay={autoPlay}
       loop={loop}
