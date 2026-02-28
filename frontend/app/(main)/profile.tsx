@@ -126,22 +126,43 @@ export default function ProfileScreen() {
     router.replace('/(auth)/login');
   };
   
-  const renderPost = ({ item }: { item: Post }) => (
-    <TouchableOpacity style={styles.postItem}>
-      {item.media ? (
-        <Image source={{ uri: item.media }} style={styles.postImage} />
-      ) : (
-        <View style={styles.postPlaceholder}>
-          <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
-        </View>
-      )}
-      {item.type === 'video' && (
-        <View style={styles.videoIcon}>
-          <Ionicons name="play" size={16} color={Colors.text} />
-        </View>
-      )}
-    </TouchableOpacity>
-  );
+  const renderPost = ({ item }: { item: Post }) => {
+    const isVideo = item.type === 'video';
+    
+    return (
+      <TouchableOpacity 
+        style={styles.postItem}
+        onPress={() => {
+          if (isVideo) {
+            router.push('/(main)/reels');
+          }
+        }}
+      >
+        {item.media ? (
+          isVideo ? (
+            <View style={styles.videoThumb}>
+              <Video
+                source={{ uri: item.media }}
+                style={styles.postImage}
+                resizeMode={ResizeMode.COVER}
+                shouldPlay={false}
+                positionMillis={500}
+              />
+              <View style={styles.videoPlayOverlay}>
+                <Ionicons name="play" size={24} color="#FFF" />
+              </View>
+            </View>
+          ) : (
+            <Image source={{ uri: item.media }} style={styles.postImage} />
+          )
+        ) : (
+          <View style={styles.postPlaceholder}>
+            <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
   
   // Mock highlights
   const highlights = [
