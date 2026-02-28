@@ -237,7 +237,66 @@ backend:
         -agent: "testing"
         -comment: "Initial testing required for GET /api/availability-slots endpoint"
 
-frontend: []
+frontend: 
+  - task: "Login Flow"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(auth)/login.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "testing"
+        -comment: "Test login screen display, BEAT MATES logo visibility and colors, email/password fields, Sign up link navigation"
+
+  - task: "Registration Flow"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(auth)/register.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "testing"
+        -comment: "Test registration form fields, validation, Sign up button, redirect to categories selection"
+
+  - task: "Categories Selection"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(auth)/categories.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "testing"
+        -comment: "Test dance categories grid display, category selection functionality, Continue button, redirect to home feed"
+
+  - task: "Home Feed"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(main)/home.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "testing"
+        -comment: "Test BEAT MATES header logo visibility, stories bar, tab bar with icons, navigation to profile tab"
+
+  - task: "Profile Page"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(main)/profile.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "testing"
+        -comment: "Test profile section with stats (Posts, Followers, Following), availability toggle visibility and functionality"
 
 metadata:
   created_by: "testing_agent"
