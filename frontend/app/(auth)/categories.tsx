@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Image,
   Alert,
   ActivityIndicator,
   Dimensions,
@@ -25,18 +24,18 @@ interface Category {
   image_url: string;
 }
 
-// Category images - using placeholder colors/gradients
-const categoryImages: Record<string, any> = {
-  latin: { backgroundColor: '#8B5CF6' },
-  ballroom: { backgroundColor: '#EC4899' },
-  breakdance: { backgroundColor: '#06B6D4' },
-  classic: { backgroundColor: '#1F2937' },
-  modern: { backgroundColor: '#9CA3AF' },
-  caribbean: { backgroundColor: '#D97706' },
-  hiphop: { backgroundColor: '#EF4444' },
-  contemporary: { backgroundColor: '#10B981' },
-  jazz: { backgroundColor: '#3B82F6' },
-  pop: { backgroundColor: '#8B5CF6' },
+// Category colors matching the Figma design
+const categoryColors: Record<string, string> = {
+  latin: '#8B5CF6',
+  ballroom: '#EC4899',
+  breakdance: '#06B6D4',
+  classic: '#374151',
+  modern: '#6B7280',
+  caribbean: '#F59E0B',
+  hiphop: '#EF4444',
+  contemporary: '#10B981',
+  jazz: '#3B82F6',
+  pop: '#A855F7',
 };
 
 export default function CategoriesScreen() {
@@ -92,7 +91,7 @@ export default function CategoriesScreen() {
   const handleSkip = async () => {
     setIsSaving(true);
     try {
-      await setCategories(['latin']); // Default category
+      await setCategories(['latin']);
       router.replace('/(main)/home');
     } catch (error: any) {
       Alert.alert('Error', error.message);
@@ -124,14 +123,14 @@ export default function CategoriesScreen() {
         <View style={styles.grid}>
           {categories.map((category) => {
             const isSelected = selectedCategories.includes(category.id);
-            const imageStyle = categoryImages[category.image_url] || { backgroundColor: Colors.surface };
+            const bgColor = categoryColors[category.id] || Colors.surface;
             
             return (
               <TouchableOpacity
                 key={category.id}
                 style={[
                   styles.card,
-                  imageStyle,
+                  { backgroundColor: bgColor },
                   isSelected && styles.cardSelected,
                 ]}
                 onPress={() => toggleCategory(category.id)}
@@ -213,7 +212,7 @@ const styles = StyleSheet.create({
   },
   card: {
     width: CARD_WIDTH,
-    height: CARD_WIDTH * 0.75,
+    height: 100,
     borderRadius: 12,
     marginBottom: 16,
     alignItems: 'center',
@@ -226,7 +225,7 @@ const styles = StyleSheet.create({
   },
   cardText: {
     color: Colors.text,
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 'bold',
     textAlign: 'center',
   },
