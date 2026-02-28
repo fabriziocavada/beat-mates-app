@@ -17,7 +17,7 @@ import { useAuthStore } from '../../src/store/authStore';
 import api from '../../src/services/api';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - 60) / 2;
+const CARD_WIDTH = (width - 48) / 2;
 
 interface Category {
   id: string;
