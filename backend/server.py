@@ -872,6 +872,15 @@ async def get_pending_sessions(current_user: dict = Depends(get_current_user)):
     
     return result
 
+@api_router.get("/live-sessions/pending/count")
+async def get_pending_count(current_user: dict = Depends(get_current_user)):
+    count = await db.live_sessions.count_documents({
+        "teacher_id": current_user["id"],
+        "status": "pending"
+    })
+    return {"count": count}
+
+
 @api_router.post("/live-sessions/{session_id}/accept", response_model=LiveSessionResponse)
 async def accept_live_session(session_id: str, current_user: dict = Depends(get_current_user)):
     session = await db.live_sessions.find_one({"id": session_id})
