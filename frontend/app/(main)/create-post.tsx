@@ -123,6 +123,12 @@ export default function CreatePostScreen() {
   
   return (
     <SafeAreaView style={styles.container}>
+      {isLoading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#FF6978" />
+          <Text style={styles.loadingText}>Pubblicazione in corso...</Text>
+        </View>
+      )}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="close" size={28} color="#FFFFFF" />
