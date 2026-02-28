@@ -25,15 +25,28 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
 
   React.useEffect(() => {
     if (!mediaUrl) return;
-    let cancelled = false;
 
+    // If already a data URL or direct video URL, use directly
+    if (mediaUrl.startsWith('data:')) {
+      setVideoSource(mediaUrl);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
     fetch(mediaUrl)
-      .then(res => res.json())
-      .then(data => {
-        if (!cancelled && data.data_url) {
-          setVideoSource(data.data_url);
+      .then(res => {
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          return res.json().then(data => {
+            if (!cancelled && data.data_url) setVideoSource(data.data_url);
+            setLoading(false);
+          });
+        } else {
+          // Direct video file - use URL as-is
+          if (!cancelled) setVideoSource(mediaUrl);
+          setLoading(false);
         }
-        setLoading(false);
       })
       .catch(() => { if (!cancelled) setLoading(false); });
 

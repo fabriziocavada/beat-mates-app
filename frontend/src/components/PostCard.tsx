@@ -30,6 +30,19 @@ interface PostCardProps {
   onCommentPress?: (postId: string) => void;
 }
 
+function VideoPlayer({ mediaUrl, autoPlay }: { mediaUrl: string; autoPlay?: boolean }) {
+  return (
+    <Video
+      source={{ uri: mediaUrl }}
+      style={{ width: '100%', height: '100%' }}
+      resizeMode={ResizeMode.COVER}
+      shouldPlay={autoPlay !== false}
+      isLooping
+      isMuted={false}
+    />
+  );
+}
+
 export default function PostCard({ post, onUserPress, onCommentPress }: PostCardProps) {
   const [isLiked, setIsLiked] = useState(post.is_liked);
   const [likesCount, setLikesCount] = useState(post.likes_count);
