@@ -12,12 +12,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/store/authStore';
 import api from '../../src/services/api';
+import Colors from '../../src/constants/colors';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
-const CARD_HEIGHT = 120;
+const CARD_HEIGHT = 130;
 
 interface Category {
   id: string;
@@ -25,17 +27,17 @@ interface Category {
   image_url: string;
 }
 
-// Real dance images from Unsplash - high quality
+// High-quality dance images
 const categoryImages: Record<string, string> = {
-  latin: 'https://images.unsplash.com/photo-1504609813442-a8924e83f76e?w=400&h=300&fit=crop&q=80',
-  ballroom: 'https://images.unsplash.com/photo-1533738363-b7f9aef128ce?w=400&h=300&fit=crop&q=80',
-  breakdance: 'https://images.unsplash.com/photo-1547153760-18fc86324498?w=400&h=300&fit=crop&q=80',
-  classic: 'https://images.unsplash.com/photo-1518834107812-67b0b7c58434?w=400&h=300&fit=crop&q=80',
-  modern: 'https://images.unsplash.com/photo-1508700929628-666bc8bd84ea?w=400&h=300&fit=crop&q=80',
-  caribbean: 'https://images.unsplash.com/photo-1545959570-a94084071b5d?w=400&h=300&fit=crop&q=80',
-  hiphop: 'https://images.unsplash.com/photo-1535525153412-5a42439a210d?w=400&h=300&fit=crop&q=80',
-  contemporary: 'https://images.unsplash.com/photo-1509670572403-1f85de089a5d?w=400&h=300&fit=crop&q=80',
-  jazz: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400&h=300&fit=crop&q=80',
+  latin: 'https://images.unsplash.com/photo-1568557412756-7d219873dd11?w=400&h=300&fit=crop&q=80',
+  ballroom: 'https://images.unsplash.com/photo-1594567573269-49ee664c6c80?w=400&h=300&fit=crop&q=80',
+  breakdance: 'https://images.unsplash.com/photo-1508700929628-666bc8bd84ea?w=400&h=300&fit=crop&q=80',
+  classic: 'https://images.unsplash.com/photo-1508807526345-15e9b5f4eaff?w=400&h=300&fit=crop&q=80',
+  modern: 'https://images.unsplash.com/photo-1547153760-18fc86324498?w=400&h=300&fit=crop&q=80',
+  caribbean: 'https://images.unsplash.com/photo-1587827646762-c2e320829539?w=400&h=300&fit=crop&q=80',
+  hiphop: 'https://images.unsplash.com/photo-1609602886239-a55db9685b7c?w=400&h=300&fit=crop&q=80',
+  contemporary: 'https://images.unsplash.com/photo-1529229504105-4ea795dcbf59?w=400&h=300&fit=crop&q=80',
+  jazz: 'https://images.unsplash.com/photo-1550026593-f369f98df0af?w=400&h=300&fit=crop&q=80',
   pop: 'https://images.unsplash.com/photo-1524594152303-9fd13543fe6e?w=400&h=300&fit=crop&q=80',
 };
 
@@ -104,7 +106,7 @@ export default function CategoriesScreen() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF6978" />
+        <ActivityIndicator size="large" color={Colors.primary} />
       </View>
     );
   }
@@ -117,14 +119,16 @@ export default function CategoriesScreen() {
         <Text style={styles.matesText}>MATES</Text>
       </View>
       
-      {/* Categories Grid */}
+      <Text style={styles.subtitle}>Choose the dance categories</Text>
+      
+      {/* Categories Grid - ALL categories */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.grid}>
-          {categories.slice(0, 6).map((category) => {
+          {categories.map((category) => {
             const isSelected = selectedCategories.includes(category.id);
             const imageUrl = categoryImages[category.id] || categoryImages.latin;
             
@@ -144,7 +148,15 @@ export default function CategoriesScreen() {
                   imageStyle={styles.cardImageStyle}
                   resizeMode="cover"
                 >
-                  <View style={styles.cardOverlay}>
+                  <View style={[
+                    styles.cardOverlay,
+                    isSelected && styles.cardOverlaySelected,
+                  ]}>
+                    {isSelected && (
+                      <View style={styles.checkIcon}>
+                        <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
+                      </View>
+                    )}
                     <Text style={styles.cardText}>
                       {category.name.toUpperCase()}
                     </Text>
@@ -155,6 +167,13 @@ export default function CategoriesScreen() {
           })}
         </View>
       </ScrollView>
+      
+      {/* Selected count */}
+      {selectedCategories.length > 0 && (
+        <Text style={styles.selectedCount}>
+          {selectedCategories.length} selected
+        </Text>
+      )}
       
       {/* Footer */}
       <View style={styles.footer}>
@@ -181,8 +200,6 @@ export default function CategoriesScreen() {
           )}
         </TouchableOpacity>
       </View>
-      
-      <Text style={styles.footerText}>Choose the dance categories</Text>
     </SafeAreaView>
   );
 }
@@ -190,28 +207,35 @@ export default function CategoriesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: Colors.background,
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: Colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    paddingVertical: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   beatText: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: Colors.text,
   },
   matesText: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#FF6978',
+    color: Colors.primary,
+  },
+  subtitle: {
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    fontSize: 15,
+    marginBottom: 16,
   },
   scrollView: {
     flex: 1,
@@ -231,11 +255,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 12,
     overflow: 'hidden',
-    backgroundColor: '#1C1C1E',
+    backgroundColor: Colors.surface,
   },
   cardSelected: {
     borderWidth: 3,
-    borderColor: '#FF6978',
+    borderColor: Colors.primary,
   },
   cardImage: {
     flex: 1,
@@ -245,9 +269,20 @@ const styles = StyleSheet.create({
     borderRadius: 13,
   },
   cardOverlay: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
     paddingVertical: 10,
     paddingHorizontal: 12,
+    borderRadius: 13,
+  },
+  cardOverlaySelected: {
+    backgroundColor: 'rgba(255,105,120,0.3)',
+  },
+  checkIcon: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
   },
   cardText: {
     color: '#FFFFFF',
@@ -255,29 +290,37 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 0.5,
   },
+  selectedCount: {
+    color: Colors.primary,
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '600',
+    paddingVertical: 4,
+  },
   footer: {
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 12,
+    paddingBottom: 24,
   },
   skipButton: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#FF6978',
+    borderColor: Colors.primary,
     backgroundColor: 'transparent',
     borderRadius: 10,
     padding: 14,
     alignItems: 'center',
   },
   skipButtonText: {
-    color: '#FFFFFF',
+    color: Colors.text,
     fontSize: 16,
     fontWeight: '600',
   },
   continueButton: {
     flex: 1,
-    backgroundColor: '#2C2C2E',
+    backgroundColor: Colors.primary,
     borderRadius: 10,
     padding: 14,
     alignItems: 'center',
@@ -286,14 +329,8 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   continueButtonText: {
-    color: '#FFFFFF',
+    color: Colors.text,
     fontSize: 16,
     fontWeight: '600',
-  },
-  footerText: {
-    color: '#8E8E93',
-    textAlign: 'center',
-    paddingBottom: 20,
-    fontSize: 14,
   },
 });
