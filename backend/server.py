@@ -1035,7 +1035,7 @@ async def get_live_session(session_id: str, current_user: dict = Depends(get_cur
         "profile_image": teacher.get("profile_image")
     }
     
-    return LiveSessionResponse(**session)
+    return LiveSessionResponse(**clean_doc(session))
 
 # ==================== REVIEWS ====================
 
