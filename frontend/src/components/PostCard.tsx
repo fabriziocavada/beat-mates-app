@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import api, { getMediaUrl } from '../services/api';
 
