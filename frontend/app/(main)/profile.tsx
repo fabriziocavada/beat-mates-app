@@ -20,6 +20,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Video, ResizeMode } from 'expo-av';
 import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
+import LessonNotificationBanner from '../../src/components/LessonNotificationBanner';
 import { useAuthStore } from '../../src/store/authStore';
 import api, { uploadFile, getMediaUrl } from '../../src/services/api';
 
