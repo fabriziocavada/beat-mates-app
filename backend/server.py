@@ -856,11 +856,17 @@ async def get_pending_sessions(current_user: dict = Depends(get_current_user)):
     result = []
     for session in sessions:
         student = await db.users.find_one({"id": session["student_id"]})
-        session["teacher"] = {
+        session["student"] = {
             "id": student["id"],
             "username": student["username"],
             "name": student["name"],
             "profile_image": student.get("profile_image")
+        } if student else None
+        session["teacher"] = {
+            "id": current_user["id"],
+            "username": current_user["username"],
+            "name": current_user["name"],
+            "profile_image": current_user.get("profile_image")
         }
         result.append(LiveSessionResponse(**session))
     
