@@ -199,9 +199,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   mediaContainer: {
-    width: width,
+    width: '100%',
     aspectRatio: 1,
     backgroundColor: '#1C1C1E',
+    maxHeight: 400,
   },
   media: {
     width: '100%',
