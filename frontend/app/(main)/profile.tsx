@@ -40,18 +40,9 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (user?.id) {
       loadPosts();
+      refreshUser();
     }
   }, [user?.id]);
-  
-  // Refresh posts when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      if (user?.id) {
-        loadPosts();
-        refreshUser();
-      }
-    }, [user?.id])
-  );
   
   const loadPosts = async () => {
     try {
