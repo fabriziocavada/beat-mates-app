@@ -1,59 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Platform, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import api, { getMediaUrl } from '../services/api';
-
-// Component that fetches video data URL from server and plays with expo-av
-function VideoPlayer({ mediaUrl, autoPlay = true }: { mediaUrl: string; autoPlay?: boolean }) {
-  const [videoSource, setVideoSource] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!mediaUrl) return;
-    let cancelled = false;
-
-    // Fetch the base64 data URL from the media endpoint
-    fetch(mediaUrl)
-      .then(res => res.json())
-      .then(data => {
-        if (!cancelled && data.data_url) {
-          setVideoSource(data.data_url);
-        }
-        setLoading(false);
-      })
-      .catch(() => { if (!cancelled) setLoading(false); });
-
-    return () => { cancelled = true; };
-  }, [mediaUrl]);
-
-  if (loading) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="small" color="#FF6978" />
-      </View>
-    );
-  }
-
-  if (!videoSource) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center' }}>
-        <Ionicons name="videocam-off-outline" size={32} color="#666" />
-      </View>
-    );
-  }
-
-  return (
-    <Video
-      source={{ uri: videoSource }}
-      style={{ width: '100%', height: '100%' }}
-      resizeMode={ResizeMode.COVER}
-      shouldPlay={autoPlay}
-      isLooping
-      isMuted
-    />
-  );
-}
 
 const { width } = Dimensions.get('window');
 
