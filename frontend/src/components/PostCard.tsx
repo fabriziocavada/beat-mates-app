@@ -1,7 +1,53 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import api, { getMediaUrl } from '../services/api';
+
+// Web video player that loads video as blob to bypass proxy issues
+function WebVideo({ src, autoPlay, loop, muted, style }: any) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!src) return;
+    let cancelled = false;
+    
+    fetch(src)
+      .then(res => res.blob())
+      .then(blob => {
+        if (!cancelled) {
+          const url = URL.createObjectURL(blob);
+          setBlobUrl(url);
+        }
+      })
+      .catch(() => {});
+    
+    return () => {
+      cancelled = true;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [src]);
+
+  if (!blobUrl) {
+    return (
+      <div style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ color: '#888', fontSize: 12 }}>Caricamento...</div>
+      </div>
+    );
+  }
+
+  return (
+    <video
+      ref={videoRef}
+      src={blobUrl}
+      style={style}
+      autoPlay={autoPlay}
+      loop={loop}
+      muted={muted}
+      playsInline
+    />
+  );
+}
 
 const { width } = Dimensions.get('window');
 
@@ -92,13 +138,12 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
         <View style={styles.mediaContainer}>
           {isVideo ? (
             Platform.OS === 'web' ? (
-              <video
+              <WebVideo
                 src={mediaUrl}
                 style={{ width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#000' }}
                 autoPlay
                 loop
                 muted
-                playsInline
               />
             ) : (
               <View style={[styles.media, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
