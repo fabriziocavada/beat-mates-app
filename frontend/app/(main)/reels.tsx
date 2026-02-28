@@ -52,9 +52,9 @@ export default function ReelsScreen() {
   const loadReels = async () => {
     try {
       const response = await api.get('/posts');
-      // Show ALL posts with media content
-      const mediaPosts = response.data.filter((p: ReelPost) => p.media);
-      setReels(mediaPosts);
+      // Show ONLY video posts
+      const videoPosts = response.data.filter((p: ReelPost) => p.type === 'video' && p.media);
+      setReels(videoPosts);
     } catch (error) {
       console.error('Failed to load reels', error);
     } finally {
