@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ActivityIndicator, StatusBar } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, StatusBar, Image } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore } from '../src/store/authStore';
@@ -10,13 +10,21 @@ export default function RootLayout() {
   const segments = useSegments();
   const { isLoading, isAuthenticated, hasSelectedCategories, loadUser } = useAuthStore();
   const [isReady, setIsReady] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
   
   useEffect(() => {
     loadUser().finally(() => setIsReady(true));
+    
+    // Show splash for 2 seconds
+    const splashTimer = setTimeout(() => {
+      setShowSplash(false);
+    }, 2000);
+    
+    return () => clearTimeout(splashTimer);
   }, []);
   
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || showSplash) return;
     
     const inAuthGroup = segments[0] === '(auth)';
     const inMainGroup = segments[0] === '(main)';
@@ -28,13 +36,23 @@ export default function RootLayout() {
     } else if (isAuthenticated && hasSelectedCategories && inAuthGroup) {
       router.replace('/(main)/home');
     }
-  }, [isAuthenticated, hasSelectedCategories, segments, isReady]);
+  }, [isAuthenticated, hasSelectedCategories, segments, isReady, showSplash]);
   
-  if (!isReady || isLoading) {
+  // Show splash screen
+  if (showSplash || !isReady || isLoading) {
     return (
-      <View style={styles.loading}>
-        <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
-        <ActivityIndicator size="large" color={Colors.primary} />
+      <View style={styles.splashContainer}>
+        <StatusBar barStyle="light-content" backgroundColor="#000000" />
+        <Image
+          source={require('../assets/images/splash-logo.png')}
+          style={styles.splashLogo}
+          resizeMode="contain"
+        />
+        <ActivityIndicator
+          size="small"
+          color={Colors.primary}
+          style={styles.splashLoader}
+        />
       </View>
     );
   }
@@ -54,10 +72,17 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  loading: {
+  splashContainer: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  splashLogo: {
+    width: 280,
+    height: 280,
+  },
+  splashLoader: {
+    marginTop: 40,
   },
 });
