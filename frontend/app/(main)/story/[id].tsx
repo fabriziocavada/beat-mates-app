@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import api from '../../../src/services/api';
+import api, { getMediaUrl } from '../../../src/services/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -80,7 +80,7 @@ export default function ViewStoryScreen() {
     <View style={styles.container}>
       {/* Story Image */}
       <Image
-        source={{ uri: story.media }}
+        source={{ uri: getMediaUrl(story.media) || '' }}
         style={styles.storyImage}
         resizeMode="cover"
       />
@@ -96,7 +96,7 @@ export default function ViewStoryScreen() {
           <View style={styles.avatar}>
             {story.user?.profile_image ? (
               <Image
-                source={{ uri: story.user.profile_image }}
+                source={{ uri: getMediaUrl(story.user.profile_image) || '' }}
                 style={styles.avatarImage}
               />
             ) : (

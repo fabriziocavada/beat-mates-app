@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../../../src/constants/colors';
-import api from '../../../src/services/api';
+import api, { getMediaUrl } from '../../../src/services/api';
 import { useAuthStore } from '../../../src/store/authStore';
 
 interface Comment {
@@ -101,7 +101,7 @@ export default function CommentsScreen() {
         >
           <View style={styles.commentAvatar}>
             {item.user?.profile_image ? (
-              <Image source={{ uri: item.user.profile_image }} style={styles.avatarImage} />
+              <Image source={{ uri: getMediaUrl(item.user.profile_image) || '' }} style={styles.avatarImage} />
             ) : (
               <Ionicons name="person" size={16} color={Colors.textSecondary} />
             )}
@@ -161,7 +161,7 @@ export default function CommentsScreen() {
           <View style={styles.inputContainer}>
             <View style={styles.inputAvatar}>
               {user?.profile_image ? (
-                <Image source={{ uri: user.profile_image }} style={styles.inputAvatarImage} />
+                <Image source={{ uri: getMediaUrl(user.profile_image) || '' }} style={styles.inputAvatarImage} />
               ) : (
                 <Ionicons name="person" size={16} color={Colors.textSecondary} />
               )}
