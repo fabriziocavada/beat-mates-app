@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { Video, ResizeMode } from 'expo-av';
 import api from '../../src/services/api';
 import { useAuthStore } from '../../src/store/authStore';
 
@@ -28,6 +29,7 @@ export default function CreatePostScreen() {
   
   const [caption, setCaption] = useState('');
   const [media, setMedia] = useState<string | null>(null);
+  const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'photo' | 'video'>('photo');
   const [isLoading, setIsLoading] = useState(false);
   
@@ -35,17 +37,17 @@ export default function CreatePostScreen() {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (!permissionResult.granted) {
-      Alert.alert('Permission required', 'Please allow access to your photo library');
+      Alert.alert('Permesso richiesto', 'Consenti accesso alla galleria');
       return;
     }
     
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.4, // Lower quality for smaller size
+      aspect: [9, 16],
+      quality: 0.4,
       base64: true,
-      videoMaxDuration: 60,
+      videoMaxDuration: 10,
     });
     
     if (!result.canceled && result.assets[0]) {
@@ -53,9 +55,11 @@ export default function CreatePostScreen() {
       if (asset.type === 'video') {
         setMediaType('video');
         setMedia(asset.uri);
+        setMediaUri(asset.uri);
       } else if (asset.base64) {
         setMediaType('photo');
         setMedia(`data:image/jpeg;base64,${asset.base64}`);
+        setMediaUri(asset.uri);
       }
     }
   };
@@ -64,13 +68,13 @@ export default function CreatePostScreen() {
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
     
     if (!permissionResult.granted) {
-      Alert.alert('Permission required', 'Please allow camera access');
+      Alert.alert('Permesso richiesto', 'Consenti accesso alla fotocamera');
       return;
     }
     
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
-      aspect: [1, 1],
+      aspect: [9, 16],
       quality: 0.4,
       base64: true,
     });
@@ -78,12 +82,36 @@ export default function CreatePostScreen() {
     if (!result.canceled && result.assets[0].base64) {
       setMediaType('photo');
       setMedia(`data:image/jpeg;base64,${result.assets[0].base64}`);
+      setMediaUri(result.assets[0].uri);
+    }
+  };
+
+  const takeVideo = async () => {
+    const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
+    const micPermission = await ImagePicker.requestMicrophonePermissionsAsync();
+    
+    if (!cameraPermission.granted || !micPermission.granted) {
+      Alert.alert('Permesso richiesto', 'Consenti accesso a fotocamera e microfono');
+      return;
+    }
+    
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      videoMaxDuration: 10,
+      videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
+      allowsEditing: true,
+    });
+    
+    if (!result.canceled && result.assets[0]) {
+      setMediaType('video');
+      setMedia(result.assets[0].uri);
+      setMediaUri(result.assets[0].uri);
     }
   };
   
   const handlePost = async () => {
     if (!media && !caption) {
-      Alert.alert('Empty post', 'Please add an image, video or caption');
+      Alert.alert('Post vuoto', 'Aggiungi una foto, un video o un testo');
       return;
     }
     
@@ -99,7 +127,7 @@ export default function CreatePostScreen() {
       router.back();
     } catch (error: any) {
       console.error('Post error:', error.response?.data || error.message);
-      Alert.alert('Error', 'Failed to create post. Try with a smaller image/video.');
+      Alert.alert('Errore', 'Impossibile creare il post. Prova con un file più piccolo.');
     } finally {
       setIsLoading(false);
     }
@@ -111,7 +139,7 @@ export default function CreatePostScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="close" size={28} color="#FFFFFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>New Post</Text>
+        <Text style={styles.headerTitle}>Nuovo Post</Text>
         <TouchableOpacity
           onPress={handlePost}
           disabled={isLoading || (!media && !caption)}
@@ -123,7 +151,7 @@ export default function CreatePostScreen() {
               styles.shareButton,
               (!media && !caption) && styles.shareButtonDisabled
             ]}>
-              Share
+              Pubblica
             </Text>
           )}
         </TouchableOpacity>
@@ -136,30 +164,52 @@ export default function CreatePostScreen() {
         <ScrollView>
           {media ? (
             <View style={styles.previewContainer}>
-              <Image source={{ uri: media }} style={styles.preview} resizeMode="cover" />
+              {mediaType === 'video' ? (
+                <Video
+                  source={{ uri: mediaUri || media }}
+                  style={styles.preview}
+                  useNativeControls
+                  resizeMode={ResizeMode.COVER}
+                  isLooping
+                  shouldPlay
+                />
+              ) : (
+                <Image source={{ uri: media }} style={styles.preview} resizeMode="cover" />
+              )}
               <TouchableOpacity
                 style={styles.removeButton}
-                onPress={() => setMedia(null)}
+                onPress={() => { setMedia(null); setMediaUri(null); }}
               >
                 <Ionicons name="close-circle" size={32} color="#FF6978" />
               </TouchableOpacity>
+              {mediaType === 'video' && (
+                <View style={styles.videoBadge}>
+                  <Ionicons name="videocam" size={14} color="#FFF" />
+                  <Text style={styles.videoBadgeText}>Video</Text>
+                </View>
+              )}
             </View>
           ) : (
             <View style={styles.mediaOptions}>
               <TouchableOpacity style={styles.mediaButton} onPress={takePhoto}>
                 <Ionicons name="camera" size={36} color="#FF6978" />
-                <Text style={styles.mediaButtonText}>Camera</Text>
+                <Text style={styles.mediaButtonText}>Foto</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.mediaButton} onPress={takeVideo}>
+                <Ionicons name="videocam" size={36} color="#FF6978" />
+                <Text style={styles.mediaButtonText}>Video</Text>
+                <Text style={styles.mediaButtonHint}>max 10s</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.mediaButton} onPress={pickMedia}>
                 <Ionicons name="images" size={36} color="#FF6978" />
-                <Text style={styles.mediaButtonText}>Gallery</Text>
+                <Text style={styles.mediaButtonText}>Galleria</Text>
               </TouchableOpacity>
             </View>
           )}
           
           <TextInput
             style={styles.captionInput}
-            placeholder="Write a caption..."
+            placeholder="Scrivi una didascalia..."
             placeholderTextColor="#8E8E93"
             value={caption}
             onChangeText={setCaption}
@@ -204,7 +254,8 @@ const styles = StyleSheet.create({
   },
   previewContainer: {
     width: width - 32,
-    aspectRatio: 1,
+    aspectRatio: 9 / 16,
+    maxHeight: 400,
     margin: 16,
     borderRadius: 12,
     overflow: 'hidden',
@@ -219,24 +270,46 @@ const styles = StyleSheet.create({
     top: 8,
     right: 8,
   },
+  videoBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  videoBadgeText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   mediaOptions: {
     flexDirection: 'row',
     justifyContent: 'center',
     padding: 40,
-    gap: 30,
+    gap: 20,
   },
   mediaButton: {
     alignItems: 'center',
-    padding: 24,
+    padding: 20,
     backgroundColor: '#1C1C1E',
     borderRadius: 16,
-    width: 110,
+    width: 100,
   },
   mediaButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '500',
     marginTop: 8,
+  },
+  mediaButtonHint: {
+    color: '#8E8E93',
+    fontSize: 11,
+    marginTop: 2,
   },
   captionInput: {
     color: '#FFFFFF',
