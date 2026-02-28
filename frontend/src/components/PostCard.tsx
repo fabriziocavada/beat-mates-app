@@ -1,46 +1,33 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Video, ResizeMode } from 'expo-av';
 import api, { getMediaUrl } from '../services/api';
 
-// Web video player that loads video via base64 data URL from API
-function WebVideo({ src, autoPlay, loop, muted, style }: any) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [dataUrl, setDataUrl] = useState<string | null>(null);
-  const [error, setError] = useState(false);
+// Component that fetches video data URL from server and plays with expo-av
+function VideoPlayer({ mediaUrl, autoPlay = true }: { mediaUrl: string; autoPlay?: boolean }) {
+  const [videoSource, setVideoSource] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!src) return;
+    if (!mediaUrl) return;
     let cancelled = false;
-    
-    // Fetch the video as base64 data URL from the media endpoint
-    fetch(src)
+
+    // Fetch the base64 data URL from the media endpoint
+    fetch(mediaUrl)
       .then(res => res.json())
       .then(data => {
         if (!cancelled && data.data_url) {
-          setDataUrl(data.data_url);
+          setVideoSource(data.data_url);
         }
+        setLoading(false);
       })
-      .catch(() => { if (!cancelled) setError(true); });
-    
+      .catch(() => { if (!cancelled) setLoading(false); });
+
     return () => { cancelled = true; };
-  }, [src]);
+  }, [mediaUrl]);
 
-  useEffect(() => {
-    if (dataUrl && videoRef.current && autoPlay) {
-      videoRef.current.play().catch(() => {});
-    }
-  }, [dataUrl]);
-
-  if (error) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center' }}>
-        <Ionicons name="videocam-off-outline" size={32} color="#666" />
-      </View>
-    );
-  }
-
-  if (!dataUrl) {
+  if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="small" color="#FF6978" />
@@ -48,15 +35,22 @@ function WebVideo({ src, autoPlay, loop, muted, style }: any) {
     );
   }
 
+  if (!videoSource) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name="videocam-off-outline" size={32} color="#666" />
+      </View>
+    );
+  }
+
   return (
-    <video
-      ref={videoRef}
-      src={dataUrl}
-      style={style}
-      autoPlay={autoPlay}
-      loop={loop}
-      muted={muted}
-      playsInline
+    <Video
+      source={{ uri: videoSource }}
+      style={{ width: '100%', height: '100%' }}
+      resizeMode={ResizeMode.COVER}
+      shouldPlay={autoPlay}
+      isLooping
+      isMuted
     />
   );
 }
