@@ -10,7 +10,7 @@ import time
 from datetime import datetime, timedelta
 
 # Configuration
-BASE_URL = "https://beat-mates-demo.preview.emergentagent.com/api"
+BASE_URL = "https://beats-connect-3.preview.emergentagent.com/api"
 headers = {'Content-Type': 'application/json'}
 auth_token = None
 
