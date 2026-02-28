@@ -1069,6 +1069,25 @@ async def toggle_availability(current_user: dict = Depends(get_current_user)):
 
 # ==================== FILE UPLOAD ====================
 
+import subprocess
+
+def convert_video_to_mp4(input_path: str, output_path: str) -> bool:
+    """Convert any video to H.264 MP4 format for browser compatibility."""
+    try:
+        cmd = [
+            'ffmpeg', '-y', '-i', input_path,
+            '-c:v', 'libx264', '-preset', 'fast',
+            '-crf', '28', '-c:a', 'aac',
+            '-movflags', '+faststart',
+            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+            output_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, timeout=60)
+        return result.returncode == 0
+    except Exception as e:
+        logger.error(f"Video conversion failed: {e}")
+        return False
+
 @api_router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
@@ -1080,8 +1099,11 @@ async def upload_file(
         parts = file.filename.rsplit('.', 1)
         if len(parts) > 1:
             ext = parts[1].lower()
+    
+    is_video = False
     if file.content_type:
         if 'video' in file.content_type:
+            is_video = True
             if ext not in ['mp4', 'mov', 'avi', 'webm']:
                 ext = 'mp4'
         elif 'png' in file.content_type:
@@ -1091,15 +1113,40 @@ async def upload_file(
         elif 'webp' in file.content_type:
             ext = 'webp'
 
-    filename = f"{uuid.uuid4()}.{ext}"
+    file_id = str(uuid.uuid4())
+    filename = f"{file_id}.{ext}"
     filepath = UPLOADS_DIR / filename
 
     content = await file.read()
     with open(filepath, 'wb') as f:
         f.write(content)
 
+    # Convert video to H.264 MP4 for browser compatibility
+    if is_video and ext != 'mp4':
+        mp4_filename = f"{file_id}.mp4"
+        mp4_path = UPLOADS_DIR / mp4_filename
+        if convert_video_to_mp4(str(filepath), str(mp4_path)):
+            os.remove(filepath)
+            filename = mp4_filename
+            filepath = mp4_path
+    elif is_video:
+        # Even if ext is mp4, check if it's actually QuickTime and needs re-encoding
+        with open(filepath, 'rb') as f:
+            f.seek(4)
+            box_type = f.read(4)
+            if box_type == b'ftyp':
+                f.read(0)  # skip
+                brand = f.read(4)
+                # QuickTime brand: 'qt  '
+                if brand in [b'qt  ', b'M4V ']:
+                    mp4_filename = f"{file_id}_h264.mp4"
+                    mp4_path = UPLOADS_DIR / mp4_filename
+                    if convert_video_to_mp4(str(filepath), str(mp4_path)):
+                        os.remove(filepath)
+                        filename = mp4_filename
+
     url = f"/api/uploads/{filename}"
-    media_type = "video" if file.content_type and 'video' in file.content_type else "image"
+    media_type = "video" if is_video else "image"
     return {"url": url, "filename": filename, "media_type": media_type}
 
 # ==================== HEALTH CHECK ====================
