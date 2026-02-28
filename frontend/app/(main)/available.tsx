@@ -38,6 +38,13 @@ export default function AvailableScreen() {
     loadTeachers();
   }, []);
   
+  // Refresh teachers when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadTeachers();
+    }, [])
+  );
+  
   const loadTeachers = async () => {
     try {
       const response = await api.get('/available-teachers');
