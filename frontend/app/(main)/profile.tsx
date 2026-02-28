@@ -21,7 +21,7 @@ import { Video, ResizeMode } from 'expo-av';
 import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
 import { useAuthStore } from '../../src/store/authStore';
-import api from '../../src/services/api';
+import api, { uploadFile, getMediaUrl } from '../../src/services/api';
 
 const { width } = Dimensions.get('window');
 const POST_SIZE = (width - 4) / 3;
@@ -68,10 +68,10 @@ export default function ProfileScreen() {
           const perm = await ImagePicker.requestCameraPermissionsAsync();
           if (!perm.granted) { Alert.alert('Permesso necessario'); return; }
           const result = await ImagePicker.launchCameraAsync({
-            allowsEditing: true, aspect: [1, 1], quality: 0.15, base64: true,
+            allowsEditing: true, aspect: [1, 1], quality: 0.5,
           });
-          if (!result.canceled && result.assets[0].base64) {
-            uploadProfilePic(`data:image/jpeg;base64,${result.assets[0].base64}`);
+          if (!result.canceled && result.assets[0]) {
+            uploadProfilePic(result.assets[0].uri);
           }
         },
       },
@@ -82,10 +82,10 @@ export default function ProfileScreen() {
           if (!perm.granted) { Alert.alert('Permesso necessario'); return; }
           const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true, aspect: [1, 1], quality: 0.15, base64: true,
+            allowsEditing: true, aspect: [1, 1], quality: 0.5,
           });
-          if (!result.canceled && result.assets[0].base64) {
-            uploadProfilePic(`data:image/jpeg;base64,${result.assets[0].base64}`);
+          if (!result.canceled && result.assets[0]) {
+            uploadProfilePic(result.assets[0].uri);
           }
         },
       },
@@ -93,14 +93,15 @@ export default function ProfileScreen() {
     ]);
   };
 
-  const uploadProfilePic = async (base64Image: string) => {
+  const uploadProfilePic = async (uri: string) => {
     setIsUploadingPic(true);
     try {
-      await api.put('/users/me', { profile_image: base64Image });
+      const serverUrl = await uploadFile(uri);
+      await api.put('/users/me', { profile_image: serverUrl });
       await refreshUser();
       Alert.alert('Fatto!', 'Immagine di profilo aggiornata');
     } catch (error) {
-      Alert.alert('Errore', 'Immagine troppo grande. Prova con una foto più piccola.');
+      Alert.alert('Errore', 'Impossibile aggiornare la foto. Riprova.');
     } finally {
       setIsUploadingPic(false);
     }
