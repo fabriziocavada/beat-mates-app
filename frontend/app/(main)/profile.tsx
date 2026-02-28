@@ -39,6 +39,7 @@ export default function ProfileScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'shop'>('posts');
+  const [isUploadingPic, setIsUploadingPic] = useState(false);
   
   useEffect(() => {
     if (user?.id) {
@@ -55,6 +56,37 @@ export default function ProfileScreen() {
       console.error('Failed to load posts', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+  
+  const handleChangeProfilePicture = async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (!permissionResult.granted) {
+      Alert.alert('Permesso richiesto', 'Consenti accesso alla galleria');
+      return;
+    }
+    
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.3,
+      base64: true,
+    });
+    
+    if (!result.canceled && result.assets[0].base64) {
+      setIsUploadingPic(true);
+      try {
+        const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
+        await api.put('/users/me', { profile_image: base64Image });
+        await refreshUser();
+        Alert.alert('Fatto!', 'Immagine di profilo aggiornata');
+      } catch (error) {
+        Alert.alert('Errore', 'Impossibile aggiornare la foto. Riprova.');
+      } finally {
+        setIsUploadingPic(false);
+      }
     }
   };
   
