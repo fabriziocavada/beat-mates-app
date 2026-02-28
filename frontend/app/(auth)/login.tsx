@@ -81,6 +81,8 @@ export default function LoginScreen() {
                 onChangeText={setEmail}
                 autoCapitalize="none"
                 keyboardType="email-address"
+                data-testid="login-email-input"
+                testID="login-email-input"
               />
             </View>
             
@@ -92,6 +94,8 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                data-testid="login-password-input"
+                testID="login-password-input"
               />
               <TouchableOpacity
                 style={styles.eyeButton}
@@ -113,6 +117,8 @@ export default function LoginScreen() {
               style={[styles.loginButton, (!email || !password) && styles.loginButtonDisabled]}
               onPress={handleLogin}
               disabled={isLoading || !email || !password}
+              data-testid="login-submit-button"
+              testID="login-submit-button"
             >
               {isLoading ? (
                 <ActivityIndicator color={Colors.text} />
