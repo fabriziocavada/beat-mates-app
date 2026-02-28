@@ -172,12 +172,16 @@ export default function ProfileScreen() {
       >
         {/* Profile Info */}
         <View style={styles.profileSection}>
-          <View style={styles.avatarContainer}>
+          <TouchableOpacity style={styles.avatarContainer} onPress={handleChangeProfilePicture}>
             <View style={[
               styles.avatarBorder,
               user?.is_available && styles.avatarBorderAvailable
             ]}>
-              {user?.profile_image ? (
+              {isUploadingPic ? (
+                <View style={styles.avatarPlaceholder}>
+                  <ActivityIndicator size="large" color={Colors.primary} />
+                </View>
+              ) : user?.profile_image ? (
                 <Image source={{ uri: user.profile_image }} style={styles.avatar} />
               ) : (
                 <View style={styles.avatarPlaceholder}>
@@ -185,10 +189,14 @@ export default function ProfileScreen() {
                 </View>
               )}
             </View>
+            {/* Camera icon overlay */}
+            <View style={styles.cameraIcon}>
+              <Ionicons name="camera" size={14} color="#FFF" />
+            </View>
             {user?.is_available && (
               <View style={styles.onlineIndicator} />
             )}
-          </View>
+          </TouchableOpacity>
           
           <Text style={styles.name}>{user?.name}</Text>
           <Text style={styles.bio}>{user?.bio || 'Dance Teacher'}</Text>
