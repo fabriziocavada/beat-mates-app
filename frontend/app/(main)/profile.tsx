@@ -44,6 +44,16 @@ export default function ProfileScreen() {
     }
   }, [user?.id]);
   
+  // Refresh posts when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) {
+        loadPosts();
+        refreshUser();
+      }
+    }, [user?.id])
+  );
+  
   const loadPosts = async () => {
     try {
       const response = await api.get(`/users/${user?.id}/posts`);
