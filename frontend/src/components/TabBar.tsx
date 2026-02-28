@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Colors from '../constants/colors';
 import { useAuthStore } from '../store/authStore';
+import Colors from '../constants/colors';
 
 interface TabBarProps {
   activeTab: string;
@@ -10,50 +10,59 @@ interface TabBarProps {
 }
 
 export default function TabBar({ activeTab, onTabPress }: TabBarProps) {
-  const user = useAuthStore((state) => state.user);
-  
+  const { user } = useAuthStore();
+
   const tabs = [
-    { id: 'home', icon: 'home', iconOutline: 'home-outline' },
-    { id: 'create', icon: 'add-circle', iconOutline: 'add-circle-outline' },
-    { id: 'available', icon: 'people', iconOutline: 'people-outline' },
-    { id: 'reels', icon: 'play-circle', iconOutline: 'play-circle-outline' },
-    { id: 'music', icon: 'musical-notes', iconOutline: 'musical-notes-outline' },
+    { id: 'home', icon: 'home', iconOutline: 'home-outline', label: 'Home' },
+    { id: 'create', icon: 'add-circle', iconOutline: 'add-circle-outline', label: 'Create' },
+    { id: 'available', icon: 'tv', iconOutline: 'tv-outline', label: 'Live', hasDot: true },
+    { id: 'reels', icon: 'play', iconOutline: 'play-outline', label: 'Reels' },
+    { id: 'music', icon: 'musical-notes', iconOutline: 'musical-notes-outline', label: 'Music' },
+    { id: 'profile', icon: 'person', iconOutline: 'person-outline', label: 'Profile', isProfile: true },
   ];
-  
+
   return (
     <View style={styles.container}>
-      {tabs.map((tab) => (
-        <TouchableOpacity
-          key={tab.id}
-          style={styles.tab}
-          onPress={() => onTabPress(tab.id)}
-        >
-          <Ionicons
-            name={activeTab === tab.id ? tab.icon as any : tab.iconOutline as any}
-            size={26}
-            color={activeTab === tab.id ? Colors.primary : Colors.text}
-          />
-        </TouchableOpacity>
-      ))}
-      
-      <TouchableOpacity
-        style={styles.tab}
-        onPress={() => onTabPress('profile')}
-      >
-        <View style={[
-          styles.profileImage,
-          activeTab === 'profile' && styles.profileImageActive
-        ]}>
-          {user?.profile_image ? (
-            <Image
-              source={{ uri: user.profile_image }}
-              style={styles.avatar}
-            />
-          ) : (
-            <Ionicons name="person" size={18} color={Colors.text} />
-          )}
-        </View>
-      </TouchableOpacity>
+      {tabs.map((tab) => {
+        const isActive = activeTab === tab.id;
+
+        if (tab.isProfile) {
+          return (
+            <TouchableOpacity
+              key={tab.id}
+              style={styles.tab}
+              onPress={() => onTabPress(tab.id)}
+            >
+              <View style={[styles.profileContainer, isActive && styles.profileContainerActive]}>
+                {user?.profile_image ? (
+                  <Image source={{ uri: user.profile_image }} style={styles.profileImage} />
+                ) : (
+                  <Ionicons name="person" size={18} color={isActive ? Colors.primary : '#FFFFFF'} />
+                )}
+              </View>
+            </TouchableOpacity>
+          );
+        }
+
+        return (
+          <TouchableOpacity
+            key={tab.id}
+            style={styles.tab}
+            onPress={() => onTabPress(tab.id)}
+          >
+            <View style={styles.iconWrapper}>
+              <Ionicons
+                name={isActive ? tab.icon as any : tab.iconOutline as any}
+                size={tab.id === 'create' ? 28 : 24}
+                color={isActive ? Colors.primary : '#FFFFFF'}
+              />
+              {tab.hasDot && (
+                <View style={styles.liveDot} />
+              )}
+            </View>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
@@ -61,32 +70,46 @@ export default function TabBar({ activeTab, onTabPress }: TabBarProps) {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    backgroundColor: Colors.background,
-    paddingVertical: 10,
+    backgroundColor: '#000000',
     borderTopWidth: 0.5,
-    borderTopColor: Colors.border,
+    borderTopColor: '#2C2C2E',
+    paddingBottom: 20,
+    paddingTop: 8,
+    paddingHorizontal: 8,
   },
   tab: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 8,
+    paddingVertical: 4,
   },
-  profileImage: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.surface,
+  iconWrapper: {
+    position: 'relative',
+  },
+  liveDot: {
+    position: 'absolute',
+    top: -2,
+    right: -4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: Colors.primary,
+  },
+  profileContainer: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 2,
+    borderColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+    backgroundColor: '#2C2C2E',
   },
-  profileImageActive: {
-    borderWidth: 2,
+  profileContainerActive: {
     borderColor: Colors.primary,
   },
-  avatar: {
+  profileImage: {
     width: '100%',
     height: '100%',
   },
