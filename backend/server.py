@@ -1,15 +1,18 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field
-from typing import List
+from pydantic import BaseModel, Field, EmailStr
+from typing import List, Optional
 import uuid
-from datetime import datetime
-
+from datetime import datetime, timedelta
+import bcrypt
+import jwt
+import base64
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -17,40 +20,867 @@ load_dotenv(ROOT_DIR / '.env')
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[os.environ.get('DB_NAME', 'beatmates')]
 
-# Create the main app without a prefix
-app = FastAPI()
+# JWT Settings
+JWT_SECRET = os.environ.get('JWT_SECRET', 'beatmates-secret-key-2025')
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24 * 7  # 7 days
+
+# Create the main app
+app = FastAPI(title="Beat Mates API")
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+# Security
+security = HTTPBearer()
 
-# Define Models
-class StatusCheck(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+# ==================== MODELS ====================
 
-# Add your routes to the router instead of directly to app
+class UserBase(BaseModel):
+    email: EmailStr
+    username: str
+    name: str
+    bio: Optional[str] = ""
+    profile_image: Optional[str] = None
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    username: str
+    name: str
+    password: str
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    username: str
+    name: str
+    bio: str = ""
+    profile_image: Optional[str] = None
+    dance_categories: List[str] = []
+    is_available: bool = False
+    hourly_rate: float = 0
+    rating: float = 0
+    followers_count: int = 0
+    following_count: int = 0
+    posts_count: int = 0
+    created_at: datetime
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    bio: Optional[str] = None
+    profile_image: Optional[str] = None
+    dance_categories: Optional[List[str]] = None
+    is_available: Optional[bool] = None
+    hourly_rate: Optional[float] = None
+
+class DanceCategory(BaseModel):
+    id: str
+    name: str
+    image_url: str
+
+class PostCreate(BaseModel):
+    type: str  # photo, video, text
+    media: Optional[str] = None  # base64 encoded
+    caption: Optional[str] = ""
+
+class PostResponse(BaseModel):
+    id: str
+    user_id: str
+    user: Optional[dict] = None
+    type: str
+    media: Optional[str] = None
+    caption: str = ""
+    likes_count: int = 0
+    comments_count: int = 0
+    is_liked: bool = False
+    created_at: datetime
+
+class CommentCreate(BaseModel):
+    text: str
+
+class CommentResponse(BaseModel):
+    id: str
+    user_id: str
+    user: Optional[dict] = None
+    post_id: str
+    text: str
+    created_at: datetime
+
+class AvailabilitySlotCreate(BaseModel):
+    date: str  # YYYY-MM-DD
+    start_time: str  # HH:MM
+    end_time: str  # HH:MM
+    dance_categories: List[str]
+    price: float
+
+class AvailabilitySlotResponse(BaseModel):
+    id: str
+    user_id: str
+    user: Optional[dict] = None
+    date: str
+    start_time: str
+    end_time: str
+    dance_categories: List[str]
+    price: float
+    is_booked: bool = False
+    created_at: datetime
+
+class BookingCreate(BaseModel):
+    slot_id: str
+
+class BookingResponse(BaseModel):
+    id: str
+    student_id: str
+    teacher_id: str
+    slot: Optional[dict] = None
+    status: str  # pending, confirmed, completed, cancelled
+    amount: float
+    created_at: datetime
+
+class LiveSessionRequest(BaseModel):
+    teacher_id: str
+
+class LiveSessionResponse(BaseModel):
+    id: str
+    student_id: str
+    teacher_id: str
+    teacher: Optional[dict] = None
+    status: str  # pending, accepted, active, completed, rejected
+    amount: float
+    started_at: Optional[datetime] = None
+    ended_at: Optional[datetime] = None
+    created_at: datetime
+
+class ReviewCreate(BaseModel):
+    session_id: str
+    rating: int  # 1-5
+
+class PreRecordedLessonCreate(BaseModel):
+    title: str
+    video: str  # base64
+    duration: int  # minutes
+    price: float
+    dance_category: str
+
+class PreRecordedLessonResponse(BaseModel):
+    id: str
+    user_id: str
+    user: Optional[dict] = None
+    title: str
+    video: Optional[str] = None
+    duration: int
+    price: float
+    dance_category: str
+    created_at: datetime
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+# ==================== AUTH HELPERS ====================
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode(), hashed.encode())
+
+def create_token(user_id: str) -> str:
+    payload = {
+        "user_id": user_id,
+        "exp": datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        user = await db.users.find_one({"id": user_id})
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        return user
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+# ==================== AUTH ROUTES ====================
+
+@api_router.post("/auth/register", response_model=TokenResponse)
+async def register(data: UserCreate):
+    # Check if email exists
+    existing = await db.users.find_one({"email": data.email})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Check if username exists
+    existing = await db.users.find_one({"username": data.username})
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already taken")
+    
+    user_id = str(uuid.uuid4())
+    user = {
+        "id": user_id,
+        "email": data.email,
+        "username": data.username,
+        "name": data.name,
+        "password_hash": hash_password(data.password),
+        "bio": "",
+        "profile_image": None,
+        "dance_categories": [],
+        "is_available": False,
+        "hourly_rate": 50.0,
+        "rating": 0,
+        "followers_count": 0,
+        "following_count": 0,
+        "posts_count": 0,
+        "created_at": datetime.utcnow()
+    }
+    
+    await db.users.insert_one(user)
+    token = create_token(user_id)
+    
+    user_response = UserResponse(**{k: v for k, v in user.items() if k != "password_hash"})
+    return TokenResponse(access_token=token, user=user_response)
+
+@api_router.post("/auth/login", response_model=TokenResponse)
+async def login(data: UserLogin):
+    user = await db.users.find_one({"email": data.email})
+    if not user or not verify_password(data.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    token = create_token(user["id"])
+    user_response = UserResponse(**{k: v for k, v in user.items() if k != "password_hash"})
+    return TokenResponse(access_token=token, user=user_response)
+
+# ==================== USER ROUTES ====================
+
+@api_router.get("/users/me", response_model=UserResponse)
+async def get_me(current_user: dict = Depends(get_current_user)):
+    return UserResponse(**{k: v for k, v in current_user.items() if k != "password_hash"})
+
+@api_router.put("/users/me", response_model=UserResponse)
+async def update_me(data: UserUpdate, current_user: dict = Depends(get_current_user)):
+    update_data = {k: v for k, v in data.dict().items() if v is not None}
+    if update_data:
+        await db.users.update_one({"id": current_user["id"]}, {"$set": update_data})
+    
+    updated_user = await db.users.find_one({"id": current_user["id"]})
+    return UserResponse(**{k: v for k, v in updated_user.items() if k != "password_hash"})
+
+@api_router.get("/users/{user_id}", response_model=UserResponse)
+async def get_user(user_id: str, current_user: dict = Depends(get_current_user)):
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return UserResponse(**{k: v for k, v in user.items() if k != "password_hash"})
+
+@api_router.post("/users/{user_id}/follow")
+async def follow_user(user_id: str, current_user: dict = Depends(get_current_user)):
+    if user_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot follow yourself")
+    
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    existing = await db.follows.find_one({
+        "follower_id": current_user["id"],
+        "following_id": user_id
+    })
+    
+    if existing:
+        # Unfollow
+        await db.follows.delete_one({"id": existing["id"]})
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"following_count": -1}})
+        await db.users.update_one({"id": user_id}, {"$inc": {"followers_count": -1}})
+        return {"following": False}
+    else:
+        # Follow
+        follow = {
+            "id": str(uuid.uuid4()),
+            "follower_id": current_user["id"],
+            "following_id": user_id,
+            "created_at": datetime.utcnow()
+        }
+        await db.follows.insert_one(follow)
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"following_count": 1}})
+        await db.users.update_one({"id": user_id}, {"$inc": {"followers_count": 1}})
+        return {"following": True}
+
+@api_router.get("/users/{user_id}/is-following")
+async def is_following(user_id: str, current_user: dict = Depends(get_current_user)):
+    existing = await db.follows.find_one({
+        "follower_id": current_user["id"],
+        "following_id": user_id
+    })
+    return {"following": existing is not None}
+
+# ==================== DANCE CATEGORIES ====================
+
+DEFAULT_CATEGORIES = [
+    {"id": "latin", "name": "Latin American Dance", "image_url": "latin"},
+    {"id": "ballroom", "name": "Ballroom", "image_url": "ballroom"},
+    {"id": "breakdance", "name": "Break Dance", "image_url": "breakdance"},
+    {"id": "classic", "name": "Classic", "image_url": "classic"},
+    {"id": "modern", "name": "Modern", "image_url": "modern"},
+    {"id": "caribbean", "name": "Caribbean", "image_url": "caribbean"},
+    {"id": "hiphop", "name": "Hip Hop", "image_url": "hiphop"},
+    {"id": "contemporary", "name": "Contemporary", "image_url": "contemporary"},
+    {"id": "jazz", "name": "Jazz", "image_url": "jazz"},
+    {"id": "pop", "name": "Pop", "image_url": "pop"},
+]
+
+@api_router.get("/dance-categories", response_model=List[DanceCategory])
+async def get_dance_categories():
+    return DEFAULT_CATEGORIES
+
+# ==================== POSTS ROUTES ====================
+
+@api_router.post("/posts", response_model=PostResponse)
+async def create_post(data: PostCreate, current_user: dict = Depends(get_current_user)):
+    post_id = str(uuid.uuid4())
+    post = {
+        "id": post_id,
+        "user_id": current_user["id"],
+        "type": data.type,
+        "media": data.media,
+        "caption": data.caption or "",
+        "likes_count": 0,
+        "comments_count": 0,
+        "created_at": datetime.utcnow()
+    }
+    
+    await db.posts.insert_one(post)
+    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"posts_count": 1}})
+    
+    post["user"] = {
+        "id": current_user["id"],
+        "username": current_user["username"],
+        "name": current_user["name"],
+        "profile_image": current_user.get("profile_image")
+    }
+    post["is_liked"] = False
+    
+    return PostResponse(**post)
+
+@api_router.get("/posts", response_model=List[PostResponse])
+async def get_posts(current_user: dict = Depends(get_current_user)):
+    # Get posts from users in same dance categories or followed users
+    following = await db.follows.find({"follower_id": current_user["id"]}).to_list(1000)
+    following_ids = [f["following_id"] for f in following]
+    following_ids.append(current_user["id"])
+    
+    # Get users with matching dance categories
+    if current_user.get("dance_categories"):
+        category_users = await db.users.find({
+            "dance_categories": {"$in": current_user["dance_categories"]}
+        }).to_list(1000)
+        category_user_ids = [u["id"] for u in category_users]
+        following_ids.extend(category_user_ids)
+    
+    following_ids = list(set(following_ids))
+    
+    posts = await db.posts.find({"user_id": {"$in": following_ids}}).sort("created_at", -1).to_list(100)
+    
+    # Get likes for current user
+    user_likes = await db.likes.find({"user_id": current_user["id"]}).to_list(1000)
+    liked_post_ids = {l["post_id"] for l in user_likes}
+    
+    result = []
+    for post in posts:
+        user = await db.users.find_one({"id": post["user_id"]})
+        if user:
+            post["user"] = {
+                "id": user["id"],
+                "username": user["username"],
+                "name": user["name"],
+                "profile_image": user.get("profile_image")
+            }
+        post["is_liked"] = post["id"] in liked_post_ids
+        result.append(PostResponse(**post))
+    
+    return result
+
+@api_router.get("/users/{user_id}/posts", response_model=List[PostResponse])
+async def get_user_posts(user_id: str, current_user: dict = Depends(get_current_user)):
+    posts = await db.posts.find({"user_id": user_id}).sort("created_at", -1).to_list(100)
+    
+    user = await db.users.find_one({"id": user_id})
+    user_likes = await db.likes.find({"user_id": current_user["id"]}).to_list(1000)
+    liked_post_ids = {l["post_id"] for l in user_likes}
+    
+    result = []
+    for post in posts:
+        if user:
+            post["user"] = {
+                "id": user["id"],
+                "username": user["username"],
+                "name": user["name"],
+                "profile_image": user.get("profile_image")
+            }
+        post["is_liked"] = post["id"] in liked_post_ids
+        result.append(PostResponse(**post))
+    
+    return result
+
+@api_router.post("/posts/{post_id}/like")
+async def like_post(post_id: str, current_user: dict = Depends(get_current_user)):
+    post = await db.posts.find_one({"id": post_id})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    existing = await db.likes.find_one({
+        "user_id": current_user["id"],
+        "post_id": post_id
+    })
+    
+    if existing:
+        # Unlike
+        await db.likes.delete_one({"id": existing["id"]})
+        await db.posts.update_one({"id": post_id}, {"$inc": {"likes_count": -1}})
+        return {"liked": False}
+    else:
+        # Like
+        like = {
+            "id": str(uuid.uuid4()),
+            "user_id": current_user["id"],
+            "post_id": post_id,
+            "created_at": datetime.utcnow()
+        }
+        await db.likes.insert_one(like)
+        await db.posts.update_one({"id": post_id}, {"$inc": {"likes_count": 1}})
+        return {"liked": True}
+
+@api_router.post("/posts/{post_id}/comments", response_model=CommentResponse)
+async def create_comment(post_id: str, data: CommentCreate, current_user: dict = Depends(get_current_user)):
+    post = await db.posts.find_one({"id": post_id})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    comment_id = str(uuid.uuid4())
+    comment = {
+        "id": comment_id,
+        "user_id": current_user["id"],
+        "post_id": post_id,
+        "text": data.text,
+        "created_at": datetime.utcnow()
+    }
+    
+    await db.comments.insert_one(comment)
+    await db.posts.update_one({"id": post_id}, {"$inc": {"comments_count": 1}})
+    
+    comment["user"] = {
+        "id": current_user["id"],
+        "username": current_user["username"],
+        "name": current_user["name"],
+        "profile_image": current_user.get("profile_image")
+    }
+    
+    return CommentResponse(**comment)
+
+@api_router.get("/posts/{post_id}/comments", response_model=List[CommentResponse])
+async def get_comments(post_id: str, current_user: dict = Depends(get_current_user)):
+    comments = await db.comments.find({"post_id": post_id}).sort("created_at", -1).to_list(100)
+    
+    result = []
+    for comment in comments:
+        user = await db.users.find_one({"id": comment["user_id"]})
+        if user:
+            comment["user"] = {
+                "id": user["id"],
+                "username": user["username"],
+                "name": user["name"],
+                "profile_image": user.get("profile_image")
+            }
+        result.append(CommentResponse(**comment))
+    
+    return result
+
+# ==================== AVAILABILITY & BOOKINGS ====================
+
+@api_router.get("/available-teachers", response_model=List[dict])
+async def get_available_teachers(current_user: dict = Depends(get_current_user)):
+    # Get users who are available now
+    users = await db.users.find({"is_available": True, "id": {"$ne": current_user["id"]}}).to_list(100)
+    
+    result = []
+    for user in users:
+        result.append({
+            "id": user["id"],
+            "username": user["username"],
+            "name": user["name"],
+            "profile_image": user.get("profile_image"),
+            "rating": user.get("rating", 0),
+            "hourly_rate": user.get("hourly_rate", 50),
+            "dance_categories": user.get("dance_categories", []),
+            "available_since": user.get("available_since", datetime.utcnow())
+        })
+    
+    return result
+
+@api_router.post("/availability-slots", response_model=AvailabilitySlotResponse)
+async def create_availability_slot(data: AvailabilitySlotCreate, current_user: dict = Depends(get_current_user)):
+    slot_id = str(uuid.uuid4())
+    slot = {
+        "id": slot_id,
+        "user_id": current_user["id"],
+        "date": data.date,
+        "start_time": data.start_time,
+        "end_time": data.end_time,
+        "dance_categories": data.dance_categories,
+        "price": data.price,
+        "is_booked": False,
+        "created_at": datetime.utcnow()
+    }
+    
+    await db.availability_slots.insert_one(slot)
+    
+    slot["user"] = {
+        "id": current_user["id"],
+        "username": current_user["username"],
+        "name": current_user["name"],
+        "profile_image": current_user.get("profile_image")
+    }
+    
+    return AvailabilitySlotResponse(**slot)
+
+@api_router.get("/availability-slots", response_model=List[AvailabilitySlotResponse])
+async def get_my_availability_slots(current_user: dict = Depends(get_current_user)):
+    slots = await db.availability_slots.find({"user_id": current_user["id"]}).sort("date", 1).to_list(100)
+    
+    result = []
+    for slot in slots:
+        slot["user"] = {
+            "id": current_user["id"],
+            "username": current_user["username"],
+            "name": current_user["name"],
+            "profile_image": current_user.get("profile_image")
+        }
+        result.append(AvailabilitySlotResponse(**slot))
+    
+    return result
+
+@api_router.get("/users/{user_id}/availability-slots", response_model=List[AvailabilitySlotResponse])
+async def get_user_availability_slots(user_id: str, current_user: dict = Depends(get_current_user)):
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    slots = await db.availability_slots.find({
+        "user_id": user_id,
+        "is_booked": False,
+        "date": {"$gte": today}
+    }).sort("date", 1).to_list(100)
+    
+    result = []
+    for slot in slots:
+        slot["user"] = {
+            "id": user["id"],
+            "username": user["username"],
+            "name": user["name"],
+            "profile_image": user.get("profile_image")
+        }
+        result.append(AvailabilitySlotResponse(**slot))
+    
+    return result
+
+@api_router.post("/bookings", response_model=BookingResponse)
+async def create_booking(data: BookingCreate, current_user: dict = Depends(get_current_user)):
+    slot = await db.availability_slots.find_one({"id": data.slot_id})
+    if not slot:
+        raise HTTPException(status_code=404, detail="Slot not found")
+    
+    if slot["is_booked"]:
+        raise HTTPException(status_code=400, detail="Slot already booked")
+    
+    if slot["user_id"] == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot book your own slot")
+    
+    booking_id = str(uuid.uuid4())
+    booking = {
+        "id": booking_id,
+        "student_id": current_user["id"],
+        "teacher_id": slot["user_id"],
+        "slot_id": data.slot_id,
+        "status": "confirmed",
+        "amount": slot["price"],
+        "created_at": datetime.utcnow()
+    }
+    
+    await db.bookings.insert_one(booking)
+    await db.availability_slots.update_one({"id": data.slot_id}, {"$set": {"is_booked": True}})
+    
+    booking["slot"] = slot
+    
+    return BookingResponse(**booking)
+
+@api_router.get("/bookings", response_model=List[BookingResponse])
+async def get_my_bookings(current_user: dict = Depends(get_current_user)):
+    bookings = await db.bookings.find({
+        "$or": [
+            {"student_id": current_user["id"]},
+            {"teacher_id": current_user["id"]}
+        ]
+    }).sort("created_at", -1).to_list(100)
+    
+    result = []
+    for booking in bookings:
+        slot = await db.availability_slots.find_one({"id": booking["slot_id"]})
+        booking["slot"] = slot
+        result.append(BookingResponse(**booking))
+    
+    return result
+
+# ==================== LIVE SESSIONS ====================
+
+@api_router.post("/live-sessions/request", response_model=LiveSessionResponse)
+async def request_live_session(data: LiveSessionRequest, current_user: dict = Depends(get_current_user)):
+    teacher = await db.users.find_one({"id": data.teacher_id})
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Teacher not found")
+    
+    if not teacher.get("is_available"):
+        raise HTTPException(status_code=400, detail="Teacher is not available")
+    
+    if data.teacher_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot request session with yourself")
+    
+    session_id = str(uuid.uuid4())
+    session = {
+        "id": session_id,
+        "student_id": current_user["id"],
+        "teacher_id": data.teacher_id,
+        "status": "pending",
+        "amount": teacher.get("hourly_rate", 50),
+        "started_at": None,
+        "ended_at": None,
+        "created_at": datetime.utcnow()
+    }
+    
+    await db.live_sessions.insert_one(session)
+    
+    session["teacher"] = {
+        "id": teacher["id"],
+        "username": teacher["username"],
+        "name": teacher["name"],
+        "profile_image": teacher.get("profile_image")
+    }
+    
+    return LiveSessionResponse(**session)
+
+@api_router.get("/live-sessions/pending", response_model=List[LiveSessionResponse])
+async def get_pending_sessions(current_user: dict = Depends(get_current_user)):
+    sessions = await db.live_sessions.find({
+        "teacher_id": current_user["id"],
+        "status": "pending"
+    }).to_list(100)
+    
+    result = []
+    for session in sessions:
+        student = await db.users.find_one({"id": session["student_id"]})
+        session["teacher"] = {
+            "id": student["id"],
+            "username": student["username"],
+            "name": student["name"],
+            "profile_image": student.get("profile_image")
+        }
+        result.append(LiveSessionResponse(**session))
+    
+    return result
+
+@api_router.post("/live-sessions/{session_id}/accept", response_model=LiveSessionResponse)
+async def accept_live_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    session = await db.live_sessions.find_one({"id": session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if session["teacher_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    await db.live_sessions.update_one(
+        {"id": session_id},
+        {"$set": {"status": "active", "started_at": datetime.utcnow()}}
+    )
+    
+    session = await db.live_sessions.find_one({"id": session_id})
+    teacher = await db.users.find_one({"id": session["teacher_id"]})
+    session["teacher"] = {
+        "id": teacher["id"],
+        "username": teacher["username"],
+        "name": teacher["name"],
+        "profile_image": teacher.get("profile_image")
+    }
+    
+    return LiveSessionResponse(**session)
+
+@api_router.post("/live-sessions/{session_id}/reject")
+async def reject_live_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    session = await db.live_sessions.find_one({"id": session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if session["teacher_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    await db.live_sessions.update_one({"id": session_id}, {"$set": {"status": "rejected"}})
+    return {"status": "rejected"}
+
+@api_router.post("/live-sessions/{session_id}/end")
+async def end_live_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    session = await db.live_sessions.find_one({"id": session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if session["teacher_id"] != current_user["id"] and session["student_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    await db.live_sessions.update_one(
+        {"id": session_id},
+        {"$set": {"status": "completed", "ended_at": datetime.utcnow()}}
+    )
+    return {"status": "completed"}
+
+@api_router.get("/live-sessions/{session_id}", response_model=LiveSessionResponse)
+async def get_live_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    session = await db.live_sessions.find_one({"id": session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    teacher = await db.users.find_one({"id": session["teacher_id"]})
+    session["teacher"] = {
+        "id": teacher["id"],
+        "username": teacher["username"],
+        "name": teacher["name"],
+        "profile_image": teacher.get("profile_image")
+    }
+    
+    return LiveSessionResponse(**session)
+
+# ==================== REVIEWS ====================
+
+@api_router.post("/reviews")
+async def create_review(data: ReviewCreate, current_user: dict = Depends(get_current_user)):
+    session = await db.live_sessions.find_one({"id": data.session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if session["student_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Only students can review")
+    
+    existing = await db.reviews.find_one({
+        "session_id": data.session_id,
+        "reviewer_id": current_user["id"]
+    })
+    
+    if existing:
+        raise HTTPException(status_code=400, detail="Already reviewed")
+    
+    review = {
+        "id": str(uuid.uuid4()),
+        "session_id": data.session_id,
+        "reviewer_id": current_user["id"],
+        "reviewee_id": session["teacher_id"],
+        "rating": data.rating,
+        "created_at": datetime.utcnow()
+    }
+    
+    await db.reviews.insert_one(review)
+    
+    # Update teacher's average rating
+    reviews = await db.reviews.find({"reviewee_id": session["teacher_id"]}).to_list(1000)
+    avg_rating = sum(r["rating"] for r in reviews) / len(reviews) if reviews else 0
+    await db.users.update_one({"id": session["teacher_id"]}, {"$set": {"rating": avg_rating}})
+    
+    return {"success": True}
+
+# ==================== PRE-RECORDED LESSONS ====================
+
+@api_router.post("/pre-recorded-lessons", response_model=PreRecordedLessonResponse)
+async def create_pre_recorded_lesson(data: PreRecordedLessonCreate, current_user: dict = Depends(get_current_user)):
+    lesson_id = str(uuid.uuid4())
+    lesson = {
+        "id": lesson_id,
+        "user_id": current_user["id"],
+        "title": data.title,
+        "video": data.video,
+        "duration": data.duration,
+        "price": data.price,
+        "dance_category": data.dance_category,
+        "created_at": datetime.utcnow()
+    }
+    
+    await db.pre_recorded_lessons.insert_one(lesson)
+    
+    lesson["user"] = {
+        "id": current_user["id"],
+        "username": current_user["username"],
+        "name": current_user["name"],
+        "profile_image": current_user.get("profile_image")
+    }
+    
+    return PreRecordedLessonResponse(**lesson)
+
+@api_router.get("/users/{user_id}/pre-recorded-lessons", response_model=List[PreRecordedLessonResponse])
+async def get_user_pre_recorded_lessons(user_id: str, current_user: dict = Depends(get_current_user)):
+    lessons = await db.pre_recorded_lessons.find({"user_id": user_id}).sort("created_at", -1).to_list(100)
+    
+    user = await db.users.find_one({"id": user_id})
+    
+    result = []
+    for lesson in lessons:
+        lesson["user"] = {
+            "id": user["id"],
+            "username": user["username"],
+            "name": user["name"],
+            "profile_image": user.get("profile_image")
+        }
+        # Don't include video in list view
+        lesson["video"] = None
+        result.append(PreRecordedLessonResponse(**lesson))
+    
+    return result
+
+# ==================== TOGGLE AVAILABILITY ====================
+
+@api_router.post("/users/me/toggle-availability")
+async def toggle_availability(current_user: dict = Depends(get_current_user)):
+    new_status = not current_user.get("is_available", False)
+    update_data = {"is_available": new_status}
+    
+    if new_status:
+        update_data["available_since"] = datetime.utcnow()
+    
+    await db.users.update_one({"id": current_user["id"]}, {"$set": update_data})
+    return {"is_available": new_status}
+
+# ==================== HEALTH CHECK ====================
+
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "Beat Mates API", "version": "1.0.0"}
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.dict()
-    status_obj = StatusCheck(**status_dict)
-    _ = await db.status_checks.insert_one(status_obj.dict())
-    return status_obj
-
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    status_checks = await db.status_checks.find().to_list(1000)
-    return [StatusCheck(**status_check) for status_check in status_checks]
+@api_router.get("/health")
+async def health():
+    return {"status": "healthy"}
 
 # Include the router in the main app
 app.include_router(api_router)
@@ -62,13 +892,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
