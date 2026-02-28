@@ -1149,6 +1149,67 @@ async def upload_file(
     media_type = "video" if is_video else "image"
     return {"url": url, "filename": filename, "media_type": media_type}
 
+# Video streaming endpoint with Range request support
+@api_router.get("/media/{filename}")
+async def stream_media(filename: str, request: Request):
+    filepath = UPLOADS_DIR / filename
+    if not filepath.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    file_size = filepath.stat().st_size
+    
+    # Determine content type
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    content_types = {
+        'mp4': 'video/mp4', 'mov': 'video/quicktime', 'webm': 'video/webm',
+        'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
+        'gif': 'image/gif', 'webp': 'image/webp',
+    }
+    content_type = content_types.get(ext, 'application/octet-stream')
+    
+    # Handle Range requests for video streaming
+    range_header = request.headers.get('range')
+    if range_header:
+        range_match = range_header.strip().split('=')[-1]
+        parts = range_match.split('-')
+        start = int(parts[0])
+        end = int(parts[1]) if parts[1] else min(start + 1024 * 1024, file_size - 1)
+        end = min(end, file_size - 1)
+        
+        def iter_range():
+            with open(filepath, 'rb') as f:
+                f.seek(start)
+                remaining = end - start + 1
+                while remaining > 0:
+                    chunk = f.read(min(8192, remaining))
+                    if not chunk:
+                        break
+                    remaining -= len(chunk)
+                    yield chunk
+        
+        headers = {
+            'Content-Range': f'bytes {start}-{end}/{file_size}',
+            'Accept-Ranges': 'bytes',
+            'Content-Length': str(end - start + 1),
+            'Content-Type': content_type,
+            'Cache-Control': 'public, max-age=3600',
+        }
+        return StreamingResponse(iter_range(), status_code=206, headers=headers)
+    
+    # Full file response
+    def iter_file():
+        with open(filepath, 'rb') as f:
+            while chunk := f.read(8192):
+                yield chunk
+    
+    headers = {
+        'Accept-Ranges': 'bytes',
+        'Content-Length': str(file_size),
+        'Content-Type': content_type,
+        'Cache-Control': 'public, max-age=3600',
+    }
+    return StreamingResponse(iter_file(), headers=headers)
+
 # ==================== HEALTH CHECK ====================
 
 @api_router.get("/")
