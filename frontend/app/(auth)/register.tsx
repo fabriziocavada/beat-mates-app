@@ -42,10 +42,9 @@ export default function RegisterScreen() {
     setIsLoading(true);
     try {
       await register(email, username, name, password);
-      // Navigate directly to categories after successful registration
-      setTimeout(() => {
-        router.replace('/(auth)/categories');
-      }, 100);
+      // _layout.tsx will detect isAuthenticated + !hasSelectedCategories
+      // and redirect to categories automatically
+      router.replace('/(auth)/categories');
     } catch (error: any) {
       Alert.alert('Error', error.message);
       setIsLoading(false);
