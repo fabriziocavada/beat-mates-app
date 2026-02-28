@@ -396,11 +396,37 @@ async def get_dance_categories():
 @api_router.post("/posts", response_model=PostResponse)
 async def create_post(data: PostCreate, current_user: dict = Depends(get_current_user)):
     post_id = str(uuid.uuid4())
+    
+    # Save media to file if it's base64
+    media_url = None
+    if data.media:
+        if data.media.startswith('data:'):
+            # Base64 encoded - save to file
+            try:
+                header, b64data = data.media.split(',', 1)
+                ext = 'jpg' if 'jpeg' in header or 'jpg' in header else 'png'
+                if 'video' in header:
+                    ext = 'mp4'
+                filename = f"{post_id}.{ext}"
+                filepath = UPLOADS_DIR / filename
+                import base64 as b64mod
+                with open(filepath, 'wb') as f:
+                    f.write(b64mod.b64decode(b64data))
+                media_url = f"/api/uploads/{filename}"
+            except Exception as e:
+                logger.error(f"Failed to save media: {e}")
+                media_url = data.media  # fallback to base64
+        elif data.media.startswith('file://'):
+            # Local file URI - can't use server-side, skip
+            media_url = None
+        else:
+            media_url = data.media
+    
     post = {
         "id": post_id,
         "user_id": current_user["id"],
         "type": data.type,
-        "media": data.media,
+        "media": media_url,
         "caption": data.caption or "",
         "likes_count": 0,
         "comments_count": 0,
