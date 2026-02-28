@@ -1,11 +1,11 @@
 export const Colors = {
-  // Main theme
+  // Main theme - from Figma
   background: '#000000',
   surface: '#1C1C1E',
   surfaceLight: '#2C2C2E',
   
-  // Primary accent - Coral/Salmon
-  primary: '#FF6B6B',
+  // Primary accent - Coral from Figma #FF6978
+  primary: '#FF6978',
   primaryDark: '#E55A5A',
   
   // Secondary - Green for success/availability
@@ -18,7 +18,7 @@ export const Colors = {
   textMuted: '#636366',
   
   // Story border gradient
-  storyGradientStart: '#FF6B6B',
+  storyGradientStart: '#FF6978',
   storyGradientEnd: '#FF3B9A',
   
   // Highlights border

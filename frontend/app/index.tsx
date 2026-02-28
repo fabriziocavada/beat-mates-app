@@ -27,7 +27,7 @@ export default function SplashScreen() {
   
   return (
     <View style={styles.container}>
-      {/* Logo Box */}
+      {/* Logo Box - Rounded square with infinity symbol */}
       <View style={styles.logoBox}>
         <Text style={styles.infinitySymbol}>∞</Text>
       </View>
@@ -49,34 +49,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   logoBox: {
-    width: 140,
-    height: 120,
-    backgroundColor: '#FF6B7A',
-    borderRadius: 28,
+    width: 150,
+    height: 130,
+    backgroundColor: '#FF6978',
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: 30,
   },
   infinitySymbol: {
-    fontSize: 80,
+    fontSize: 90,
     color: '#FFFFFF',
-    fontWeight: '300',
-    marginTop: -8,
+    fontWeight: '200',
+    marginTop: -10,
   },
   nameContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   beatText: {
-    fontSize: 36,
+    fontSize: 40,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    letterSpacing: 2,
+    letterSpacing: 1,
   },
   matesText: {
-    fontSize: 36,
+    fontSize: 40,
     fontWeight: 'bold',
-    color: '#FF6B7A',
-    letterSpacing: 2,
+    color: '#FF6978',
+    letterSpacing: 1,
   },
 });

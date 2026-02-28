@@ -17,7 +17,7 @@ import api from '../../src/services/api';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
-const CARD_HEIGHT = 130;
+const CARD_HEIGHT = 120;
 
 interface Category {
   id: string;
@@ -25,18 +25,18 @@ interface Category {
   image_url: string;
 }
 
-// Real dance images from Unsplash
+// Real dance images from Unsplash - high quality
 const categoryImages: Record<string, string> = {
-  latin: 'https://images.unsplash.com/photo-1575448914662-72bf6428937b?w=400&h=300&fit=crop',
-  ballroom: 'https://images.unsplash.com/photo-1575448913281-98e9e5d3f193?w=400&h=300&fit=crop',
-  breakdance: 'https://images.unsplash.com/photo-1508700929628-666bc8bd84ea?w=400&h=300&fit=crop',
-  classic: 'https://images.unsplash.com/photo-1495791185843-c73f2269f669?w=400&h=300&fit=crop',
-  modern: 'https://images.unsplash.com/photo-1547153760-18fc86324498?w=400&h=300&fit=crop',
-  caribbean: 'https://images.unsplash.com/photo-1555489401-79c274997434?w=400&h=300&fit=crop',
-  hiphop: 'https://images.unsplash.com/photo-1508700929628-666bc8bd84ea?w=400&h=300&fit=crop',
-  contemporary: 'https://images.unsplash.com/photo-1547153760-18fc86324498?w=400&h=300&fit=crop',
-  jazz: 'https://images.unsplash.com/photo-1518834107812-67b0b7c58434?w=400&h=300&fit=crop',
-  pop: 'https://images.unsplash.com/photo-1524594152303-9fd13543fe6e?w=400&h=300&fit=crop',
+  latin: 'https://images.unsplash.com/photo-1504609813442-a8924e83f76e?w=400&h=300&fit=crop&q=80',
+  ballroom: 'https://images.unsplash.com/photo-1533738363-b7f9aef128ce?w=400&h=300&fit=crop&q=80',
+  breakdance: 'https://images.unsplash.com/photo-1547153760-18fc86324498?w=400&h=300&fit=crop&q=80',
+  classic: 'https://images.unsplash.com/photo-1518834107812-67b0b7c58434?w=400&h=300&fit=crop&q=80',
+  modern: 'https://images.unsplash.com/photo-1508700929628-666bc8bd84ea?w=400&h=300&fit=crop&q=80',
+  caribbean: 'https://images.unsplash.com/photo-1545959570-a94084071b5d?w=400&h=300&fit=crop&q=80',
+  hiphop: 'https://images.unsplash.com/photo-1535525153412-5a42439a210d?w=400&h=300&fit=crop&q=80',
+  contemporary: 'https://images.unsplash.com/photo-1509670572403-1f85de089a5d?w=400&h=300&fit=crop&q=80',
+  jazz: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400&h=300&fit=crop&q=80',
+  pop: 'https://images.unsplash.com/photo-1524594152303-9fd13543fe6e?w=400&h=300&fit=crop&q=80',
 };
 
 export default function CategoriesScreen() {
@@ -104,7 +104,7 @@ export default function CategoriesScreen() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF6B7A" />
+        <ActivityIndicator size="large" color="#FF6978" />
       </View>
     );
   }
@@ -142,9 +142,12 @@ export default function CategoriesScreen() {
                   source={{ uri: imageUrl }}
                   style={styles.cardImage}
                   imageStyle={styles.cardImageStyle}
+                  resizeMode="cover"
                 >
                   <View style={styles.cardOverlay}>
-                    <Text style={styles.cardText}>{category.name.toUpperCase()}</Text>
+                    <Text style={styles.cardText}>
+                      {category.name.toUpperCase()}
+                    </Text>
                   </View>
                 </ImageBackground>
               </TouchableOpacity>
@@ -187,35 +190,35 @@ export default function CategoriesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0E0E0E',
+    backgroundColor: '#0A0A0A',
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#0E0E0E',
+    backgroundColor: '#0A0A0A',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 20,
   },
   beatText: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
   matesText: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#FF4058',
+    color: '#FF6978',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingBottom: 20,
   },
   grid: {
     flexDirection: 'row',
@@ -225,29 +228,32 @@ const styles = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
-    borderRadius: 12,
+    borderRadius: 16,
     marginBottom: 12,
     overflow: 'hidden',
+    backgroundColor: '#1C1C1E',
   },
   cardSelected: {
     borderWidth: 3,
-    borderColor: '#FF4058',
+    borderColor: '#FF6978',
   },
   cardImage: {
     flex: 1,
     justifyContent: 'flex-end',
   },
   cardImageStyle: {
-    borderRadius: 12,
+    borderRadius: 13,
   },
   cardOverlay: {
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    padding: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
   cardText: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   footer: {
     flexDirection: 'row',
@@ -258,9 +264,9 @@ const styles = StyleSheet.create({
   skipButton: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#FF4058',
-    backgroundColor: '#1C1C1E',
-    borderRadius: 8,
+    borderColor: '#FF6978',
+    backgroundColor: 'transparent',
+    borderRadius: 10,
     padding: 14,
     alignItems: 'center',
   },
@@ -271,8 +277,8 @@ const styles = StyleSheet.create({
   },
   continueButton: {
     flex: 1,
-    backgroundColor: '#3A3A3C',
-    borderRadius: 8,
+    backgroundColor: '#2C2C2E',
+    borderRadius: 10,
     padding: 14,
     alignItems: 'center',
   },
@@ -285,9 +291,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   footerText: {
-    color: '#98989A',
+    color: '#8E8E93',
     textAlign: 'center',
-    paddingBottom: 16,
+    paddingBottom: 20,
     fontSize: 14,
   },
 });
