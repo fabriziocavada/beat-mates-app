@@ -13,9 +13,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { Video, ResizeMode } from 'expo-av';
 import api from '../../src/services/api';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 export default function CreateStoryScreen() {
   const router = useRouter();
@@ -26,9 +27,8 @@ export default function CreateStoryScreen() {
   
   const pickMedia = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
     if (!permissionResult.granted) {
-      Alert.alert('Permission required', 'Please allow access to your photo library');
+      Alert.alert('Permesso richiesto', 'Consenti accesso alla galleria');
       return;
     }
     
@@ -36,9 +36,9 @@ export default function CreateStoryScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsEditing: true,
       aspect: [9, 16],
-      quality: 0.5,
+      quality: 0.4,
       base64: true,
-      videoMaxDuration: 30,
+      videoMaxDuration: 10,
     });
     
     if (!result.canceled && result.assets[0]) {
@@ -55,16 +55,15 @@ export default function CreateStoryScreen() {
   
   const takePhoto = async () => {
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-    
     if (!permissionResult.granted) {
-      Alert.alert('Permission required', 'Please allow access to your camera');
+      Alert.alert('Permesso richiesto', 'Consenti accesso alla fotocamera');
       return;
     }
     
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       aspect: [9, 16],
-      quality: 0.5,
+      quality: 0.4,
       base64: true,
     });
     
@@ -73,10 +72,29 @@ export default function CreateStoryScreen() {
       setMedia(`data:image/jpeg;base64,${result.assets[0].base64}`);
     }
   };
+
+  const takeVideo = async () => {
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert('Permesso richiesto', 'Consenti accesso alla fotocamera');
+      return;
+    }
+    
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      videoMaxDuration: 10,
+      allowsEditing: true,
+    });
+    
+    if (!result.canceled && result.assets[0]) {
+      setMediaType('video');
+      setMedia(result.assets[0].uri);
+    }
+  };
   
   const handlePublish = async () => {
     if (!media) {
-      Alert.alert('No media', 'Please select a photo or video');
+      Alert.alert('Nessun media', 'Scegli una foto o registra un video');
       return;
     }
     
@@ -89,7 +107,7 @@ export default function CreateStoryScreen() {
       router.back();
     } catch (error: any) {
       console.error('Story error:', error.response?.data || error.message);
-      Alert.alert('Error', 'Failed to publish story. Try with a smaller image.');
+      Alert.alert('Errore', 'Impossibile pubblicare. Prova con un file più piccolo.');
     } finally {
       setIsLoading(false);
     }
@@ -101,7 +119,7 @@ export default function CreateStoryScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="close" size={28} color="#FFFFFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add to Story</Text>
+        <Text style={styles.headerTitle}>Nuova Storia</Text>
         <TouchableOpacity
           onPress={handlePublish}
           disabled={isLoading || !media}
@@ -113,7 +131,7 @@ export default function CreateStoryScreen() {
               styles.publishButton,
               !media && styles.publishButtonDisabled
             ]}>
-              Share
+              Pubblica
             </Text>
           )}
         </TouchableOpacity>
@@ -122,13 +140,30 @@ export default function CreateStoryScreen() {
       <View style={styles.content}>
         {media ? (
           <View style={styles.previewContainer}>
-            <Image source={{ uri: media }} style={styles.preview} resizeMode="cover" />
+            {mediaType === 'video' ? (
+              <Video
+                source={{ uri: media }}
+                style={styles.preview}
+                useNativeControls
+                resizeMode={ResizeMode.COVER}
+                isLooping
+                shouldPlay
+              />
+            ) : (
+              <Image source={{ uri: media }} style={styles.preview} resizeMode="cover" />
+            )}
             <TouchableOpacity
               style={styles.removeButton}
               onPress={() => setMedia(null)}
             >
               <Ionicons name="close-circle" size={36} color="#FF6978" />
             </TouchableOpacity>
+            {mediaType === 'video' && (
+              <View style={styles.videoBadge}>
+                <Ionicons name="videocam" size={14} color="#FFF" />
+                <Text style={styles.videoBadgeText}>Video</Text>
+              </View>
+            )}
           </View>
         ) : (
           <View style={styles.optionsContainer}>
@@ -136,14 +171,22 @@ export default function CreateStoryScreen() {
               <View style={styles.optionIcon}>
                 <Ionicons name="camera" size={40} color="#FF6978" />
               </View>
-              <Text style={styles.optionText}>Camera</Text>
+              <Text style={styles.optionText}>Foto</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.optionButton} onPress={takeVideo}>
+              <View style={styles.optionIcon}>
+                <Ionicons name="videocam" size={40} color="#FF6978" />
+              </View>
+              <Text style={styles.optionText}>Video</Text>
+              <Text style={styles.optionHint}>max 10s</Text>
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.optionButton} onPress={pickMedia}>
               <View style={styles.optionIcon}>
                 <Ionicons name="images" size={40} color="#FF6978" />
               </View>
-              <Text style={styles.optionText}>Gallery</Text>
+              <Text style={styles.optionText}>Galleria</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -198,25 +241,47 @@ const styles = StyleSheet.create({
     top: 20,
     right: 20,
   },
+  videoBadge: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    gap: 4,
+  },
+  videoBadgeText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   optionsContainer: {
     flexDirection: 'row',
-    gap: 30,
+    gap: 24,
   },
   optionButton: {
     alignItems: 'center',
   },
   optionIcon: {
-    width: 100,
-    height: 100,
+    width: 90,
+    height: 90,
     borderRadius: 20,
     backgroundColor: '#1C1C1E',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   optionText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
+  },
+  optionHint: {
+    color: '#8E8E93',
+    fontSize: 11,
+    marginTop: 2,
   },
 });
