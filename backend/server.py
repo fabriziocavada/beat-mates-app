@@ -26,7 +26,7 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ.get('DB_NAME', 'beatmates')]
 
 # JWT Settings
-JWT_SECRET = os.environ.get('JWT_SECRET', 'beatmates-secret-key-2025')
+JWT_SECRET = os.environ.get('JWT_SECRET', 'beatmates-secret-key-2025-production-secure')
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24 * 7  # 7 days
 
