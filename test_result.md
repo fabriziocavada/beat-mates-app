@@ -332,6 +332,6 @@ test_plan:
 
 agent_communication:
     -agent: "testing"
-    -message: "Starting comprehensive frontend testing of BEAT MATES dance social app on mobile dimensions (390x844). Will test authentication flow, categories selection, home feed, and profile page as requested. Backend URL: https://choreflow-1.preview.emergentagent.com"
+    -message: "Starting comprehensive frontend testing of BEAT MATES dance social app on mobile dimensions (390x844). Will test authentication flow, categories selection, home feed, and profile page as requested. Backend URL: https://beat-mates-demo.preview.emergentagent.com"
     -agent: "testing"
     -message: "✅ FRONTEND TESTING COMPLETE: All requested mobile UI flows tested successfully on iPhone dimensions (390x844). Login flow works with provided credentials (test@beatmates.com/test123), registration form displays properly, categories selection shows colorful dance category grid, and navigation between screens functions correctly. App displays BEAT MATES branding with proper colors (white + coral red). Backend integration working - API calls successful for login and data fetching."

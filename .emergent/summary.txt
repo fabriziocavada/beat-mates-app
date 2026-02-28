@@ -1,0 +1,255 @@
+<analysis>
+
+<original_problem_statement>
+The user wants to create a social media mobile app called BEAT MATES for dancers.
+
+**PRODUCT REQUIREMENTS:**
+- **User System:** Users can register and log in using both Google social login and traditional email/password.
+- **Dance Disciplines:** Upon registration or from their profile, users can select multiple dance disciplines they are interested in.
+- **Social Feed:** The main home feed should display content (videos, photos, text) from other dancers who are part of the same selected dance disciplines. The feed should look and feel like Instagram.
+- **Paid Lessons:** Any user can offer paid dance lessons.
+  - **Pre-recorded Lessons:** Users can upload and sell pre-recorded video lessons.
+  - **Live Lessons:** Users can make themselves available for live, one-on-one video lessons.
+- **Live Lesson Flow:**
+  1. A student finds an available professional/teacher on a dedicated page.
+  2. The student sends a request for a 30-minute live lesson.
+  3. The student must pay for the lesson in advance.
+  4. If the professional accepts the request, a paid video call starts.
+- **Availability System:** Users have a toggle in their profile to set their real-time availability. They can also use a calendar to schedule future availability, allowing other users to book lessons in advance.
+- **Payment Systems:** The app should support standard payment methods like Stripe and PayPal. The user does not have API keys yet and requires a demo/mocked version first.
+- **Video Call Integration:** The user has no preference for the video call provider, as long as it works live.
+- **Design:** The app must strictly follow the UI/UX provided in the Figma designs. This includes a dark theme, a specific coral accent color (), and the BEAT MATES logo.
+- **User Testing:** The user wants to be able to have 5 real friends register on the app to test the core functionalities like registration, category selection, posting, and seeing each other on the available teachers page.
+
+</original_problem_statement>
+
+**User's preferred language**: The user's primary language is Italian. The next agent MUST respond in Italian.
+
+**what currently exists?**
+A basic full-stack application has been scaffolded using Expo (React Native) for the frontend and FastAPI/MongoDB for the backend.
+- **Authentication:** User registration and login with email/password are implemented. The system uses Zustand for state management to handle the authentication token.
+- **Screens:** Many screens have been created based on the Figma designs, including splash, login, register, category selection, home feed, user profile, and a page for available teachers.
+- **Backend:** Basic models and API endpoints exist for users, posts, dance categories, and stories.
+- **UI:** The app has a dark theme with the coral accent color. However, several UI elements like the splash screen and category selection cards do not yet match the Figma designs as requested by the user.
+
+**Last working item**:
+    - Last item agent was working: The agent was addressing a list of user complaints from message #262. Specifically, the agent was trying to:
+        1.  Fix the user profile page, which wasn't updating with new posts immediately.
+        2.  Fix the Available Teachers page to show real-time data and refresh automatically.
+        3.  Remove hardcoded test users to allow for real user registration and testing.
+        4.  Update the  to show a real-time countdown/timer instead of a fake one.
+        The agent implemented  on the profile and available teachers pages and attempted to add a timer logic to the teacher card. It also cleaned the database.
+    - Status: IN PROGRESS
+    - Agent Testing Done: N
+    - Which testing method agent to use? Frontend testing agent (to verify UI changes and refresh logic) and manual testing via screenshot tool to confirm the flow from a user's perspective.
+    - User Testing Done: N
+
+**All Pending/In progress Issue list**:
+  Issue 1: Profile page does not update automatically after creating a post. (P0)
+  Issue 2: The Available Teachers page shows static, fake data and doesn't update in real-time. (P0)
+  Issue 3: UI does not match the provided Figma designs, especially the splash screen and dance category selection cards. (P1)
+  Issue 4: The home feed and Available Teachers list do not filter content based on the logged-in user's selected dance categories. (P1)
+  Issue 5: Registration flow has been intermittently buggy, blocking users. (P2)
+  Issue 6: Image and video posts are not responsive and can appear oversized, breaking the layout. (P2)
+  
+  Issues Detail:
+  - Issue 1: Profile page not updating.
+     - Attempted fixes: The agent added  to  to refetch user posts when the screen comes into focus.
+     - Next debug checklist:
+        1. Verify that  is correctly imported from .
+        2. Test the screen navigation flow: create a post, navigate to the profile, and confirm the new post appears without manual refresh.
+        3. Check the  function in the Zustand store () to ensure it's working as expected.
+     - Why fix this issue and what will be achieved with the fix? This is a core UX issue. Users expect to see their new content on their profile immediately after posting.
+     - Status:  IN PROGRESS
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? Frontend
+     - Blocked on other issue: None
+
+  - Issue 2: Available Teachers page is not dynamic.
+     - Attempted fixes: The agent cleared the database of fake users. It added  to  to refresh the list of available teachers. It also attempted to modify  to show a real-time timer.
+     - Next debug checklist:
+        1. Verify the  implementation in  is working and fetches fresh data from the  endpoint.
+        2. Verify the real-time timer logic in . The agent added  and  but the component needs to be checked for correctness (imports, time calculation logic).
+        3. Have two test users register, one sets their availability to on, and confirm the second user can see the first user on the available list immediately.
+     - Why fix this issue and what will be achieved with the fix? This is critical for the app's main live lesson feature. The page must show who is *actually* available right now.
+     - Status:  IN PROGRESS
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? Both (Backend to confirm availability status is saved, Frontend to confirm real-time display).
+     - Blocked on other issue: None
+
+  - Issue 3: UI mismatch with Figma designs.
+     - Attempted fixes: The agent made several attempts to fix the splash screen ( initially, then moved logic to ) and the category selection cards (). The user is still not satisfied.
+     - Next debug checklist:
+        1. Re-analyze the Figma designs for the Splash Screen and Category cards.
+        2. **Splash Screen:** Implement a proper splash screen that shows the logo () and then navigates away. The current implementation in  might be causing a flicker or showing the login screen too quickly.
+        3. **Category Cards:** The user wants a 2-column grid with images, not just colored boxes. The  in  needs  and the card component must be styled to include an  with the category name overlaid, exactly as in the Figma.
+     - Why fix this issue and what will be achieved with the fix? The user is very insistent on the visual fidelity of the app. Achieving this will build user trust.
+     - Status:  IN PROGRESS
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? Frontend
+     - Blocked on other issue: None
+
+  - Issue 4: Content filtering by dance category.
+     - Attempted fixes: The agent updated the backend endpoint  to accept a  query parameter.
+     - Next debug checklist:
+        1. In the home feed screen (), modify the  call to pass the logged-in user's selected categories to the API.
+        2. The user's categories are available in the Zustand auth store.
+        3. Perform a similar modification for the  endpoint and the  screen.
+     - Why fix this issue and what will be achieved with the fix? This is a core requirement of the app's social aspect. Users should only see relevant content.
+     - Status:  NOT STARTED (Backend is ready, frontend is not).
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix? Both
+     - Blocked on other issue: None
+
+   - Issue 5: Registration flow is buggy.
+     - Attempted fixes: The agent has fixed this multiple times by adding explicit navigation () after a successful API call in .
+     - Next debug checklist:
+        1. Thoroughly test the registration flow on a clean session (incognito browser).
+        2. Ensure there are no race conditions between setting the auth state in Zustand and the  router effect.
+        3. Add more robust error handling to show specific error messages to the user (e.g., Username already taken).
+     - Why fix this issue and what will be achieved with the fix? A broken registration is a critical barrier to entry for any user.
+     - Status: IN PROGRESS
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? Frontend
+     - Blocked on other issue: None
+
+    - Issue 6: Responsive images/videos in posts.
+     - Attempted fixes: The agent modified  to set an  on the post image.
+     - Next debug checklist:
+        1. Test posting both portrait and landscape images to see how they are handled. The aspect ratio should be constrained within a max-width and max-height.
+        2. Implement video display using the   component in .
+        3. Ensure the  functionality correctly handles video uploads.
+     - Why fix this issue and what will be achieved with the fix? A broken feed layout makes the app look unprofessional and unusable.
+     - Status: IN PROGRESS
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? Frontend
+     - Blocked on other issue: None
+
+**In progress Task List**:
+  - Task 1: Implement full Story functionality.
+     - Where to resume: The agent has created backend APIs for stories () and scaffolded screens (, ). The next step is to integrate the UI to allow users to pick/take a photo/video, upload it as a story, and view stories from the home screen's story bar.
+     - What will be achieved with this? A key social feature requested by the user.
+     - Status:  IN PROGRESS
+     - Should Test frontend/backend/both after fix? Both
+     - Blocked on something: Needs camera/image picker integration.
+
+**Upcoming and Future Tasks**
+  Upcoming Tasks:
+    - (P0) Finalize Figma UI Compliance: Splash screen and Category selection cards must be made identical to the designs.
+    - (P0) Implement Content Filtering: Home feed and available teachers must be filtered by the user's selected dance categories.
+    - (P1) Implement Video Posts: Allow users to upload and view videos in the feed.
+    - (P1) Implement Camera Access: Integrate  to allow users to use their phone's camera for posts and stories.
+    - (P2) Implement Social Features: Add Like, Comment, and Follow/Unfollow functionality.
+    - (P2) Implement Lesson Booking: Build the UI and logic for users to book future lessons from a teacher's calendar.
+
+  Future Tasks:
+    - Implement Mock Payment Flow: Integrate a mock of Stripe/PayPal for booking lessons.
+    - Implement Mock Video Call: Integrate a mock video call feature that starts after a lesson is booked and accepted.
+    - Implement Pre-recorded Lesson Marketplace: Allow users to upload and sell video files.
+    - Implement Google Social Login.
+    - Add User Ratings and Reviews system.
+
+**Completed work in this session**
+- **User Authentication:** Implemented basic email/password registration and login.
+- **Project Scaffolding:** Set up the initial file structure for the Expo frontend and FastAPI backend.
+- **API and DB Scaffolding:** Created initial database models and API endpoints for Users, Posts, Dance Categories, and Stories.
+- **UI Component Creation:** Developed multiple React Native components and screens, including a tabbed layout, login/register forms, home feed, profile, and available teachers list.
+- **Database Cleanup:** Removed initial hardcoded test users to allow for real user testing.
+- **UI Refresh Logic:** Added  to the profile and available teachers screens in an attempt to solve the stale data issue.
+
+**Earlier issues found/mentioned but not fixed**
+   - Issue 1:  might not work correctly on the web. This was mentioned by the agent as a potential cause for auth issues but was never fully investigated or mitigated. A more robust cross-platform storage solution like  might be needed if problems persist.
+
+**Known issue recurrence from previous fork**
+  - N/A (This is the first summary)
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+- **Frontend:** React Native (Expo), TypeScript, Zustand (state management), Expo Router (file-based routing).
+- **Backend:** Python, FastAPI.
+- **Database:** MongoDB (with  for async access).
+- **Authentication:** JWT-based token authentication.
+
+**key DB schema**
+  - : {_id, username, email, fullName, hashedPassword, dance_categories, is_available, available_since, profile_picture}
+  - : {_id, user_id, content, media_url, media_type, created_at}
+  - : {_id, name, image_url}
+  - : {_id, user_id, media_url, created_at}
+
+**changes in tech stack**
+  - None.
+
+**All files of reference**
+- : Contains all business logic, API endpoints, and database models.
+- : Root navigator, critical for auth flow.
+- : User registration screen, has been a source of bugs.
+- : The main feed, needs filtering logic.
+- : User profile, needs refresh logic verified.
+- : Available teachers list, needs refresh logic and real-time data.
+- : Category selection screen, needs major UI overhaul to match Figma.
+- : Displays a single post, needs responsive image/video handling.
+- : Zustand store managing authentication token and user state.
+
+**Areas that need refactoring**:
+- The authentication flow logic spread between  and  is fragile. It should be consolidated in  to act as a single source of truth for navigation redirection based on auth state, with  being only a static splash screen.
+
+**key api endpoints**
+- 
+- 
+- 
+- 
+- 
+- 
+- 
+- 
+- 
+- 
+- 
+
+**Critical Info for New Agent**
+- The user is non-technical and relies on visual confirmation. Matching the Figma designs is a top priority.
+- The user wants to test with real people. Stop creating fake test data. The registration and core loop must be stable.
+- The agent has repeatedly struggled with UI implementation and frontend testing. Pay close attention to styling and use the screenshot tool frequently to verify visual changes before declaring them complete.
+- The core feature of filtering content by dance category has been requested but not implemented on the frontend yet. This is a critical next step.
+
+**documents created in this job**
+  - None.
+
+**Last 10 User Messages and any pending HUMAN messages** 
+1. : User complains that profile doesn't update, fake teachers are still visible with fake timers, and wants to register 5 real friends to test real availability and see each other. (UNRESOLVED)
+2. : User reports that registration is stuck and not working. (ATTEMPTED FIX)
+3. : User is frustrated. Demands that the app functionality be visible. Lists several major issues: category cards not visible/correct, fake users, wants to test with 5 real friends, wants post/story/video functionality, wants camera access, and demands the splash screen be fixed to match the mockups perfectly. (UNRESOLVED)
+4. : User complains that post images are huge and break responsiveness, the logo and category cards are completely different from Figma, and asks for 5 real user accounts to be created for testing. (PARTIALLY ADDRESSED, BUT RECURRING)
+5. : User reports not seeing the dance category screen after logging in. (RESOLVED - Agent explained it's skipped if categories are already chosen and reset the test user's data).
+6. : User reports that login is not working and they are stuck on the login screen. (RESOLVED - Agent fixed the frontend navigation logic).
+7. : puoi procedere? (Can you proceed?) - User asking for the agent to continue.
+8. : ne mancano 2 (2 more are missing) - User uploading the last Figma screens.
+9. : arrivano i prossimi (the next ones are coming) - User uploading more Figma screens.
+10. : ti carico i prossimi 5 (I'm uploading the next 5) - User uploading Figma screens.
+
+**Project Health Check:**
+- **Broken**: The user registration flow has been repeatedly buggy. The UI for key screens (categories, splash) does not meet user requirements. Core filtering logic is missing.
+- **Mocked**: No features are currently mocked. The plan is to mock payments and video calls later.
+
+**3rd Party Integrations**
+- None currently integrated.
+- Planned: Stripe, PayPal, a video-calling service (e.g., Agora, Daily.co).
+
+**Testing status**
+  - Testing agent used after significant changes: YES, but the frontend testing agent failed repeatedly due to issues with handling the virtual keyboard.
+  - Troubleshoot agent used after agent stuck in loop: NO
+  - Test files created: None.
+  - Known regressions: The registration flow has broken multiple times after being fixed. The UI for categories was implemented but then flagged by the user as incorrect, which can be seen as a regression from requirements.
+
+**Credentials to test flow:**
+The database was cleaned of test users. The next agent should instruct the user to register a new account. If a test account is needed for debugging, it should be created via the app's Sign up form.
+
+**What agent forgot to execute**
+- The agent has consistently failed to fully implement the UI according to the Figma designs, particularly for the category selection screen, despite multiple user complaints.
+- The agent did not implement the crucial frontend logic to filter the home feed and available teachers list by the user's selected dance categories, even after preparing the backend API for it.
+- The agent planned to add support for video posts and stories but the implementation is incomplete and untested.
+- The agent has not yet implemented camera access () as requested by the user.
+
+</analysis>
