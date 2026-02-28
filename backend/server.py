@@ -191,6 +191,8 @@ class LiveSessionResponse(BaseModel):
     student: Optional[dict] = None
     status: str  # pending, accepted, active, completed, rejected
     amount: float
+    room_url: Optional[str] = None
+    room_name: Optional[str] = None
     started_at: Optional[datetime] = None
     ended_at: Optional[datetime] = None
     created_at: datetime
@@ -946,9 +948,39 @@ async def accept_live_session(session_id: str, current_user: dict = Depends(get_
     if session["teacher_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
+    # Create Daily.co room for the video call
+    room_url = None
+    room_name = None
+    if DAILY_API_KEY:
+        try:
+            room_name = f"beatmates-{uuid.uuid4().hex[:12]}"
+            exp_timestamp = int((datetime.utcnow() + timedelta(hours=2)).timestamp())
+            async with httpx.AsyncClient() as client_http:
+                response = await client_http.post(
+                    f"{DAILY_API_URL}/rooms",
+                    headers={"Authorization": f"Bearer {DAILY_API_KEY}", "Content-Type": "application/json"},
+                    json={
+                        "name": room_name,
+                        "privacy": "public",
+                        "properties": {"exp": exp_timestamp, "enable_chat": True, "max_participants": 2}
+                    }
+                )
+                if response.status_code == 200:
+                    room_data = response.json()
+                    room_url = room_data["url"]
+                else:
+                    logger.error(f"Daily.co room creation failed: {response.text}")
+        except Exception as e:
+            logger.error(f"Daily.co error: {e}")
+    
     await db.live_sessions.update_one(
         {"id": session_id},
-        {"$set": {"status": "active", "started_at": datetime.utcnow()}}
+        {"$set": {
+            "status": "active",
+            "started_at": datetime.utcnow(),
+            "room_url": room_url,
+            "room_name": room_name,
+        }}
     )
     
     session = await db.live_sessions.find_one({"id": session_id})
@@ -960,7 +992,7 @@ async def accept_live_session(session_id: str, current_user: dict = Depends(get_
         "profile_image": teacher.get("profile_image")
     }
     
-    return LiveSessionResponse(**session)
+    return LiveSessionResponse(**clean_doc(session))
 
 @api_router.post("/live-sessions/{session_id}/reject")
 async def reject_live_session(session_id: str, current_user: dict = Depends(get_current_user)):
