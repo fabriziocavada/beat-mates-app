@@ -1081,6 +1081,41 @@ async def toggle_availability(current_user: dict = Depends(get_current_user)):
     await db.users.update_one({"id": current_user["id"]}, {"$set": update_data})
     return {"is_available": new_status}
 
+# ==================== FILE UPLOAD ====================
+
+@api_router.post("/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    # Determine extension from filename or content type
+    ext = 'jpg'
+    if file.filename:
+        parts = file.filename.rsplit('.', 1)
+        if len(parts) > 1:
+            ext = parts[1].lower()
+    if file.content_type:
+        if 'video' in file.content_type:
+            if ext not in ['mp4', 'mov', 'avi', 'webm']:
+                ext = 'mp4'
+        elif 'png' in file.content_type:
+            ext = 'png'
+        elif 'gif' in file.content_type:
+            ext = 'gif'
+        elif 'webp' in file.content_type:
+            ext = 'webp'
+
+    filename = f"{uuid.uuid4()}.{ext}"
+    filepath = UPLOADS_DIR / filename
+
+    content = await file.read()
+    with open(filepath, 'wb') as f:
+        f.write(content)
+
+    url = f"/api/uploads/{filename}"
+    media_type = "video" if file.content_type and 'video' in file.content_type else "image"
+    return {"url": url, "filename": filename, "media_type": media_type}
+
 # ==================== HEALTH CHECK ====================
 
 @api_router.get("/")
