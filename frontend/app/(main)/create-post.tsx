@@ -45,7 +45,7 @@ export default function CreatePostScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsEditing: true,
       aspect: [9, 16],
-      quality: 0.4,
+      quality: 0.15,
       base64: true,
       videoMaxDuration: 10,
     });
