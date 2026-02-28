@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
+  FlatList,
   Alert,
   ActivityIndicator,
   Dimensions,
@@ -24,7 +24,6 @@ interface Category {
   image_url: string;
 }
 
-// Category colors matching the Figma design
 const categoryColors: Record<string, string> = {
   latin: '#8B5CF6',
   ballroom: '#EC4899',
@@ -100,6 +99,25 @@ export default function CategoriesScreen() {
     }
   };
   
+  const renderCategory = ({ item }: { item: Category }) => {
+    const isSelected = selectedCategories.includes(item.id);
+    const bgColor = categoryColors[item.id] || Colors.surface;
+    
+    return (
+      <TouchableOpacity
+        style={[
+          styles.card,
+          { backgroundColor: bgColor },
+          isSelected && styles.cardSelected,
+        ]}
+        onPress={() => toggleCategory(item.id)}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.cardText}>{item.name.toUpperCase()}</Text>
+      </TouchableOpacity>
+    );
+  };
+  
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -115,33 +133,14 @@ export default function CategoriesScreen() {
         <Text style={styles.logoRed}>MATES</Text>
       </View>
       
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.grid}>
-          {categories.map((category) => {
-            const isSelected = selectedCategories.includes(category.id);
-            const bgColor = categoryColors[category.id] || Colors.surface;
-            
-            return (
-              <TouchableOpacity
-                key={category.id}
-                style={[
-                  styles.card,
-                  { backgroundColor: bgColor },
-                  isSelected && styles.cardSelected,
-                ]}
-                onPress={() => toggleCategory(category.id)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.cardText}>{category.name.toUpperCase()}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </ScrollView>
+      <FlatList
+        data={categories}
+        renderItem={renderCategory}
+        keyExtractor={(item) => item.id}
+        numColumns={2}
+        contentContainerStyle={styles.listContent}
+        columnWrapperStyle={styles.row}
+      />
       
       <View style={styles.footer}>
         <TouchableOpacity
@@ -199,33 +198,28 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: Colors.primary,
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
+  listContent: {
     padding: 16,
   },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  row: {
     justifyContent: 'space-between',
+    marginBottom: 16,
   },
   card: {
     width: CARD_WIDTH,
-    height: 100,
+    height: 90,
     borderRadius: 12,
-    marginBottom: 16,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 12,
   },
   cardSelected: {
     borderWidth: 3,
-    borderColor: Colors.primary,
+    borderColor: Colors.text,
   },
   cardText: {
     color: Colors.text,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 'bold',
     textAlign: 'center',
   },
