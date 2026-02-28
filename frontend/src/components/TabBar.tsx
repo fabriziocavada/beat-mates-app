@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/authStore';
+import { getMediaUrl } from '../services/api';
 import Colors from '../constants/colors';
 
 interface TabBarProps {
@@ -35,7 +36,7 @@ export default function TabBar({ activeTab, onTabPress }: TabBarProps) {
             >
               <View style={[styles.profileContainer, isActive && styles.profileContainerActive]}>
                 {user?.profile_image ? (
-                  <Image source={{ uri: user.profile_image }} style={styles.profileImage} />
+                  <Image source={{ uri: getMediaUrl(user.profile_image) || '' }} style={styles.profileImage} />
                 ) : (
                   <Ionicons name="person" size={18} color={isActive ? Colors.primary : '#FFFFFF'} />
                 )}

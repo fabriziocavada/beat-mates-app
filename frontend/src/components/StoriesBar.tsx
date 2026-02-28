@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/authStore';
+import { getMediaUrl } from '../services/api';
 
 interface StoryUser {
   user_id: string;
@@ -33,7 +34,7 @@ export default function StoriesBar({ stories, onStoryPress, onAddStoryPress }: S
           <View style={styles.storyImageContainer}>
             {user?.profile_image ? (
               <Image
-                source={{ uri: user.profile_image }}
+                source={{ uri: getMediaUrl(user.profile_image) || '' }}
                 style={styles.storyImage}
               />
             ) : (
@@ -63,7 +64,7 @@ export default function StoriesBar({ stories, onStoryPress, onAddStoryPress }: S
             <View style={styles.storyImageContainer}>
               {story.profile_image ? (
                 <Image
-                  source={{ uri: story.profile_image }}
+                  source={{ uri: getMediaUrl(story.profile_image) || '' }}
                   style={styles.storyImage}
                 />
               ) : (
