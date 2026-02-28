@@ -22,17 +22,15 @@ import { Video, ResizeMode } from 'expo-av';
 function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: boolean }) {
   const [videoSource, setVideoSource] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const containerRef = React.useRef<any>(null);
 
   React.useEffect(() => {
     if (!mediaUrl) return;
-
-    // If already a data URL or direct video URL, use directly
     if (mediaUrl.startsWith('data:')) {
       setVideoSource(mediaUrl);
       setLoading(false);
       return;
     }
-
     let cancelled = false;
     fetch(mediaUrl)
       .then(res => {
@@ -43,15 +41,29 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
             setLoading(false);
           });
         } else {
-          // Direct video file - use URL as-is
           if (!cancelled) setVideoSource(mediaUrl);
           setLoading(false);
         }
       })
       .catch(() => { if (!cancelled) setLoading(false); });
-
     return () => { cancelled = true; };
   }, [mediaUrl]);
+
+  React.useEffect(() => {
+    if (Platform.OS === 'web' && containerRef.current && videoSource) {
+      const domNode = containerRef.current;
+      while (domNode.firstChild) domNode.removeChild(domNode.firstChild);
+      const video = document.createElement('video');
+      video.src = videoSource;
+      video.style.cssText = 'width:100%;height:100%;object-fit:cover;background:#000;';
+      video.autoplay = isActive;
+      video.loop = true;
+      video.muted = true;
+      video.playsInline = true;
+      domNode.appendChild(video);
+      return () => { while (domNode.firstChild) domNode.removeChild(domNode.firstChild); };
+    }
+  }, [videoSource, isActive]);
 
   if (loading) {
     return (
@@ -68,25 +80,6 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
       </View>
     );
   }
-
-  const containerRef = React.useRef<any>(null);
-
-  React.useEffect(() => {
-    if (Platform.OS === 'web' && containerRef.current && videoSource) {
-      const domNode = containerRef.current;
-      while (domNode.firstChild) domNode.removeChild(domNode.firstChild);
-      const video = document.createElement('video');
-      video.src = videoSource;
-      video.style.cssText = 'width:100%;height:100%;object-fit:cover;background:#000;';
-      video.autoplay = isActive;
-      video.loop = true;
-      video.muted = true;
-      video.playsInline = true;
-      video.setAttribute('playsinline', '');
-      domNode.appendChild(video);
-      return () => { while (domNode.firstChild) domNode.removeChild(domNode.firstChild); };
-    }
-  }, [videoSource, isActive]);
 
   if (Platform.OS === 'web') {
     return <View ref={containerRef} style={{ flex: 1 }} />;
