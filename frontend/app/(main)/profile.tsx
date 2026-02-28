@@ -360,6 +360,7 @@ export default function ProfileScreen() {
         )}
       </ScrollView>
       
+      <LessonNotificationBanner />
       <TabBar activeTab="profile" onTabPress={handleTabPress} />
     </SafeAreaView>
   );
