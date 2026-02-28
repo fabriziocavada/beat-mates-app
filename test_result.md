@@ -350,17 +350,13 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Authentication - Register endpoint"
-    - "Authentication - Login endpoint"
-    - "Dance Categories - Get all categories"
-    - "Posts - Create and Get"
-    - "Toggle Availability"
-    - "Available Teachers - Get available teachers"
+  current_focus: []
   stuck_tasks: []
-  test_all: true
-  test_priority: "high_first"
+  test_all: false
+  test_priority: "completed"
 
 agent_communication:
     - agent: "main"
     - message: "Fixed critical bugs: removed useFocusEffect causing navigation crash, fixed categories grid layout to 2 columns, improved registration flow, cleaned fake test data. All core flows working E2E. Test users in DB: fabry (a@gmail.com) and mario_dancer (mario@test.com, password123). Please test all backend endpoints."
+    - agent: "testing"
+    - message: "✅ BACKEND TESTING COMPLETE: All 11 backend API endpoints tested successfully. Fixed critical MongoDB ObjectID serialization issue in booking endpoints. All authentication, posts, availability, booking, and social features working correctly. Ready for production use."
