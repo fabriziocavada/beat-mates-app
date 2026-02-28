@@ -22,11 +22,10 @@ import { Video, ResizeMode } from 'expo-av';
 function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: boolean }) {
   const [videoSource, setVideoSource] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
-  const containerRef = React.useRef<any>(null);
 
   React.useEffect(() => {
     if (!mediaUrl) return;
-    if (mediaUrl.startsWith('data:')) {
+    if (mediaUrl.startsWith('data:') || mediaUrl.startsWith('http')) {
       setVideoSource(mediaUrl);
       setLoading(false);
       return;
@@ -49,22 +48,6 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
     return () => { cancelled = true; };
   }, [mediaUrl]);
 
-  React.useEffect(() => {
-    if (Platform.OS === 'web' && containerRef.current && videoSource) {
-      const domNode = containerRef.current;
-      while (domNode.firstChild) domNode.removeChild(domNode.firstChild);
-      const video = document.createElement('video');
-      video.src = videoSource;
-      video.style.cssText = 'width:100%;height:100%;object-fit:cover;background:#000;';
-      video.autoplay = isActive;
-      video.loop = true;
-      video.muted = true;
-      video.playsInline = true;
-      domNode.appendChild(video);
-      return () => { while (domNode.firstChild) domNode.removeChild(domNode.firstChild); };
-    }
-  }, [videoSource, isActive]);
-
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
@@ -79,10 +62,6 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
         <Ionicons name="videocam-off-outline" size={48} color="#666" />
       </View>
     );
-  }
-
-  if (Platform.OS === 'web') {
-    return <View ref={containerRef} style={{ flex: 1 }} />;
   }
 
   return (
