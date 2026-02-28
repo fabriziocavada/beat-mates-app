@@ -3,27 +3,23 @@ import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Platform }
 import { Ionicons } from '@expo/vector-icons';
 import api, { getMediaUrl } from '../services/api';
 
-// Web video player that loads video as blob to bypass proxy issues
+// Web video player that loads video via base64 data URL from API
 function WebVideo({ src, autoPlay, loop, muted, style }: any) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     if (!src) return;
     let cancelled = false;
     
+    // Fetch the video as base64 data URL from the media endpoint
     fetch(src)
-      .then(res => {
-        if (!res.ok) throw new Error('fetch failed');
-        return res.arrayBuffer();
-      })
-      .then(buffer => {
-        if (cancelled) return;
-        // Create blob with explicit video/mp4 type
-        const blob = new Blob([buffer], { type: 'video/mp4' });
-        const url = URL.createObjectURL(blob);
-        setBlobUrl(url);
+      .then(res => res.json())
+      .then(data => {
+        if (!cancelled && data.data_url) {
+          setDataUrl(data.data_url);
+        }
       })
       .catch(() => { if (!cancelled) setError(true); });
     
@@ -31,16 +27,10 @@ function WebVideo({ src, autoPlay, loop, muted, style }: any) {
   }, [src]);
 
   useEffect(() => {
-    if (blobUrl && videoRef.current) {
-      videoRef.current.load();
-      if (autoPlay) {
-        videoRef.current.play().catch(() => {});
-      }
+    if (dataUrl && videoRef.current && autoPlay) {
+      videoRef.current.play().catch(() => {});
     }
-    return () => {
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-    };
-  }, [blobUrl]);
+  }, [dataUrl]);
 
   if (error) {
     return (
@@ -50,7 +40,7 @@ function WebVideo({ src, autoPlay, loop, muted, style }: any) {
     );
   }
 
-  if (!blobUrl) {
+  if (!dataUrl) {
     return (
       <View style={{ flex: 1, backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="small" color="#FF6978" />
@@ -61,7 +51,7 @@ function WebVideo({ src, autoPlay, loop, muted, style }: any) {
   return (
     <video
       ref={videoRef}
-      src={blobUrl}
+      src={dataUrl}
       style={style}
       autoPlay={autoPlay}
       loop={loop}
