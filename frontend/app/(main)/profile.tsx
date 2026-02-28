@@ -566,6 +566,17 @@ const styles = StyleSheet.create({
     top: 8,
     right: 8,
   },
+  videoThumb: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+  },
+  videoPlayOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   emptyPosts: {
     alignItems: 'center',
     padding: 40,
