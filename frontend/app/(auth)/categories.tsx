@@ -4,19 +4,20 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  FlatList,
+  ScrollView,
   Alert,
   ActivityIndicator,
   Dimensions,
+  ImageBackground,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import Colors from '../../src/constants/colors';
 import { useAuthStore } from '../../src/store/authStore';
 import api from '../../src/services/api';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
+const CARD_HEIGHT = 130;
 
 interface Category {
   id: string;
@@ -24,17 +25,18 @@ interface Category {
   image_url: string;
 }
 
-const categoryColors: Record<string, string> = {
-  latin: '#8B5CF6',
-  ballroom: '#EC4899',
-  breakdance: '#06B6D4',
-  classic: '#374151',
-  modern: '#6B7280',
-  caribbean: '#F59E0B',
-  hiphop: '#EF4444',
-  contemporary: '#10B981',
-  jazz: '#3B82F6',
-  pop: '#A855F7',
+// Real dance images from Unsplash
+const categoryImages: Record<string, string> = {
+  latin: 'https://images.unsplash.com/photo-1575448914662-72bf6428937b?w=400&h=300&fit=crop',
+  ballroom: 'https://images.unsplash.com/photo-1575448913281-98e9e5d3f193?w=400&h=300&fit=crop',
+  breakdance: 'https://images.unsplash.com/photo-1508700929628-666bc8bd84ea?w=400&h=300&fit=crop',
+  classic: 'https://images.unsplash.com/photo-1495791185843-c73f2269f669?w=400&h=300&fit=crop',
+  modern: 'https://images.unsplash.com/photo-1547153760-18fc86324498?w=400&h=300&fit=crop',
+  caribbean: 'https://images.unsplash.com/photo-1555489401-79c274997434?w=400&h=300&fit=crop',
+  hiphop: 'https://images.unsplash.com/photo-1508700929628-666bc8bd84ea?w=400&h=300&fit=crop',
+  contemporary: 'https://images.unsplash.com/photo-1547153760-18fc86324498?w=400&h=300&fit=crop',
+  jazz: 'https://images.unsplash.com/photo-1518834107812-67b0b7c58434?w=400&h=300&fit=crop',
+  pop: 'https://images.unsplash.com/photo-1524594152303-9fd13543fe6e?w=400&h=300&fit=crop',
 };
 
 export default function CategoriesScreen() {
@@ -99,49 +101,59 @@ export default function CategoriesScreen() {
     }
   };
   
-  const renderCategory = ({ item }: { item: Category }) => {
-    const isSelected = selectedCategories.includes(item.id);
-    const bgColor = categoryColors[item.id] || Colors.surface;
-    
-    return (
-      <TouchableOpacity
-        style={[
-          styles.card,
-          { backgroundColor: bgColor },
-          isSelected && styles.cardSelected,
-        ]}
-        onPress={() => toggleCategory(item.id)}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.cardText}>{item.name.toUpperCase()}</Text>
-      </TouchableOpacity>
-    );
-  };
-  
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color="#FF6B7A" />
       </View>
     );
   }
   
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header */}
       <View style={styles.headerContainer}>
-        <Text style={styles.logoWhite}>BEAT </Text>
-        <Text style={styles.logoRed}>MATES</Text>
+        <Text style={styles.beatText}>BEAT </Text>
+        <Text style={styles.matesText}>MATES</Text>
       </View>
       
-      <FlatList
-        data={categories}
-        renderItem={renderCategory}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
-        contentContainerStyle={styles.listContent}
-        columnWrapperStyle={styles.row}
-      />
+      {/* Categories Grid */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.grid}>
+          {categories.slice(0, 6).map((category) => {
+            const isSelected = selectedCategories.includes(category.id);
+            const imageUrl = categoryImages[category.id] || categoryImages.latin;
+            
+            return (
+              <TouchableOpacity
+                key={category.id}
+                style={[
+                  styles.card,
+                  isSelected && styles.cardSelected,
+                ]}
+                onPress={() => toggleCategory(category.id)}
+                activeOpacity={0.8}
+              >
+                <ImageBackground
+                  source={{ uri: imageUrl }}
+                  style={styles.cardImage}
+                  imageStyle={styles.cardImageStyle}
+                >
+                  <View style={styles.cardOverlay}>
+                    <Text style={styles.cardText}>{category.name.toUpperCase()}</Text>
+                  </View>
+                </ImageBackground>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </ScrollView>
       
+      {/* Footer */}
       <View style={styles.footer}>
         <TouchableOpacity
           style={styles.skipButton}
@@ -160,7 +172,7 @@ export default function CategoriesScreen() {
           disabled={isSaving || selectedCategories.length === 0}
         >
           {isSaving ? (
-            <ActivityIndicator color={Colors.text} />
+            <ActivityIndicator color="#FFFFFF" />
           ) : (
             <Text style={styles.continueButtonText}>Continue</Text>
           )}
@@ -175,11 +187,11 @@ export default function CategoriesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#0E0E0E',
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#0E0E0E',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -188,40 +200,54 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 16,
   },
-  logoWhite: {
-    fontSize: 24,
+  beatText: {
+    fontSize: 26,
     fontWeight: 'bold',
-    color: Colors.text,
+    color: '#FFFFFF',
   },
-  logoRed: {
-    fontSize: 24,
+  matesText: {
+    fontSize: 26,
     fontWeight: 'bold',
-    color: Colors.primary,
+    color: '#FF4058',
   },
-  listContent: {
-    padding: 16,
+  scrollView: {
+    flex: 1,
   },
-  row: {
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginBottom: 16,
   },
   card: {
     width: CARD_WIDTH,
-    height: 90,
+    height: CARD_HEIGHT,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
+    marginBottom: 12,
+    overflow: 'hidden',
   },
   cardSelected: {
     borderWidth: 3,
-    borderColor: Colors.text,
+    borderColor: '#FF4058',
+  },
+  cardImage: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  cardImageStyle: {
+    borderRadius: 12,
+  },
+  cardOverlay: {
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    padding: 10,
   },
   cardText: {
-    color: Colors.text,
+    color: '#FFFFFF',
     fontSize: 11,
     fontWeight: 'bold',
-    textAlign: 'center',
   },
   footer: {
     flexDirection: 'row',
@@ -232,19 +258,20 @@ const styles = StyleSheet.create({
   skipButton: {
     flex: 1,
     borderWidth: 1,
-    borderColor: Colors.primary,
+    borderColor: '#FF4058',
+    backgroundColor: '#1C1C1E',
     borderRadius: 8,
     padding: 14,
     alignItems: 'center',
   },
   skipButtonText: {
-    color: Colors.text,
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
   },
   continueButton: {
     flex: 1,
-    backgroundColor: Colors.surface,
+    backgroundColor: '#3A3A3C',
     borderRadius: 8,
     padding: 14,
     alignItems: 'center',
@@ -253,13 +280,14 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   continueButtonText: {
-    color: Colors.text,
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
   },
   footerText: {
-    color: Colors.textSecondary,
+    color: '#98989A',
     textAlign: 'center',
     paddingBottom: 16,
+    fontSize: 14,
   },
 });

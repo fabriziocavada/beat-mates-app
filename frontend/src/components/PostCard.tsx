@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Colors from '../constants/colors';
+import { Video, ResizeMode } from 'expo-av';
 import api from '../services/api';
 
 const { width } = Dimensions.get('window');
@@ -57,6 +57,8 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
     return date.toLocaleDateString();
   };
   
+  const isVideo = post.type === 'video' || (post.media && post.media.includes('video'));
+  
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -72,7 +74,7 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
                 style={styles.avatarImage}
               />
             ) : (
-              <Ionicons name="person" size={20} color={Colors.text} />
+              <Ionicons name="person" size={20} color="#FFFFFF" />
             )}
           </View>
           <View>
@@ -80,17 +82,29 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
           </View>
         </View>
         <TouchableOpacity>
-          <Ionicons name="ellipsis-horizontal" size={20} color={Colors.text} />
+          <Ionicons name="ellipsis-horizontal" size={20} color="#FFFFFF" />
         </TouchableOpacity>
       </TouchableOpacity>
       
-      {/* Media */}
+      {/* Media - Instagram-style responsive */}
       {post.media && (
-        <Image
-          source={{ uri: post.media }}
-          style={styles.media}
-          resizeMode="cover"
-        />
+        <View style={styles.mediaContainer}>
+          {isVideo ? (
+            <Video
+              source={{ uri: post.media }}
+              style={styles.media}
+              useNativeControls
+              resizeMode={ResizeMode.COVER}
+              isLooping
+            />
+          ) : (
+            <Image
+              source={{ uri: post.media }}
+              style={styles.media}
+              resizeMode="cover"
+            />
+          )}
+        </View>
       )}
       
       {/* Actions */}
@@ -100,21 +114,21 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
             <Ionicons
               name={isLiked ? 'heart' : 'heart-outline'}
               size={26}
-              color={isLiked ? Colors.primary : Colors.text}
+              color={isLiked ? '#FF4058' : '#FFFFFF'}
             />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => onCommentPress?.(post.id)}
             style={styles.actionButton}
           >
-            <Ionicons name="chatbubble-outline" size={24} color={Colors.text} />
+            <Ionicons name="chatbubble-outline" size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="paper-plane-outline" size={24} color={Colors.text} />
+            <Ionicons name="paper-plane-outline" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
         <TouchableOpacity>
-          <Ionicons name="bookmark-outline" size={24} color={Colors.text} />
+          <Ionicons name="bookmark-outline" size={24} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
       
@@ -152,8 +166,8 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.background,
-    marginBottom: 16,
+    backgroundColor: '#000000',
+    marginBottom: 8,
   },
   header: {
     flexDirection: 'row',
@@ -169,7 +183,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.surface,
+    backgroundColor: '#1C1C1E',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
@@ -180,13 +194,18 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   username: {
-    color: Colors.text,
+    color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 14,
   },
-  media: {
+  mediaContainer: {
     width: width,
-    height: width,
+    aspectRatio: 1,
+    backgroundColor: '#1C1C1E',
+  },
+  media: {
+    width: '100%',
+    height: '100%',
   },
   actions: {
     flexDirection: 'row',
@@ -203,17 +222,18 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   likesCount: {
-    color: Colors.text,
+    color: '#FFFFFF',
     fontWeight: '600',
     paddingHorizontal: 12,
     marginBottom: 6,
+    fontSize: 14,
   },
   captionContainer: {
     paddingHorizontal: 12,
     marginBottom: 6,
   },
   caption: {
-    color: Colors.text,
+    color: '#FFFFFF',
     fontSize: 14,
     lineHeight: 20,
   },
@@ -221,12 +241,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   viewComments: {
-    color: Colors.textSecondary,
+    color: '#8E8E93',
     paddingHorizontal: 12,
     marginBottom: 4,
+    fontSize: 14,
   },
   time: {
-    color: Colors.textMuted,
+    color: '#636366',
     fontSize: 12,
     paddingHorizontal: 12,
     marginBottom: 8,

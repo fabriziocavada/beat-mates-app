@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import Colors from '../src/constants/colors';
 import { useAuthStore } from '../src/store/authStore';
 
 export default function SplashScreen() {
@@ -21,21 +20,22 @@ export default function SplashScreen() {
       } else {
         router.replace('/(auth)/login');
       }
-    }, 1500);
+    }, 2000);
     
     return () => clearTimeout(timer);
   }, [isLoading, isAuthenticated, hasSelectedCategories]);
   
   return (
     <View style={styles.container}>
-      <View style={styles.logoContainer}>
-        <View style={styles.iconBox}>
-          <Text style={styles.infinitySymbol}>∞</Text>
-        </View>
+      {/* Logo Box */}
+      <View style={styles.logoBox}>
+        <Text style={styles.infinitySymbol}>∞</Text>
       </View>
-      <View style={styles.textContainer}>
-        <Text style={styles.logoWhite}>BEAT </Text>
-        <Text style={styles.logoRed}>MATES</Text>
+      
+      {/* App Name */}
+      <View style={styles.nameContainer}>
+        <Text style={styles.beatText}>BEAT </Text>
+        <Text style={styles.matesText}>MATES</Text>
       </View>
     </View>
   );
@@ -44,38 +44,39 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoContainer: {
-    marginBottom: 20,
-  },
-  iconBox: {
-    width: 120,
-    height: 100,
-    backgroundColor: Colors.primary,
-    borderRadius: 24,
+  logoBox: {
+    width: 140,
+    height: 120,
+    backgroundColor: '#FF6B7A',
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 24,
   },
   infinitySymbol: {
-    fontSize: 70,
-    color: Colors.text,
-    fontWeight: '200',
-    marginTop: -10,
+    fontSize: 80,
+    color: '#FFFFFF',
+    fontWeight: '300',
+    marginTop: -8,
   },
-  textContainer: {
+  nameContainer: {
     flexDirection: 'row',
+    alignItems: 'center',
   },
-  logoWhite: {
-    fontSize: 32,
+  beatText: {
+    fontSize: 36,
     fontWeight: 'bold',
-    color: Colors.text,
+    color: '#FFFFFF',
+    letterSpacing: 2,
   },
-  logoRed: {
-    fontSize: 32,
+  matesText: {
+    fontSize: 36,
     fontWeight: 'bold',
-    color: Colors.primary,
+    color: '#FF6B7A',
+    letterSpacing: 2,
   },
 });

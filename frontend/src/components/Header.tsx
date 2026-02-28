@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Colors from '../constants/colors';
 
 interface HeaderProps {
   showSearch?: boolean;
@@ -24,26 +23,26 @@ export default function Header({
     <View style={styles.container}>
       {showSearch ? (
         <TouchableOpacity onPress={onSearchPress} style={styles.iconButton}>
-          <Ionicons name="search-outline" size={24} color={Colors.text} />
+          <Ionicons name="search-outline" size={24} color="#FFFFFF" />
         </TouchableOpacity>
       ) : (
         <View style={styles.iconButton} />
       )}
       
       <View style={styles.logoContainer}>
-        <Text style={styles.logoWhite}>BEAT </Text>
-        <Text style={styles.logoRed}>MATES</Text>
+        <Text style={styles.beatText}>BEAT </Text>
+        <Text style={styles.matesText}>MATES</Text>
       </View>
       
       <View style={styles.rightIcons}>
         {showNotifications && (
           <TouchableOpacity onPress={onNotificationsPress} style={styles.iconButton}>
-            <Ionicons name="heart-outline" size={24} color={Colors.text} />
+            <Ionicons name="heart-outline" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         )}
         {showMessages && (
           <TouchableOpacity onPress={onMessagesPress} style={styles.iconButton}>
-            <Ionicons name="paper-plane-outline" size={24} color={Colors.text} />
+            <Ionicons name="paper-plane-outline" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         )}
       </View>
@@ -58,20 +57,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: Colors.background,
+    backgroundColor: '#000000',
   },
   logoContainer: {
     flexDirection: 'row',
   },
-  logoWhite: {
+  beatText: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: Colors.text,
+    color: '#FFFFFF',
   },
-  logoRed: {
+  matesText: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: Colors.primary,
+    color: '#FF4058',
   },
   rightIcons: {
     flexDirection: 'row',
