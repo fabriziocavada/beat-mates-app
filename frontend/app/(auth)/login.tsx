@@ -35,6 +35,13 @@ export default function LoginScreen() {
     setIsLoading(true);
     try {
       await login(email, password);
+      // Navigate based on user's category selection status
+      const user = useAuthStore.getState().user;
+      if (user?.dance_categories && user.dance_categories.length > 0) {
+        router.replace('/(main)/home');
+      } else {
+        router.replace('/(auth)/categories');
+      }
     } catch (error: any) {
       Alert.alert('Error', error.message);
     } finally {
