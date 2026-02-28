@@ -31,20 +31,31 @@ interface PostCardProps {
 }
 
 function VideoPlayer({ mediaUrl, autoPlay }: { mediaUrl: string; autoPlay?: boolean }) {
+  const containerRef = React.useRef<any>(null);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && containerRef.current) {
+      const domNode = containerRef.current;
+      // Clear existing content
+      while (domNode.firstChild) domNode.removeChild(domNode.firstChild);
+      const video = document.createElement('video');
+      video.src = mediaUrl;
+      video.style.cssText = 'width:100%;height:100%;object-fit:cover;background:#000;';
+      video.autoplay = true;
+      video.loop = true;
+      video.muted = true;
+      video.playsInline = true;
+      video.setAttribute('playsinline', '');
+      video.setAttribute('webkit-playsinline', '');
+      domNode.appendChild(video);
+      return () => { while (domNode.firstChild) domNode.removeChild(domNode.firstChild); };
+    }
+  }, [mediaUrl]);
+
   if (Platform.OS === 'web') {
-    return (
-      <View style={{ width: '100%', height: '100%' }}>
-        {React.createElement('video', {
-          src: mediaUrl,
-          style: { width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#000' },
-          autoPlay: true,
-          loop: true,
-          muted: true,
-          playsInline: true,
-        })}
-      </View>
-    );
+    return <View ref={containerRef} style={{ width: '100%', height: '100%' }} />;
   }
+
   return (
     <Video
       source={{ uri: mediaUrl }}
