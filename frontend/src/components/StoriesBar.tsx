@@ -1,20 +1,18 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import Colors from '../constants/colors';
 import { useAuthStore } from '../store/authStore';
 
-interface Story {
-  id: string;
+interface StoryUser {
   user_id: string;
   username: string;
   profile_image: string | null;
   has_unread: boolean;
+  stories: any[];
 }
 
 interface StoriesBarProps {
-  stories: Story[];
+  stories: StoryUser[];
   onStoryPress?: (userId: string) => void;
   onAddStoryPress?: () => void;
 }
@@ -40,12 +38,12 @@ export default function StoriesBar({ stories, onStoryPress, onAddStoryPress }: S
               />
             ) : (
               <View style={styles.placeholderImage}>
-                <Ionicons name="person" size={30} color={Colors.textSecondary} />
+                <Ionicons name="person" size={28} color="#8E8E93" />
               </View>
             )}
           </View>
           <View style={styles.addButton}>
-            <Ionicons name="add" size={16} color={Colors.text} />
+            <Ionicons name="add" size={14} color="#FFFFFF" />
           </View>
         </View>
         <Text style={styles.storyUsername} numberOfLines={1}>Your Story</Text>
@@ -54,7 +52,7 @@ export default function StoriesBar({ stories, onStoryPress, onAddStoryPress }: S
       {/* Other Stories */}
       {stories.map((story) => (
         <TouchableOpacity
-          key={story.id}
+          key={story.user_id}
           style={styles.storyItem}
           onPress={() => onStoryPress?.(story.user_id)}
         >
@@ -70,7 +68,7 @@ export default function StoriesBar({ stories, onStoryPress, onAddStoryPress }: S
                 />
               ) : (
                 <View style={styles.placeholderImage}>
-                  <Ionicons name="person" size={30} color={Colors.textSecondary} />
+                  <Ionicons name="person" size={28} color="#8E8E93" />
                 </View>
               )}
             </View>
@@ -84,9 +82,9 @@ export default function StoriesBar({ stories, onStoryPress, onAddStoryPress }: S
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.background,
+    backgroundColor: '#000000',
     borderBottomWidth: 0.5,
-    borderBottomColor: Colors.border,
+    borderBottomColor: '#3A3A3C',
   },
   content: {
     paddingVertical: 10,
@@ -95,26 +93,26 @@ const styles = StyleSheet.create({
   storyItem: {
     alignItems: 'center',
     marginHorizontal: 6,
-    width: 72,
+    width: 68,
   },
   addStoryContainer: {
     position: 'relative',
   },
   storyBorder: {
-    padding: 3,
-    borderRadius: 40,
+    padding: 2,
+    borderRadius: 35,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: '#3A3A3C',
   },
   storyBorderActive: {
-    borderColor: Colors.storyGradientStart,
+    borderColor: '#FF6978',
   },
   storyImageContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     overflow: 'hidden',
-    backgroundColor: Colors.surface,
+    backgroundColor: '#1C1C1E',
   },
   storyImage: {
     width: '100%',
@@ -125,24 +123,24 @@ const styles = StyleSheet.create({
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: '#1C1C1E',
   },
   addButton: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: Colors.primary,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FF6978',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: Colors.background,
+    borderColor: '#000000',
   },
   storyUsername: {
-    color: Colors.text,
-    fontSize: 12,
+    color: '#FFFFFF',
+    fontSize: 11,
     marginTop: 4,
     textAlign: 'center',
   },

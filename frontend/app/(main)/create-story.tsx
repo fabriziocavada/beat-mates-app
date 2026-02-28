@@ -3,14 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   Image,
   Alert,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,15 +14,12 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import api from '../../src/services/api';
-import { useAuthStore } from '../../src/store/authStore';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
-export default function CreatePostScreen() {
+export default function CreateStoryScreen() {
   const router = useRouter();
-  const refreshUser = useAuthStore((state) => state.refreshUser);
   
-  const [caption, setCaption] = useState('');
   const [media, setMedia] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'photo' | 'video'>('photo');
   const [isLoading, setIsLoading] = useState(false);
@@ -42,10 +35,10 @@ export default function CreatePostScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.4, // Lower quality for smaller size
+      aspect: [9, 16],
+      quality: 0.5,
       base64: true,
-      videoMaxDuration: 60,
+      videoMaxDuration: 30,
     });
     
     if (!result.canceled && result.assets[0]) {
@@ -64,14 +57,14 @@ export default function CreatePostScreen() {
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
     
     if (!permissionResult.granted) {
-      Alert.alert('Permission required', 'Please allow camera access');
+      Alert.alert('Permission required', 'Please allow access to your camera');
       return;
     }
     
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.4,
+      aspect: [9, 16],
+      quality: 0.5,
       base64: true,
     });
     
@@ -81,25 +74,22 @@ export default function CreatePostScreen() {
     }
   };
   
-  const handlePost = async () => {
-    if (!media && !caption) {
-      Alert.alert('Empty post', 'Please add an image, video or caption');
+  const handlePublish = async () => {
+    if (!media) {
+      Alert.alert('No media', 'Please select a photo or video');
       return;
     }
     
     setIsLoading(true);
     try {
-      await api.post('/posts', {
-        type: mediaType,
+      await api.post('/stories', {
         media: media,
-        caption,
+        type: mediaType,
       });
-      
-      await refreshUser();
       router.back();
     } catch (error: any) {
-      console.error('Post error:', error.response?.data || error.message);
-      Alert.alert('Error', 'Failed to create post. Try with a smaller image/video.');
+      console.error('Story error:', error.response?.data || error.message);
+      Alert.alert('Error', 'Failed to publish story. Try with a smaller image.');
     } finally {
       setIsLoading(false);
     }
@@ -111,17 +101,17 @@ export default function CreatePostScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="close" size={28} color="#FFFFFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>New Post</Text>
+        <Text style={styles.headerTitle}>Add to Story</Text>
         <TouchableOpacity
-          onPress={handlePost}
-          disabled={isLoading || (!media && !caption)}
+          onPress={handlePublish}
+          disabled={isLoading || !media}
         >
           {isLoading ? (
             <ActivityIndicator color="#FF6978" />
           ) : (
             <Text style={[
-              styles.shareButton,
-              (!media && !caption) && styles.shareButtonDisabled
+              styles.publishButton,
+              !media && styles.publishButtonDisabled
             ]}>
               Share
             </Text>
@@ -129,45 +119,35 @@ export default function CreatePostScreen() {
         </TouchableOpacity>
       </View>
       
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.content}
-      >
-        <ScrollView>
-          {media ? (
-            <View style={styles.previewContainer}>
-              <Image source={{ uri: media }} style={styles.preview} resizeMode="cover" />
-              <TouchableOpacity
-                style={styles.removeButton}
-                onPress={() => setMedia(null)}
-              >
-                <Ionicons name="close-circle" size={32} color="#FF6978" />
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.mediaOptions}>
-              <TouchableOpacity style={styles.mediaButton} onPress={takePhoto}>
-                <Ionicons name="camera" size={36} color="#FF6978" />
-                <Text style={styles.mediaButtonText}>Camera</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.mediaButton} onPress={pickMedia}>
-                <Ionicons name="images" size={36} color="#FF6978" />
-                <Text style={styles.mediaButtonText}>Gallery</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          
-          <TextInput
-            style={styles.captionInput}
-            placeholder="Write a caption..."
-            placeholderTextColor="#8E8E93"
-            value={caption}
-            onChangeText={setCaption}
-            multiline
-            maxLength={2200}
-          />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      <View style={styles.content}>
+        {media ? (
+          <View style={styles.previewContainer}>
+            <Image source={{ uri: media }} style={styles.preview} resizeMode="cover" />
+            <TouchableOpacity
+              style={styles.removeButton}
+              onPress={() => setMedia(null)}
+            >
+              <Ionicons name="close-circle" size={36} color="#FF6978" />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.optionsContainer}>
+            <TouchableOpacity style={styles.optionButton} onPress={takePhoto}>
+              <View style={styles.optionIcon}>
+                <Ionicons name="camera" size={40} color="#FF6978" />
+              </View>
+              <Text style={styles.optionText}>Camera</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.optionButton} onPress={pickMedia}>
+              <View style={styles.optionIcon}>
+                <Ionicons name="images" size={40} color="#FF6978" />
+              </View>
+              <Text style={styles.optionText}>Gallery</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -191,58 +171,52 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
-  shareButton: {
+  publishButton: {
     color: '#FF6978',
     fontSize: 16,
     fontWeight: '600',
   },
-  shareButtonDisabled: {
+  publishButtonDisabled: {
     opacity: 0.5,
   },
   content: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   previewContainer: {
-    width: width - 32,
-    aspectRatio: 1,
-    margin: 16,
-    borderRadius: 12,
-    overflow: 'hidden',
+    flex: 1,
+    width: '100%',
     position: 'relative',
   },
   preview: {
+    flex: 1,
     width: '100%',
-    height: '100%',
   },
   removeButton: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 20,
+    right: 20,
   },
-  mediaOptions: {
+  optionsContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    padding: 40,
     gap: 30,
   },
-  mediaButton: {
+  optionButton: {
     alignItems: 'center',
-    padding: 24,
+  },
+  optionIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 20,
     backgroundColor: '#1C1C1E',
-    borderRadius: 16,
-    width: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
-  mediaButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '500',
-    marginTop: 8,
-  },
-  captionInput: {
+  optionText: {
     color: '#FFFFFF',
     fontSize: 16,
-    padding: 16,
-    minHeight: 80,
-    textAlignVertical: 'top',
+    fontWeight: '500',
   },
 });

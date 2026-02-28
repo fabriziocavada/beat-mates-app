@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import Colors from '../../src/constants/colors';
 import Header from '../../src/components/Header';
 import TabBar from '../../src/components/TabBar';
 import StoriesBar from '../../src/components/StoriesBar';
@@ -35,32 +34,37 @@ interface Post {
   created_at: string;
 }
 
+interface StoryUser {
+  user_id: string;
+  username: string;
+  profile_image: string | null;
+  has_unread: boolean;
+  stories: any[];
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   
   const [posts, setPosts] = useState<Post[]>([]);
+  const [stories, setStories] = useState<StoryUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   
-  // Mock stories data
-  const [stories] = useState([
-    { id: '1', user_id: '1', username: 'joshua_l', profile_image: null, has_unread: true },
-    { id: '2', user_id: '2', username: 'karennne', profile_image: null, has_unread: true },
-    { id: '3', user_id: '3', username: 'craig_love', profile_image: null, has_unread: false },
-    { id: '4', user_id: '4', username: 'amanda', profile_image: null, has_unread: true },
-  ]);
-  
   useEffect(() => {
-    loadPosts();
+    loadData();
   }, []);
   
-  const loadPosts = async () => {
+  const loadData = async () => {
     try {
-      const response = await api.get('/posts');
-      setPosts(response.data);
+      const [postsRes, storiesRes] = await Promise.all([
+        api.get('/posts'),
+        api.get('/stories'),
+      ]);
+      setPosts(postsRes.data);
+      setStories(storiesRes.data);
     } catch (error) {
-      console.error('Failed to load posts', error);
+      console.error('Failed to load data', error);
     } finally {
       setIsLoading(false);
     }
@@ -68,14 +72,13 @@ export default function HomeScreen() {
   
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await loadPosts();
+    await loadData();
     setIsRefreshing(false);
   }, []);
   
   const handleTabPress = (tab: string) => {
     switch (tab) {
       case 'home':
-        // Already on home
         break;
       case 'create':
         router.push('/(main)/create-post');
@@ -85,9 +88,6 @@ export default function HomeScreen() {
         break;
       case 'profile':
         router.push('/(main)/profile');
-        break;
-      default:
-        // Other tabs not implemented yet
         break;
     }
   };
@@ -103,8 +103,13 @@ export default function HomeScreen() {
   const renderHeader = () => (
     <StoriesBar
       stories={stories}
-      onStoryPress={(userId) => console.log('Open story', userId)}
-      onAddStoryPress={() => console.log('Add story')}
+      onStoryPress={(userId) => {
+        const userStories = stories.find(s => s.user_id === userId);
+        if (userStories && userStories.stories.length > 0) {
+          router.push(`/(main)/story/${userStories.stories[0].id}`);
+        }
+      }}
+      onAddStoryPress={() => router.push('/(main)/create-story')}
     />
   );
   
@@ -127,7 +132,7 @@ export default function HomeScreen() {
       
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color="#FF6978" />
         </View>
       ) : (
         <FlatList
@@ -140,7 +145,7 @@ export default function HomeScreen() {
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={handleRefresh}
-              tintColor={Colors.primary}
+              tintColor="#FF6978"
             />
           }
           showsVerticalScrollIndicator={false}
@@ -155,7 +160,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#000000',
   },
   loadingContainer: {
     flex: 1,
@@ -170,13 +175,13 @@ const styles = StyleSheet.create({
     marginTop: 60,
   },
   emptyTitle: {
-    color: Colors.text,
+    color: '#FFFFFF',
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 12,
   },
   emptyText: {
-    color: Colors.textSecondary,
+    color: '#8E8E93',
     fontSize: 16,
     textAlign: 'center',
     lineHeight: 24,
