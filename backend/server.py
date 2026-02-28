@@ -1149,12 +1149,14 @@ async def upload_file(
     media_type = "video" if is_video else "image"
     return {"url": url, "filename": filename, "media_type": media_type}
 
-# Video streaming endpoint with Range request support
+# Video streaming endpoint - returns base64 data URL for short videos
 @api_router.get("/media/{filename}")
 async def stream_media(filename: str, request: Request):
     filepath = UPLOADS_DIR / filename
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="File not found")
+    
+    file_size = filepath.stat().st_size
     
     # Determine content type
     ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
@@ -1165,6 +1167,17 @@ async def stream_media(filename: str, request: Request):
     }
     media_type = content_types.get(ext, 'application/octet-stream')
     
+    # For videos under 10MB, return as base64 data URL for browser compatibility
+    if 'video' in media_type and file_size < 10_000_000:
+        with open(filepath, 'rb') as f:
+            data = f.read()
+        b64 = base64.b64encode(data).decode()
+        return JSONResponse({
+            "data_url": f"data:{media_type};base64,{b64}",
+            "size": file_size,
+        })
+    
+    # For images and large files, use FileResponse
     return FileResponse(
         path=str(filepath),
         media_type=media_type,
