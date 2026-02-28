@@ -96,7 +96,7 @@ export default function HomeScreen() {
     <PostCard
       post={item}
       onUserPress={(userId) => router.push(`/(main)/user/${userId}`)}
-      onCommentPress={(postId) => console.log('Open comments', postId)}
+      onCommentPress={(postId) => router.push(`/(main)/comments/${postId}`)}
     />
   );
   
