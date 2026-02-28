@@ -18,13 +18,13 @@ import TabBar from '../../src/components/TabBar';
 import api from '../../src/services/api';
 
 const { width, height } = Dimensions.get('window');
-const VIDEO_HEIGHT = height - 140; // Full screen minus tab bar and status
+const ITEM_HEIGHT = height - 130;
 
 interface ReelPost {
   id: string;
   user_id: string;
   type: string;
-  media_url: string;
+  media: string;
   caption: string;
   user?: {
     id: string;
@@ -34,6 +34,7 @@ interface ReelPost {
   };
   likes_count: number;
   comments_count: number;
+  is_liked: boolean;
   created_at: string;
 }
 
@@ -42,7 +43,7 @@ export default function ReelsScreen() {
   const [reels, setReels] = useState<ReelPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const videoRefs = useRef<{[key: string]: Video}>({});
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadReels();
@@ -50,12 +51,36 @@ export default function ReelsScreen() {
 
   const loadReels = async () => {
     try {
-      const response = await api.get('/posts?type=video');
-      setReels(response.data.filter((p: ReelPost) => p.type === 'video'));
+      const response = await api.get('/posts');
+      // Show ALL posts with media content
+      const mediaPosts = response.data.filter((p: ReelPost) => p.media);
+      setReels(mediaPosts);
     } catch (error) {
       console.error('Failed to load reels', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleLike = async (postId: string) => {
+    try {
+      await api.post(`/posts/${postId}/like`);
+      setLikedPosts(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(postId)) {
+          newSet.delete(postId);
+        } else {
+          newSet.add(postId);
+        }
+        return newSet;
+      });
+      setReels(prev => prev.map(r => 
+        r.id === postId 
+          ? { ...r, likes_count: likedPosts.has(postId) ? r.likes_count - 1 : r.likes_count + 1 }
+          : r
+      ));
+    } catch (error) {
+      console.error('Like error', error);
     }
   };
 
@@ -77,28 +102,31 @@ export default function ReelsScreen() {
 
   const renderReel = ({ item, index }: { item: ReelPost; index: number }) => {
     const isActive = index === currentIndex;
+    const isVideo = item.type === 'video';
+    const isLiked = likedPosts.has(item.id) || item.is_liked;
 
     return (
-      <View style={[styles.reelContainer, { height: VIDEO_HEIGHT }]}>
-        {item.media_url ? (
+      <View style={[styles.reelContainer, { height: ITEM_HEIGHT }]}>
+        {isVideo && item.media ? (
           <Video
-            ref={(ref) => { if (ref) videoRefs.current[item.id] = ref; }}
-            source={{ uri: item.media_url }}
-            style={styles.video}
+            source={{ uri: item.media }}
+            style={styles.media}
             resizeMode={ResizeMode.COVER}
             shouldPlay={isActive}
             isLooping
             isMuted={false}
           />
+        ) : item.media ? (
+          <Image source={{ uri: item.media }} style={styles.media} resizeMode="cover" />
         ) : (
-          <View style={styles.noVideoPlaceholder}>
-            <Ionicons name="videocam-off" size={48} color={Colors.textSecondary} />
+          <View style={[styles.media, styles.placeholder]}>
+            <Ionicons name="image-outline" size={48} color={Colors.textSecondary} />
           </View>
         )}
         
         {/* Overlay content */}
         <View style={styles.overlay}>
-          {/* Left side - user info and caption */}
+          {/* Bottom left - user info & caption */}
           <View style={styles.bottomInfo}>
             <TouchableOpacity
               style={styles.userRow}
@@ -114,25 +142,39 @@ export default function ReelsScreen() {
               <Text style={styles.username}>@{item.user?.username}</Text>
             </TouchableOpacity>
             {item.caption ? (
-              <Text style={styles.caption} numberOfLines={2}>{item.caption}</Text>
+              <Text style={styles.caption} numberOfLines={3}>{item.caption}</Text>
             ) : null}
           </View>
 
-          {/* Right side - actions */}
+          {/* Right side - action buttons */}
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.actionBtn}>
-              <Ionicons name="heart-outline" size={28} color="#FFF" />
+            <TouchableOpacity 
+              style={styles.actionBtn}
+              onPress={() => handleLike(item.id)}
+            >
+              <Ionicons 
+                name={isLiked ? "heart" : "heart-outline"} 
+                size={30} 
+                color={isLiked ? Colors.primary : "#FFF"} 
+              />
               <Text style={styles.actionText}>{item.likes_count || 0}</Text>
             </TouchableOpacity>
+            
             <TouchableOpacity 
               style={styles.actionBtn}
               onPress={() => router.push(`/(main)/comments/${item.id}`)}
             >
-              <Ionicons name="chatbubble-outline" size={26} color="#FFF" />
+              <Ionicons name="chatbubble-outline" size={28} color="#FFF" />
               <Text style={styles.actionText}>{item.comments_count || 0}</Text>
             </TouchableOpacity>
+            
             <TouchableOpacity style={styles.actionBtn}>
-              <Ionicons name="paper-plane-outline" size={26} color="#FFF" />
+              <Ionicons name="paper-plane-outline" size={28} color="#FFF" />
+              <Text style={styles.actionText}>Invia</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.actionBtn}>
+              <Ionicons name="bookmark-outline" size={28} color="#FFF" />
             </TouchableOpacity>
           </View>
         </View>
@@ -153,19 +195,27 @@ export default function ReelsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Reels</Text>
+        <TouchableOpacity onPress={() => router.push('/(main)/create-post')}>
+          <Ionicons name="videocam" size={24} color="#FFF" />
+        </TouchableOpacity>
+      </View>
+
       {reels.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="videocam-outline" size={64} color={Colors.textSecondary} />
-          <Text style={styles.emptyTitle}>Nessun video ancora</Text>
+          <Text style={styles.emptyTitle}>Nessun contenuto ancora</Text>
           <Text style={styles.emptyText}>
-            Registra il primo video di danza! Max 10 secondi, formato verticale.
+            Pubblica foto e video di danza per vederli qui in stile TikTok!
           </Text>
           <TouchableOpacity
             style={styles.createButton}
             onPress={() => router.push('/(main)/create-post')}
           >
-            <Ionicons name="videocam" size={20} color="#FFF" />
-            <Text style={styles.createButtonText}>Registra Video</Text>
+            <Ionicons name="add" size={20} color="#FFF" />
+            <Text style={styles.createButtonText}>Crea Contenuto</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -175,7 +225,7 @@ export default function ReelsScreen() {
           keyExtractor={(item) => item.id}
           pagingEnabled
           showsVerticalScrollIndicator={false}
-          snapToInterval={VIDEO_HEIGHT}
+          snapToInterval={ITEM_HEIGHT}
           decelerationRate="fast"
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
@@ -191,6 +241,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    position: 'absolute',
+    top: 44,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
+  headerTitle: {
+    color: '#FFF',
+    fontSize: 22,
+    fontWeight: 'bold',
+  },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
@@ -201,12 +268,11 @@ const styles = StyleSheet.create({
     position: 'relative',
     backgroundColor: '#000',
   },
-  video: {
+  media: {
     width: '100%',
     height: '100%',
   },
-  noVideoPlaceholder: {
-    flex: 1,
+  placeholder: {
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#1C1C1E',
@@ -221,18 +287,18 @@ const styles = StyleSheet.create({
   },
   bottomInfo: {
     flex: 1,
-    marginRight: 16,
+    marginRight: 12,
   },
   userRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     marginBottom: 8,
   },
   reelAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 2,
     borderColor: '#FFF',
     alignItems: 'center',
@@ -246,22 +312,18 @@ const styles = StyleSheet.create({
   },
   username: {
     color: '#FFF',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: 'bold',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
   },
   caption: {
     color: '#FFF',
     fontSize: 14,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    lineHeight: 20,
   },
   actions: {
     alignItems: 'center',
     gap: 20,
+    paddingBottom: 10,
   },
   actionBtn: {
     alignItems: 'center',
@@ -269,7 +331,7 @@ const styles = StyleSheet.create({
   actionText: {
     color: '#FFF',
     fontSize: 12,
-    marginTop: 2,
+    marginTop: 3,
     fontWeight: '600',
   },
   emptyContainer: {
