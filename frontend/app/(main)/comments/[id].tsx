@@ -92,30 +92,33 @@ export default function CommentsScreen() {
     return `${days}g`;
   };
 
-  const renderComment = ({ item }: { item: Comment }) => (
-    <View style={styles.commentItem}>
-      <TouchableOpacity
-        onPress={() => router.push(`/(main)/user/${item.user_id}`)}
-      >
-        <View style={styles.commentAvatar}>
-          {item.user?.profile_image ? (
-            <Image source={{ uri: item.user.profile_image }} style={styles.avatarImage} />
-          ) : (
-            <Ionicons name="person" size={16} color={Colors.textSecondary} />
-          )}
-        </View>
-      </TouchableOpacity>
-      <View style={styles.commentContent}>
-        <Text style={styles.commentText}>
-          <Text style={styles.commentUsername}>{item.user?.username || 'utente'} </Text>
-          {item.content}
-        </Text>
-        <View style={styles.commentMeta}>
-          <Text style={styles.commentTime}>{formatTime(item.created_at)}</Text>
+  const renderComment = ({ item }: { item: Comment }) => {
+    const commentText = (item as any).text || item.content;
+    return (
+      <View style={styles.commentItem}>
+        <TouchableOpacity
+          onPress={() => router.push(`/(main)/user/${item.user_id}`)}
+        >
+          <View style={styles.commentAvatar}>
+            {item.user?.profile_image ? (
+              <Image source={{ uri: item.user.profile_image }} style={styles.avatarImage} />
+            ) : (
+              <Ionicons name="person" size={16} color={Colors.textSecondary} />
+            )}
+          </View>
+        </TouchableOpacity>
+        <View style={styles.commentContent}>
+          <Text style={styles.commentText}>
+            <Text style={styles.commentUsername}>{item.user?.username || 'utente'} </Text>
+            {commentText}
+          </Text>
+          <View style={styles.commentMeta}>
+            <Text style={styles.commentTime}>{formatTime(item.created_at)}</Text>
+          </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
