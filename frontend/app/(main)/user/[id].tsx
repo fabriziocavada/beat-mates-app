@@ -127,17 +127,20 @@ export default function UserProfileScreen() {
     }
   };
   
-  const renderPost = ({ item }: { item: Post }) => (
-    <TouchableOpacity style={styles.postItem}>
-      {item.media ? (
-        <Image source={{ uri: item.media }} style={styles.postImage} />
-      ) : (
-        <View style={styles.postPlaceholder}>
-          <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
-        </View>
-      )}
-    </TouchableOpacity>
-  );
+  const renderPost = ({ item }: { item: Post }) => {
+    const mediaUrl = getMediaUrl(item.media);
+    return (
+      <TouchableOpacity style={styles.postItem}>
+        {mediaUrl ? (
+          <Image source={{ uri: mediaUrl }} style={styles.postImage} />
+        ) : (
+          <View style={styles.postPlaceholder}>
+            <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
   
   if (isLoading || !user) {
     return (
