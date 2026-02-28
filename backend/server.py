@@ -79,7 +79,7 @@ class UserCreate(BaseModel):
     password: str
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    email: str  # Accept both email and username
     password: str
 
 class UserResponse(BaseModel):
