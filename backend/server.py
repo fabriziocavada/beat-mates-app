@@ -768,7 +768,9 @@ async def get_my_bookings(current_user: dict = Depends(get_current_user)):
     result = []
     for booking in bookings:
         slot = await db.availability_slots.find_one({"id": booking["slot_id"]})
-        booking["slot"] = slot
+        # Clean slot data to remove MongoDB ObjectIDs that can't be serialized
+        clean_slot = {k: v for k, v in slot.items() if k != "_id"} if slot else None
+        booking["slot"] = clean_slot
         result.append(BookingResponse(**booking))
     
     return result
