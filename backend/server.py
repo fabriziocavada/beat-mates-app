@@ -50,6 +50,11 @@ class CustomJSONEncoder(json.JSONEncoder):
             return obj.isoformat()
         return super().default(obj)
 
+# Uploads directory
+UPLOADS_DIR = ROOT_DIR / 'uploads'
+UPLOADS_DIR.mkdir(exist_ok=True)
+
+
 # Create the main app
 app = FastAPI(title="Beat Mates API")
 
