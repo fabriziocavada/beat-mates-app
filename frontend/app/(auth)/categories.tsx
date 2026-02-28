@@ -18,7 +18,8 @@ import api from '../../src/services/api';
 import Colors from '../../src/constants/colors';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - 48) / 2;
+const CARD_GAP = 12;
+const CARD_WIDTH = (width - 32 - CARD_GAP) / 2; // 16px padding each side + gap
 const CARD_HEIGHT = 130;
 
 interface Category {
