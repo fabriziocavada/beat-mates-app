@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import api from '../services/api';
+import { useAuthStore } from '../store/authStore';
 
 interface HeaderProps {
   showSearch?: boolean;
@@ -19,6 +21,26 @@ export default function Header({
   onNotificationsPress,
   onMessagesPress,
 }: HeaderProps) {
+  const { user } = useAuthStore();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    if (user?.is_available) {
+      checkPending();
+      const interval = setInterval(checkPending, 15000); // Check every 15 seconds
+      return () => clearInterval(interval);
+    }
+  }, [user?.is_available]);
+
+  const checkPending = async () => {
+    try {
+      const response = await api.get('/live-sessions/pending/count');
+      setPendingCount(response.data.count);
+    } catch (error) {
+      // Silently fail
+    }
+  };
+
   return (
     <View style={styles.container}>
       {showSearch ? (
@@ -38,6 +60,11 @@ export default function Header({
         {showNotifications && (
           <TouchableOpacity onPress={onNotificationsPress} style={styles.iconButton}>
             <Ionicons name="heart-outline" size={24} color="#FFFFFF" />
+            {pendingCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{pendingCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         )}
         {showMessages && (
@@ -78,5 +105,23 @@ const styles = StyleSheet.create({
   iconButton: {
     padding: 4,
     marginHorizontal: 4,
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#FF6978',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });
