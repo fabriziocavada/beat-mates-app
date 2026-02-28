@@ -88,17 +88,15 @@ export default function CreatePostScreen() {
 
   const takeVideo = async () => {
     const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
-    const micPermission = await ImagePicker.requestMicrophonePermissionsAsync();
     
-    if (!cameraPermission.granted || !micPermission.granted) {
-      Alert.alert('Permesso richiesto', 'Consenti accesso a fotocamera e microfono');
+    if (!cameraPermission.granted) {
+      Alert.alert('Permesso richiesto', 'Consenti accesso a fotocamera');
       return;
     }
     
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Videos,
       videoMaxDuration: 10,
-      videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
       allowsEditing: true,
     });
     
