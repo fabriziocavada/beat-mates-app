@@ -178,6 +178,7 @@ class LiveSessionResponse(BaseModel):
     student_id: str
     teacher_id: str
     teacher: Optional[dict] = None
+    student: Optional[dict] = None
     status: str  # pending, accepted, active, completed, rejected
     amount: float
     started_at: Optional[datetime] = None
