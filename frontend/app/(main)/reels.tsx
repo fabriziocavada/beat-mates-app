@@ -8,11 +8,11 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Video, ResizeMode } from 'expo-av';
 import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
 import api, { getMediaUrl } from '../../src/services/api';
@@ -109,14 +109,20 @@ export default function ReelsScreen() {
     return (
       <View style={[styles.reelContainer, { height: ITEM_HEIGHT }]}>
         {mediaUrl ? (
-          <Video
-            source={{ uri: mediaUrl }}
-            style={styles.media}
-            resizeMode={ResizeMode.COVER}
-            shouldPlay={isActive}
-            isLooping
-            isMuted={false}
-          />
+          Platform.OS === 'web' ? (
+            <video
+              src={mediaUrl}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#000' }}
+              autoPlay={isActive}
+              loop
+              muted={false}
+              playsInline
+            />
+          ) : (
+            <View style={[styles.media, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
+              <Ionicons name="play-circle" size={64} color="#FFF" />
+            </View>
+          )
         ) : (
           <View style={[styles.media, styles.placeholder]}>
             <Ionicons name="videocam-outline" size={48} color={Colors.textSecondary} />
