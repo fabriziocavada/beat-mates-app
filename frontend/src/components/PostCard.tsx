@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Video, ResizeMode } from 'expo-av';
 import api, { getMediaUrl } from '../services/api';
 
 const { width } = Dimensions.get('window');
@@ -92,15 +91,20 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
       {mediaUrl && (
         <View style={styles.mediaContainer}>
           {isVideo ? (
-            <Video
-              source={{ uri: mediaUrl }}
-              style={styles.media}
-              useNativeControls={false}
-              resizeMode={ResizeMode.COVER}
-              isLooping
-              shouldPlay
-              isMuted
-            />
+            Platform.OS === 'web' ? (
+              <video
+                src={mediaUrl}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#000' }}
+                autoPlay
+                loop
+                muted
+                playsInline
+              />
+            ) : (
+              <View style={[styles.media, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
+                <Ionicons name="play-circle" size={48} color="#FFF" />
+              </View>
+            )
           ) : (
             <Image
               source={{ uri: mediaUrl }}
