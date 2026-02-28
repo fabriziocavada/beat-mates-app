@@ -1,0 +1,234 @@
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import Colors from '../constants/colors';
+import api from '../services/api';
+
+const { width } = Dimensions.get('window');
+
+interface Post {
+  id: string;
+  user_id: string;
+  user?: {
+    id: string;
+    username: string;
+    name: string;
+    profile_image: string | null;
+  };
+  type: string;
+  media: string | null;
+  caption: string;
+  likes_count: number;
+  comments_count: number;
+  is_liked: boolean;
+  created_at: string;
+}
+
+interface PostCardProps {
+  post: Post;
+  onUserPress?: (userId: string) => void;
+  onCommentPress?: (postId: string) => void;
+}
+
+export default function PostCard({ post, onUserPress, onCommentPress }: PostCardProps) {
+  const [isLiked, setIsLiked] = useState(post.is_liked);
+  const [likesCount, setLikesCount] = useState(post.likes_count);
+  
+  const handleLike = async () => {
+    try {
+      const response = await api.post(`/posts/${post.id}/like`);
+      setIsLiked(response.data.liked);
+      setLikesCount((prev) => response.data.liked ? prev + 1 : prev - 1);
+    } catch (error) {
+      console.error('Failed to like post', error);
+    }
+  };
+  
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    
+    if (hours < 1) return 'Just now';
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString();
+  };
+  
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <TouchableOpacity
+        style={styles.header}
+        onPress={() => onUserPress?.(post.user_id)}
+      >
+        <View style={styles.userInfo}>
+          <View style={styles.avatar}>
+            {post.user?.profile_image ? (
+              <Image
+                source={{ uri: post.user.profile_image }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <Ionicons name="person" size={20} color={Colors.text} />
+            )}
+          </View>
+          <View>
+            <Text style={styles.username}>{post.user?.username || 'Unknown'}</Text>
+          </View>
+        </View>
+        <TouchableOpacity>
+          <Ionicons name="ellipsis-horizontal" size={20} color={Colors.text} />
+        </TouchableOpacity>
+      </TouchableOpacity>
+      
+      {/* Media */}
+      {post.media && (
+        <Image
+          source={{ uri: post.media }}
+          style={styles.media}
+          resizeMode="cover"
+        />
+      )}
+      
+      {/* Actions */}
+      <View style={styles.actions}>
+        <View style={styles.leftActions}>
+          <TouchableOpacity onPress={handleLike} style={styles.actionButton}>
+            <Ionicons
+              name={isLiked ? 'heart' : 'heart-outline'}
+              size={26}
+              color={isLiked ? Colors.primary : Colors.text}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => onCommentPress?.(post.id)}
+            style={styles.actionButton}
+          >
+            <Ionicons name="chatbubble-outline" size={24} color={Colors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton}>
+            <Ionicons name="paper-plane-outline" size={24} color={Colors.text} />
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity>
+          <Ionicons name="bookmark-outline" size={24} color={Colors.text} />
+        </TouchableOpacity>
+      </View>
+      
+      {/* Likes count */}
+      {likesCount > 0 && (
+        <Text style={styles.likesCount}>
+          {likesCount.toLocaleString()} {likesCount === 1 ? 'like' : 'likes'}
+        </Text>
+      )}
+      
+      {/* Caption */}
+      {post.caption && (
+        <View style={styles.captionContainer}>
+          <Text style={styles.caption}>
+            <Text style={styles.captionUsername}>{post.user?.username} </Text>
+            {post.caption}
+          </Text>
+        </View>
+      )}
+      
+      {/* Comments */}
+      {post.comments_count > 0 && (
+        <TouchableOpacity onPress={() => onCommentPress?.(post.id)}>
+          <Text style={styles.viewComments}>
+            View all {post.comments_count} comments
+          </Text>
+        </TouchableOpacity>
+      )}
+      
+      {/* Time */}
+      <Text style={styles.time}>{formatDate(post.created_at)}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: Colors.background,
+    marginBottom: 16,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  username: {
+    color: Colors.text,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  media: {
+    width: width,
+    height: width,
+  },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  leftActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionButton: {
+    marginRight: 16,
+  },
+  likesCount: {
+    color: Colors.text,
+    fontWeight: '600',
+    paddingHorizontal: 12,
+    marginBottom: 6,
+  },
+  captionContainer: {
+    paddingHorizontal: 12,
+    marginBottom: 6,
+  },
+  caption: {
+    color: Colors.text,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  captionUsername: {
+    fontWeight: '600',
+  },
+  viewComments: {
+    color: Colors.textSecondary,
+    paddingHorizontal: 12,
+    marginBottom: 4,
+  },
+  time: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+});
