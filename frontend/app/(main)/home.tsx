@@ -126,7 +126,7 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <Header
         onSearchPress={() => console.log('Search')}
-        onNotificationsPress={() => console.log('Notifications')}
+        onNotificationsPress={() => router.push('/(main)/lesson-requests')}
         onMessagesPress={() => console.log('Messages')}
       />
       
