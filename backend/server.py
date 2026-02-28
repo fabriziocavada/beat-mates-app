@@ -1,5 +1,6 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -13,6 +14,8 @@ from datetime import datetime, timedelta
 import bcrypt
 import jwt
 import base64
+import json
+from bson import ObjectId
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -26,6 +29,26 @@ db = client[os.environ.get('DB_NAME', 'beatmates')]
 JWT_SECRET = os.environ.get('JWT_SECRET', 'beatmates-secret-key-2025')
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24 * 7  # 7 days
+
+# Helper to strip MongoDB _id from documents
+def clean_doc(doc):
+    """Remove MongoDB _id field from a document to avoid ObjectId serialization errors"""
+    if doc is None:
+        return None
+    if isinstance(doc, list):
+        return [clean_doc(d) for d in doc]
+    if isinstance(doc, dict):
+        return {k: v for k, v in doc.items() if k != '_id'}
+    return doc
+
+# Custom JSON encoder for MongoDB ObjectId
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, ObjectId):
+            return str(obj)
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
 # Create the main app
 app = FastAPI(title="Beat Mates API")
