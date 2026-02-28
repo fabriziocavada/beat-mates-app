@@ -86,6 +86,11 @@ export default function HomeScreen() {
       case 'available':
         router.push('/(main)/available');
         break;
+      case 'reels':
+        router.push('/(main)/reels');
+        break;
+      case 'music':
+        break;
       case 'profile':
         router.push('/(main)/profile');
         break;
