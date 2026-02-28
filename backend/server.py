@@ -1197,8 +1197,6 @@ async def stream_media(filename: str, request: Request):
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="File not found")
     
-    file_size = filepath.stat().st_size
-    
     # Determine content type
     ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
     content_types = {
@@ -1208,17 +1206,7 @@ async def stream_media(filename: str, request: Request):
     }
     media_type = content_types.get(ext, 'application/octet-stream')
     
-    # For videos under 10MB, return as base64 data URL for browser compatibility
-    if 'video' in media_type and file_size < 10_000_000:
-        with open(filepath, 'rb') as f:
-            data = f.read()
-        b64 = base64.b64encode(data).decode()
-        return JSONResponse({
-            "data_url": f"data:{media_type};base64,{b64}",
-            "size": file_size,
-        })
-    
-    # For images and large files, use FileResponse
+    # Serve all files directly as FileResponse (works for both web and native)
     return FileResponse(
         path=str(filepath),
         media_type=media_type,
