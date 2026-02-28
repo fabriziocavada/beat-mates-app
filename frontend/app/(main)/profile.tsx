@@ -214,7 +214,7 @@ export default function ProfileScreen() {
                   <ActivityIndicator size="large" color={Colors.primary} />
                 </View>
               ) : user?.profile_image ? (
-                <Image source={{ uri: user.profile_image }} style={styles.avatar} />
+                <Image source={{ uri: getMediaUrl(user.profile_image) || '' }} style={styles.avatar} />
               ) : (
                 <View style={styles.avatarPlaceholder}>
                   <Ionicons name="person" size={50} color={Colors.textSecondary} />
