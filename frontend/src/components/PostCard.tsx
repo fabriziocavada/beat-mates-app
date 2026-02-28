@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
-import api from '../services/api';
+import api, { getMediaUrl } from '../services/api';
 
 const { width } = Dimensions.get('window');
 
@@ -58,6 +58,8 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
   };
   
   const isVideo = post.type === 'video' || (post.media && post.media.includes('video'));
+  const mediaUrl = getMediaUrl(post.media);
+  const profileUrl = getMediaUrl(post.user?.profile_image);
   
   return (
     <View style={styles.container}>
@@ -68,9 +70,9 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
       >
         <View style={styles.userInfo}>
           <View style={styles.avatar}>
-            {post.user?.profile_image ? (
+            {profileUrl ? (
               <Image
-                source={{ uri: post.user.profile_image }}
+                source={{ uri: profileUrl }}
                 style={styles.avatarImage}
               />
             ) : (
@@ -87,11 +89,11 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
       </TouchableOpacity>
       
       {/* Media - Instagram-style responsive */}
-      {post.media && (
+      {mediaUrl && (
         <View style={styles.mediaContainer}>
           {isVideo ? (
             <Video
-              source={{ uri: post.media }}
+              source={{ uri: mediaUrl }}
               style={styles.media}
               useNativeControls={false}
               resizeMode={ResizeMode.COVER}
@@ -101,7 +103,7 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
             />
           ) : (
             <Image
-              source={{ uri: post.media }}
+              source={{ uri: mediaUrl }}
               style={styles.media}
               resizeMode="cover"
             />
