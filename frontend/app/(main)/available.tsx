@@ -63,8 +63,6 @@ export default function AvailableScreen() {
       case 'profile': router.push('/(main)/profile'); break;
     }
   };
-    }
-  };
   
   const handleTeacherPress = (teacher: Teacher) => {
     router.push(`/(main)/user/${teacher.id}`);
