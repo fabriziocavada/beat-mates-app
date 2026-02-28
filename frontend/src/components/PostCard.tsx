@@ -207,9 +207,18 @@ const styles = StyleSheet.create({
   },
   mediaContainer: {
     width: '100%',
-    aspectRatio: 1,
+    aspectRatio: 4 / 5,
     backgroundColor: '#1C1C1E',
-    maxHeight: 400,
+    maxHeight: 500,
+    position: 'relative',
+  },
+  videoIndicator: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 12,
+    padding: 6,
   },
   media: {
     width: '100%',
