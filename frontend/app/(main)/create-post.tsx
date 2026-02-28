@@ -193,8 +193,7 @@ export default function CreatePostScreen() {
                 <Text style={styles.mediaButtonText}>Galleria</Text>
               </TouchableOpacity>
             </View>
-          )}
-          
+          )}          
           <TextInput
             style={styles.captionInput}
             placeholder="Scrivi una didascalia..."
