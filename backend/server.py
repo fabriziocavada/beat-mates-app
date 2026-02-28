@@ -514,6 +514,119 @@ async def get_comments(post_id: str, current_user: dict = Depends(get_current_us
     
     return result
 
+
+# ==================== STORIES ====================
+
+class StoryCreate(BaseModel):
+    media: str  # base64
+    type: str = "photo"  # photo or video
+
+class StoryResponse(BaseModel):
+    id: str
+    user_id: str
+    user: Optional[dict] = None
+    media: str
+    type: str
+    views_count: int = 0
+    created_at: datetime
+    expires_at: datetime
+
+@api_router.post("/stories", response_model=StoryResponse)
+async def create_story(data: StoryCreate, current_user: dict = Depends(get_current_user)):
+    # Check media size (limit to ~5MB after base64)
+    if len(data.media) > 7_000_000:
+        raise HTTPException(status_code=400, detail="Media too large. Max 5MB")
+    
+    story_id = str(uuid.uuid4())
+    now = datetime.utcnow()
+    story = {
+        "id": story_id,
+        "user_id": current_user["id"],
+        "media": data.media,
+        "type": data.type,
+        "views_count": 0,
+        "created_at": now,
+        "expires_at": now + timedelta(hours=24)  # Stories expire after 24h
+    }
+    
+    await db.stories.insert_one(story)
+    
+    story["user"] = {
+        "id": current_user["id"],
+        "username": current_user["username"],
+        "name": current_user["name"],
+        "profile_image": current_user.get("profile_image")
+    }
+    
+    return StoryResponse(**story)
+
+@api_router.get("/stories", response_model=List[dict])
+async def get_stories(current_user: dict = Depends(get_current_user)):
+    # Get following users + users with same categories
+    following = await db.follows.find({"follower_id": current_user["id"]}).to_list(1000)
+    following_ids = [f["following_id"] for f in following]
+    
+    # Add users with matching dance categories
+    user_categories = current_user.get("dance_categories", [])
+    if user_categories:
+        category_users = await db.users.find({
+            "dance_categories": {"$in": user_categories}
+        }).to_list(1000)
+        category_user_ids = [u["id"] for u in category_users]
+        following_ids.extend(category_user_ids)
+    
+    following_ids = list(set(following_ids))
+    
+    # Get non-expired stories from these users
+    now = datetime.utcnow()
+    stories = await db.stories.find({
+        "user_id": {"$in": following_ids},
+        "expires_at": {"$gt": now}
+    }).sort("created_at", -1).to_list(100)
+    
+    # Group by user
+    user_stories = {}
+    for story in stories:
+        user_id = story["user_id"]
+        if user_id not in user_stories:
+            user = await db.users.find_one({"id": user_id})
+            user_stories[user_id] = {
+                "user_id": user_id,
+                "username": user["username"] if user else "unknown",
+                "profile_image": user.get("profile_image") if user else None,
+                "stories": [],
+                "has_unread": True  # Simplified for now
+            }
+        user_stories[user_id]["stories"].append({
+            "id": story["id"],
+            "media": story["media"],
+            "type": story["type"],
+            "created_at": story["created_at"].isoformat()
+        })
+    
+    return list(user_stories.values())
+
+@api_router.get("/stories/{story_id}")
+async def get_story(story_id: str, current_user: dict = Depends(get_current_user)):
+    story = await db.stories.find_one({"id": story_id})
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    
+    # Increment view count
+    await db.stories.update_one({"id": story_id}, {"$inc": {"views_count": 1}})
+    
+    user = await db.users.find_one({"id": story["user_id"]})
+    story["user"] = {
+        "id": user["id"],
+        "username": user["username"],
+        "name": user["name"],
+        "profile_image": user.get("profile_image")
+    }
+    
+    return story
+
+
+
 # ==================== AVAILABILITY & BOOKINGS ====================
 
 @api_router.get("/available-teachers", response_model=List[dict])
