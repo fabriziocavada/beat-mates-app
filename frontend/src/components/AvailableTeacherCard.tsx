@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/colors';
+import { getMediaUrl } from '../services/api';
 
 interface Teacher {
   id: string;
@@ -71,7 +72,7 @@ export default function AvailableTeacherCard({ teacher, onPress, onBookPress }: 
         <View style={[styles.avatarBorder, { borderColor: Colors.success }]}>
           {teacher.profile_image ? (
             <Image
-              source={{ uri: teacher.profile_image }}
+              source={{ uri: getMediaUrl(teacher.profile_image) || '' }}
               style={styles.avatar}
             />
           ) : (

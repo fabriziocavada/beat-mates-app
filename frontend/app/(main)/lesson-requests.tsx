@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../../src/constants/colors';
-import api from '../../src/services/api';
+import api, { getMediaUrl } from '../../src/services/api';
 import { useAuthStore } from '../../src/store/authStore';
 
 interface LessonRequest {
@@ -137,7 +137,7 @@ export default function LessonRequestsScreen() {
           <View style={styles.studentInfo}>
             <View style={styles.avatar}>
               {item.student?.profile_image ? (
-                <Image source={{ uri: item.student.profile_image }} style={styles.avatarImage} />
+                <Image source={{ uri: getMediaUrl(item.student.profile_image) || '' }} style={styles.avatarImage} />
               ) : (
                 <Ionicons name="person" size={28} color={Colors.textSecondary} />
               )}

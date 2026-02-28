@@ -16,7 +16,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../../../src/constants/colors';
 import TabBar from '../../../src/components/TabBar';
-import api from '../../../src/services/api';
+import api, { getMediaUrl } from '../../../src/services/api';
 import { useAuthStore } from '../../../src/store/authStore';
 
 const { width } = Dimensions.get('window');
@@ -172,7 +172,7 @@ export default function UserProfileScreen() {
               user.is_available && styles.avatarBorderAvailable
             ]}>
               {user.profile_image ? (
-                <Image source={{ uri: user.profile_image }} style={styles.avatar} />
+                <Image source={{ uri: getMediaUrl(user.profile_image) || '' }} style={styles.avatar} />
               ) : (
                 <View style={styles.avatarPlaceholder}>
                   <Ionicons name="person" size={50} color={Colors.textSecondary} />
