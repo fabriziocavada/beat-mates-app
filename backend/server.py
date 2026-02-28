@@ -1246,3 +1246,103 @@ app.add_middleware(
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
+# ==================== VIDEO CALL (Daily.co) ====================
+DAILY_API_KEY = os.environ.get('DAILY_API_KEY', '')
+DAILY_API_URL = "https://api.daily.co/v1"
+
+@api_router.post("/video-call/create-room")
+async def create_video_room(session_id: str = None, current_user: dict = Depends(get_current_user)):
+    """Create a Daily.co room for a video call session."""
+    if not DAILY_API_KEY:
+        raise HTTPException(status_code=500, detail="Daily.co API key not configured")
+    
+    room_name = f"beatmates-{uuid.uuid4().hex[:12]}"
+    exp_timestamp = int((datetime.utcnow() + timedelta(hours=2)).timestamp())
+    
+    async with httpx.AsyncClient() as client_http:
+        response = await client_http.post(
+            f"{DAILY_API_URL}/rooms",
+            headers={"Authorization": f"Bearer {DAILY_API_KEY}", "Content-Type": "application/json"},
+            json={
+                "name": room_name,
+                "privacy": "public",
+                "properties": {
+                    "exp": exp_timestamp,
+                    "enable_chat": True,
+                    "enable_screenshare": False,
+                    "max_participants": 2,
+                }
+            }
+        )
+        if response.status_code != 200:
+            logger.error(f"Daily.co room creation failed: {response.text}")
+            raise HTTPException(status_code=500, detail="Failed to create video room")
+        room_data = response.json()
+    
+    # If linked to a session, update it with the room URL
+    if session_id:
+        await db.live_sessions.update_one(
+            {"id": session_id},
+            {"$set": {"room_url": room_data["url"], "room_name": room_name}}
+        )
+    
+    return {
+        "room_name": room_name,
+        "room_url": room_data["url"],
+        "session_id": session_id,
+    }
+
+@api_router.post("/video-call/token")
+async def get_video_call_token(
+    room_name: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a meeting token for a Daily.co room."""
+    if not DAILY_API_KEY:
+        raise HTTPException(status_code=500, detail="Daily.co API key not configured")
+    
+    exp_timestamp = int((datetime.utcnow() + timedelta(hours=2)).timestamp())
+    
+    async with httpx.AsyncClient() as client_http:
+        response = await client_http.post(
+            f"{DAILY_API_URL}/meeting-tokens",
+            headers={"Authorization": f"Bearer {DAILY_API_KEY}", "Content-Type": "application/json"},
+            json={
+                "properties": {
+                    "room_name": room_name,
+                    "user_name": current_user.get("name", current_user["username"]),
+                    "user_id": current_user["id"],
+                    "exp": exp_timestamp,
+                    "enable_screenshare": False,
+                }
+            }
+        )
+        if response.status_code != 200:
+            logger.error(f"Daily.co token generation failed: {response.text}")
+            raise HTTPException(status_code=500, detail="Failed to generate meeting token")
+        token_data = response.json()
+    
+    return {"token": token_data["token"]}
+
+@api_router.post("/video-call/end/{room_name}")
+async def end_video_call(room_name: str, current_user: dict = Depends(get_current_user)):
+    """End a video call by deleting the Daily.co room."""
+    if not DAILY_API_KEY:
+        raise HTTPException(status_code=500, detail="Daily.co API key not configured")
+    
+    async with httpx.AsyncClient() as client_http:
+        await client_http.delete(
+            f"{DAILY_API_URL}/rooms/{room_name}",
+            headers={"Authorization": f"Bearer {DAILY_API_KEY}"}
+        )
+    
+    # Update any linked session
+    session = await db.live_sessions.find_one({"room_name": room_name})
+    if session:
+        await db.live_sessions.update_one(
+            {"room_name": room_name},
+            {"$set": {"status": "completed", "ended_at": datetime.utcnow()}}
+        )
+    
+    return {"status": "ended"}
