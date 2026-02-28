@@ -64,10 +64,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   
   register: async (email: string, username: string, name: string, password: string) => {
     try {
+      console.log('Starting registration for:', email);
       const response = await api.post('/auth/register', { email, username, name, password });
+      console.log('Registration response received');
       const { access_token, user } = response.data;
       
+      console.log('Saving token...');
       await AsyncStorage.setItem('token', access_token);
+      console.log('Token saved');
       api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
       
       set({
