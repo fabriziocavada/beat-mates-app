@@ -10,10 +10,13 @@ import {
   Dimensions,
   RefreshControl,
   FlatList,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
 import { useAuthStore } from '../../src/store/authStore';
