@@ -40,18 +40,24 @@ Social media mobile app for dancers called "BEAT MATES" with:
 - Video call simulation
 - Dance category selection
 
-### Phase 2 (Current session - Feb 28, 2026)
-- **CRITICAL FIX: Complete media pipeline refactor** - Migrated from base64 to server-side file upload
-  - Backend `/api/upload` endpoint for multipart file uploads
-  - Frontend `uploadFile()` helper for all media uploads
-  - Frontend `getMediaUrl()` helper for URL resolution across all components
-  - Updated: create-post, create-story, profile, PostCard, StoriesBar, TabBar, story viewer, comments, user profile, lesson requests, AvailableTeacherCard
-  - Stories backend now also converts base64 to files
-  - Feed now shows ALL posts (removed restrictive follow/category filter)
-  - Stories now show ALL non-expired stories
-- **Auto-refresh:** Home and profile pages refresh on navigation via `usePathname`
-- **Data cleanup:** Removed broken `file://` URIs from old posts
-- **JWT fix:** Extended JWT secret to 32+ bytes
+### Phase 2 (Feb 28, 2026)
+- **CRITICAL FIX: Complete media pipeline refactor** - base64 → server-side file upload
+  - Backend `/api/upload` endpoint with automatic QuickTime→H.264 video conversion (ffmpeg)
+  - Backend `/api/media/{filename}` endpoint for streaming + base64 data URL delivery
+  - Frontend `uploadFile()` helper (works on both web and native platforms)
+  - Frontend `getMediaUrl()` for URL resolution + `WebVideo` component for video playback
+  - Updated ALL components: PostCard, StoriesBar, TabBar, story viewer, comments, user profile, lesson requests, AvailableTeacherCard
+  - Stories backend converts base64 to files automatically
+  - Feed shows ALL posts (removed restrictive filter)
+  - Stories show ALL non-expired stories
+- **Notification Banner:** `LessonNotificationBanner` component with:
+  - 5-second polling for pending lesson requests
+  - Coral animated banner at bottom of screen
+  - Sound alert (Web Audio API beep) + vibration on new requests
+  - Visible on Home and Profile pages
+- **Auto-refresh:** Home and Profile pages refresh on navigation via `usePathname`
+- **Data cleanup:** Removed all broken old content, fresh database
+- **Loading overlay:** "Pubblicazione in corso..." during post/story creation
 
 ## Test Results
 - Backend: 20/20 passed (100%)
