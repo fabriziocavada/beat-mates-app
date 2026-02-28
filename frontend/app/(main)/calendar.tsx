@@ -186,12 +186,78 @@ export default function CalendarScreen() {
         <View style={styles.hoursContainer}>
           <View style={styles.timeBox}>
             <Text style={styles.timeLabel}>From</Text>
-            <Text style={styles.timeValue}>{startTime}</Text>
+            <View style={styles.timePickerRow}>
+              <TouchableOpacity
+                style={styles.timeArrow}
+                onPress={() => {
+                  const [h, m] = startTime.split(':').map(Number);
+                  const newH = h > 0 ? h - 1 : 23;
+                  setStartTime(`${String(newH).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+                }}
+              >
+                <Ionicons name="chevron-up" size={20} color={Colors.primary} />
+              </TouchableOpacity>
+              <Text style={styles.timeValue}>{startTime}</Text>
+              <TouchableOpacity
+                style={styles.timeArrow}
+                onPress={() => {
+                  const [h, m] = startTime.split(':').map(Number);
+                  const newH = h < 23 ? h + 1 : 0;
+                  setStartTime(`${String(newH).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+                }}
+              >
+                <Ionicons name="chevron-down" size={20} color={Colors.primary} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.minuteRow}>
+              <TouchableOpacity
+                onPress={() => {
+                  const [h, m] = startTime.split(':').map(Number);
+                  const newM = m >= 30 ? 0 : 30;
+                  setStartTime(`${String(h).padStart(2, '0')}:${String(newM).padStart(2, '0')}`);
+                }}
+              >
+                <Text style={styles.minuteToggle}>:{startTime.split(':')[1]} tap</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-          <Ionicons name="chevron-forward" size={24} color={Colors.textSecondary} />
+          <Ionicons name="arrow-forward" size={24} color={Colors.textSecondary} />
           <View style={styles.timeBox}>
             <Text style={styles.timeLabel}>To</Text>
-            <Text style={styles.timeValue}>{endTime}</Text>
+            <View style={styles.timePickerRow}>
+              <TouchableOpacity
+                style={styles.timeArrow}
+                onPress={() => {
+                  const [h, m] = endTime.split(':').map(Number);
+                  const newH = h > 0 ? h - 1 : 23;
+                  setEndTime(`${String(newH).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+                }}
+              >
+                <Ionicons name="chevron-up" size={20} color={Colors.primary} />
+              </TouchableOpacity>
+              <Text style={styles.timeValue}>{endTime}</Text>
+              <TouchableOpacity
+                style={styles.timeArrow}
+                onPress={() => {
+                  const [h, m] = endTime.split(':').map(Number);
+                  const newH = h < 23 ? h + 1 : 0;
+                  setEndTime(`${String(newH).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+                }}
+              >
+                <Ionicons name="chevron-down" size={20} color={Colors.primary} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.minuteRow}>
+              <TouchableOpacity
+                onPress={() => {
+                  const [h, m] = endTime.split(':').map(Number);
+                  const newM = m >= 30 ? 0 : 30;
+                  setEndTime(`${String(h).padStart(2, '0')}:${String(newM).padStart(2, '0')}`);
+                }}
+              >
+                <Text style={styles.minuteToggle}>:{endTime.split(':')[1]} tap</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
         
