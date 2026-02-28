@@ -14,14 +14,14 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Video, ResizeMode } from 'expo-av';
-import api from '../../src/services/api';
+import api, { uploadFile } from '../../src/services/api';
 
 const { width } = Dimensions.get('window');
 
 export default function CreateStoryScreen() {
   const router = useRouter();
   
-  const [media, setMedia] = useState<string | null>(null);
+  const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'photo' | 'video'>('photo');
   const [isLoading, setIsLoading] = useState(false);
   
@@ -36,20 +36,14 @@ export default function CreateStoryScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsEditing: true,
       aspect: [9, 16],
-      quality: 0.4,
-      base64: true,
+      quality: 0.5,
       videoMaxDuration: 10,
     });
     
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
-      if (asset.type === 'video') {
-        setMediaType('video');
-        setMedia(asset.uri);
-      } else if (asset.base64) {
-        setMediaType('photo');
-        setMedia(`data:image/jpeg;base64,${asset.base64}`);
-      }
+      setMediaType(asset.type === 'video' ? 'video' : 'photo');
+      setMediaUri(asset.uri);
     }
   };
   
@@ -63,13 +57,12 @@ export default function CreateStoryScreen() {
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       aspect: [9, 16],
-      quality: 0.4,
-      base64: true,
+      quality: 0.5,
     });
     
-    if (!result.canceled && result.assets[0].base64) {
+    if (!result.canceled && result.assets[0]) {
       setMediaType('photo');
-      setMedia(`data:image/jpeg;base64,${result.assets[0].base64}`);
+      setMediaUri(result.assets[0].uri);
     }
   };
 
@@ -88,26 +81,27 @@ export default function CreateStoryScreen() {
     
     if (!result.canceled && result.assets[0]) {
       setMediaType('video');
-      setMedia(result.assets[0].uri);
+      setMediaUri(result.assets[0].uri);
     }
   };
   
   const handlePublish = async () => {
-    if (!media) {
+    if (!mediaUri) {
       Alert.alert('Nessun media', 'Scegli una foto o registra un video');
       return;
     }
     
     setIsLoading(true);
     try {
+      const serverUrl = await uploadFile(mediaUri);
       await api.post('/stories', {
-        media: media,
+        media: serverUrl,
         type: mediaType,
       });
-      router.back();
+      router.replace('/(main)/home');
     } catch (error: any) {
       console.error('Story error:', error.response?.data || error.message);
-      Alert.alert('Errore', 'Impossibile pubblicare. Prova con un file più piccolo.');
+      Alert.alert('Errore', 'Impossibile pubblicare. Riprova.');
     } finally {
       setIsLoading(false);
     }
@@ -122,14 +116,14 @@ export default function CreateStoryScreen() {
         <Text style={styles.headerTitle}>Nuova Storia</Text>
         <TouchableOpacity
           onPress={handlePublish}
-          disabled={isLoading || !media}
+          disabled={isLoading || !mediaUri}
         >
           {isLoading ? (
             <ActivityIndicator color="#FF6978" />
           ) : (
             <Text style={[
               styles.publishButton,
-              !media && styles.publishButtonDisabled
+              !mediaUri && styles.publishButtonDisabled
             ]}>
               Pubblica
             </Text>
@@ -138,11 +132,11 @@ export default function CreateStoryScreen() {
       </View>
       
       <View style={styles.content}>
-        {media ? (
+        {mediaUri ? (
           <View style={styles.previewContainer}>
             {mediaType === 'video' ? (
               <Video
-                source={{ uri: media }}
+                source={{ uri: mediaUri }}
                 style={styles.preview}
                 useNativeControls
                 resizeMode={ResizeMode.COVER}
@@ -150,11 +144,11 @@ export default function CreateStoryScreen() {
                 shouldPlay
               />
             ) : (
-              <Image source={{ uri: media }} style={styles.preview} resizeMode="cover" />
+              <Image source={{ uri: mediaUri }} style={styles.preview} resizeMode="cover" />
             )}
             <TouchableOpacity
               style={styles.removeButton}
-              onPress={() => setMedia(null)}
+              onPress={() => setMediaUri(null)}
             >
               <Ionicons name="close-circle" size={36} color="#FF6978" />
             </TouchableOpacity>
