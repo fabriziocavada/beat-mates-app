@@ -17,6 +17,52 @@ import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
 import api, { getMediaUrl } from '../../src/services/api';
 
+// Web video player that loads video as blob to bypass proxy issues
+function WebVideo({ src, autoPlay, loop, muted, style }: any) {
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const [blobUrl, setBlobUrl] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!src) return;
+    let cancelled = false;
+    
+    fetch(src)
+      .then(res => res.blob())
+      .then(blob => {
+        if (!cancelled) {
+          setBlobUrl(URL.createObjectURL(blob));
+        }
+      })
+      .catch(() => {});
+    
+    return () => {
+      cancelled = true;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [src]);
+
+  if (!blobUrl) {
+    return (
+      <div style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ color: '#888', fontSize: 14 }}>Caricamento video...</div>
+      </div>
+    );
+  }
+
+  return (
+    <video
+      ref={videoRef}
+      src={blobUrl}
+      style={style}
+      autoPlay={autoPlay}
+      loop={loop}
+      muted={muted}
+      playsInline
+      controls
+    />
+  );
+}
+
 const { width, height } = Dimensions.get('window');
 const ITEM_HEIGHT = height - 130;
 
@@ -110,13 +156,12 @@ export default function ReelsScreen() {
       <View style={[styles.reelContainer, { height: ITEM_HEIGHT }]}>
         {mediaUrl ? (
           Platform.OS === 'web' ? (
-            <video
+            <WebVideo
               src={mediaUrl}
               style={{ width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#000' }}
               autoPlay={isActive}
               loop
               muted={false}
-              playsInline
             />
           ) : (
             <View style={[styles.media, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
