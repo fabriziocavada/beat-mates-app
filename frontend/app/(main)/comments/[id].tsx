@@ -64,9 +64,12 @@ export default function CommentsScreen() {
     setIsSending(true);
     try {
       const response = await api.post(`/posts/${postId}/comments`, {
-        content: newComment.trim(),
+        text: newComment.trim(),
       });
-      setComments(prev => [response.data, ...prev]);
+      // Map backend field 'text' to our UI field 'content'
+      const comment = response.data;
+      comment.content = comment.text || comment.content;
+      setComments(prev => [comment, ...prev]);
       setNewComment('');
     } catch (error) {
       console.error('Failed to post comment', error);
