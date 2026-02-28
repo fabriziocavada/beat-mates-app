@@ -50,13 +50,14 @@ export default function HomeScreen() {
   const [stories, setStories] = useState<StoryUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const pathname = usePathname();
   
-  // Auto-refresh when screen gets focus (e.g., after creating a post)
-  useFocusEffect(
-    useCallback(() => {
+  // Refresh when screen comes into focus
+  useEffect(() => {
+    if (pathname === '/home' || pathname === '/(main)/home') {
       loadData();
-    }, [])
-  );
+    }
+  }, [pathname]);
   
   const loadData = async () => {
     try {
