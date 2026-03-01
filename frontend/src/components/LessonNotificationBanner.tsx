@@ -83,27 +83,62 @@ export default function LessonNotificationBanner() {
     }
   };
 
-  const triggerAlert = () => {
-    setNewRequest(true);
-    // Vibrate pattern: short-pause-long
-    if (Platform.OS !== 'web') {
-      Vibration.vibrate([0, 200, 100, 400]);
-    }
-    // Play a beep sound via Web Audio API on web
+  const playNotificationSound = async () => {
     if (Platform.OS === 'web') {
+      // Web: use AudioContext to generate a ring-ring tone
       try {
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.value = 880;
-        osc.type = 'sine';
-        gain.gain.value = 0.3;
-        osc.start();
-        setTimeout(() => { osc.stop(); ctx.close(); }, 300);
+        const playTone = (startTime: number, freq: number, duration: number) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = freq;
+          osc.type = 'sine';
+          gain.gain.setValueAtTime(0.3, startTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+          osc.start(startTime);
+          osc.stop(startTime + duration);
+        };
+        // Ring-ring pattern: two short bursts
+        playTone(ctx.currentTime, 880, 0.25);
+        playTone(ctx.currentTime + 0.35, 880, 0.25);
+        playTone(ctx.currentTime + 0.8, 880, 0.25);
+        playTone(ctx.currentTime + 1.15, 880, 0.25);
+        setTimeout(() => ctx.close(), 2000);
       } catch (e) { /* audio not available */ }
+    } else {
+      // Native: use expo-av to play a generated ringtone sound
+      try {
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+        });
+        // Create a simple ringtone using expo-av with a system-compatible beep
+        // We'll generate a WAV beep inline as a base64 data URI
+        const beepBase64 = generateBeepWav();
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: beepBase64 },
+          { shouldPlay: true, volume: 1.0 }
+        );
+        sound.setOnPlaybackStatusUpdate((status) => {
+          if ('didJustFinish' in status && status.didJustFinish) {
+            sound.unloadAsync();
+          }
+        });
+      } catch (e) {
+        console.log('Audio notification error:', e);
+      }
     }
+  };
+
+  const triggerAlert = () => {
+    setNewRequest(true);
+    // Vibrate pattern: ring-ring feel
+    if (Platform.OS !== 'web') {
+      Vibration.vibrate([0, 300, 200, 300, 200, 300]);
+    }
+    playNotificationSound();
   };
 
   if (!showBanner || !user?.is_available) return null;
