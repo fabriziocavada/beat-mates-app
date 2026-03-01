@@ -24,6 +24,16 @@ export default function CreateStoryScreen() {
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'photo' | 'video'>('photo');
   const [isLoading, setIsLoading] = useState(false);
+
+  function VideoPreview({ uri }: { uri: string }) {
+    const player = useVideoPlayer(uri, (p) => {
+      p.loop = true;
+      p.play();
+    });
+    return (
+      <VideoView player={player} style={styles.preview} contentFit="cover" nativeControls />
+    );
+  }
   
   const pickMedia = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -135,14 +145,7 @@ export default function CreateStoryScreen() {
         {mediaUri ? (
           <View style={styles.previewContainer}>
             {mediaType === 'video' ? (
-              <Video
-                source={{ uri: mediaUri }}
-                style={styles.preview}
-                useNativeControls
-                resizeMode={ResizeMode.COVER}
-                isLooping
-                shouldPlay
-              />
+              <VideoPreview uri={mediaUri} />
             ) : (
               <Image source={{ uri: mediaUri }} style={styles.preview} resizeMode="cover" />
             )}
