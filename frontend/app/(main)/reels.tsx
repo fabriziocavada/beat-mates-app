@@ -16,10 +16,15 @@ import { Ionicons } from '@expo/vector-icons';
 import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
 import api, { getMediaUrl } from '../../src/services/api';
-import { Video, ResizeMode } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
 
-// Component that plays video directly from URL - no hooks, no state
+// Each reel video: autoplay always, tap to pause/play
 function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: boolean }) {
+  const player = useVideoPlayer(mediaUrl, (p) => {
+    p.loop = true;
+    p.play();
+  });
+
   if (!mediaUrl) {
     return (
       <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
@@ -29,14 +34,24 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
   }
 
   return (
-    <Video
-      source={{ uri: mediaUrl }}
-      style={{ width: '100%', height: '100%' }}
-      resizeMode={ResizeMode.COVER}
-      shouldPlay={isActive}
-      isLooping
-      isMuted={false}
-    />
+    <TouchableOpacity
+      activeOpacity={1}
+      style={{ flex: 1 }}
+      onPress={() => {
+        if (player.playing) {
+          player.pause();
+        } else {
+          player.play();
+        }
+      }}
+    >
+      <VideoView
+        player={player}
+        style={{ width: '100%', height: '100%' }}
+        contentFit="cover"
+        nativeControls={false}
+      />
+    </TouchableOpacity>
   );
 }
 
