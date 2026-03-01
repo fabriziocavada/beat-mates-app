@@ -26,12 +26,9 @@ export default function CreateStoryScreen() {
   const [isLoading, setIsLoading] = useState(false);
 
   function VideoPreview({ uri }: { uri: string }) {
-    const player = useVideoPlayer(uri, (p) => {
-      p.loop = true;
-      p.play();
-    });
+    const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100%;height:100%;object-fit:cover}</style></head><body><video src="${uri}" autoplay loop muted playsinline controls></video></body></html>`;
     return (
-      <VideoView player={player} style={styles.preview} contentFit="cover" nativeControls />
+      <WebView source={{ html }} style={styles.preview} scrollEnabled={false} allowsInlineMediaPlayback={true} mediaPlaybackRequiresUserAction={false} javaScriptEnabled={true} />
     );
   }
   
