@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { WebView } from 'react-native-webview';
 import api, { getMediaUrl } from '../services/api';
 
 const { width } = Dimensions.get('window');
@@ -30,31 +30,19 @@ interface PostCardProps {
   onCommentPress?: (postId: string) => void;
 }
 
-function VideoPlayer({ mediaUrl, autoPlay }: { mediaUrl: string; autoPlay?: boolean }) {
-  const player = useVideoPlayer(mediaUrl, (p) => {
-    p.loop = true;
-    if (autoPlay !== false) p.play();
-  });
-
+function NativeVideoPlayer({ url, height }: { url: string; height: number }) {
+  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100%;height:100%;object-fit:cover}</style></head><body><video src="${url}" autoplay loop muted playsinline webkit-playsinline></video></body></html>`;
+  
   return (
-    <TouchableOpacity
-      activeOpacity={1}
-      style={{ width: '100%', height: '100%' }}
-      onPress={() => {
-        if (player.playing) {
-          player.pause();
-        } else {
-          player.play();
-        }
-      }}
-    >
-      <VideoView
-        player={player}
-        style={{ width: '100%', height: '100%' }}
-        contentFit="cover"
-        nativeControls={false}
-      />
-    </TouchableOpacity>
+    <WebView
+      source={{ html }}
+      style={{ width: '100%', height }}
+      scrollEnabled={false}
+      bounces={false}
+      allowsInlineMediaPlayback={true}
+      mediaPlaybackRequiresUserAction={false}
+      javaScriptEnabled={true}
+    />
   );
 }
 
@@ -77,7 +65,6 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
-    
     if (hours < 1) return 'Just now';
     if (hours < 24) return `${hours}h ago`;
     const days = Math.floor(hours / 24);
@@ -87,6 +74,7 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
   
   const isVideo = post.type === 'video';
   const mediaUrl = post.media ? getMediaUrl(post.media) : '';
+  const mediaHeight = Math.min(width * 1.25, 500);
   
   return (
     <View style={styles.container}>
@@ -109,9 +97,9 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
 
       {/* Media */}
       {mediaUrl ? (
-        <View style={styles.mediaContainer}>
+        <View style={[styles.mediaContainer, { height: mediaHeight }]}>
           {isVideo ? (
-            <VideoPlayer mediaUrl={mediaUrl} autoPlay />
+            <NativeVideoPlayer url={mediaUrl} height={mediaHeight} />
           ) : (
             <Image source={{ uri: mediaUrl }} style={styles.media} resizeMode="cover" />
           )}
@@ -127,11 +115,7 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
       <View style={styles.actions}>
         <View style={styles.leftActions}>
           <TouchableOpacity onPress={handleLike} style={styles.actionBtn}>
-            <Ionicons
-              name={isLiked ? 'heart' : 'heart-outline'}
-              size={24}
-              color={isLiked ? '#FF6978' : '#FFF'}
-            />
+            <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={24} color={isLiked ? '#FF6978' : '#FFF'} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => onCommentPress?.(post.id)} style={styles.actionBtn}>
             <Ionicons name="chatbubble-outline" size={22} color="#FFF" />
@@ -169,94 +153,23 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
 }
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#0a0a1a',
-    marginBottom: 8,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-  },
-  avatarContainer: {
-    marginRight: 10,
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  avatarPlaceholder: {
-    backgroundColor: '#1a1a2e',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerInfo: {
-    flex: 1,
-  },
-  username: {
-    color: '#FFF',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  date: {
-    color: '#888',
-    fontSize: 11,
-    marginTop: 1,
-  },
-  mediaContainer: {
-    width: '100%',
-    aspectRatio: 4 / 5,
-    maxHeight: 500,
-    position: 'relative',
-  },
-  media: {
-    width: '100%',
-    height: '100%',
-  },
-  videoIndicator: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 12,
-    padding: 4,
-  },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  leftActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  actionBtn: {
-    marginRight: 16,
-  },
-  footer: {
-    paddingHorizontal: 12,
-    marginBottom: 8,
-  },
-  likes: {
-    color: '#FFF',
-    fontWeight: '600',
-    fontSize: 13,
-    marginBottom: 4,
-  },
-  caption: {
-    color: '#FFF',
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  captionUsername: {
-    fontWeight: '600',
-  },
-  viewComments: {
-    color: '#888',
-    fontSize: 13,
-    marginTop: 4,
-  },
+  container: { backgroundColor: '#0a0a1a', marginBottom: 8 },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 12 },
+  avatarContainer: { marginRight: 10 },
+  avatar: { width: 32, height: 32, borderRadius: 16 },
+  avatarPlaceholder: { backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center' },
+  headerInfo: { flex: 1 },
+  username: { color: '#FFF', fontWeight: '600', fontSize: 14 },
+  date: { color: '#888', fontSize: 11, marginTop: 1 },
+  mediaContainer: { width: '100%', position: 'relative', overflow: 'hidden' },
+  media: { width: '100%', height: '100%' },
+  videoIndicator: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, padding: 4 },
+  actions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8 },
+  leftActions: { flexDirection: 'row', alignItems: 'center' },
+  actionBtn: { marginRight: 16 },
+  footer: { paddingHorizontal: 12, marginBottom: 8 },
+  likes: { color: '#FFF', fontWeight: '600', fontSize: 13, marginBottom: 4 },
+  caption: { color: '#FFF', fontSize: 13, lineHeight: 18 },
+  captionUsername: { fontWeight: '600' },
+  viewComments: { color: '#888', fontSize: 13, marginTop: 4 },
 });
