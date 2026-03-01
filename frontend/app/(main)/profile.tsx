@@ -283,6 +283,8 @@ export default function ProfileScreen() {
             <TouchableOpacity 
               key={highlight.id} 
               style={styles.highlightItem}
+              activeOpacity={0.6}
+              data-testid={highlight.isNew ? 'add-story-highlight-btn' : `highlight-${highlight.id}`}
               onPress={() => {
                 if (highlight.isNew) {
                   router.push('/(main)/create-story');
