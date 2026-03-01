@@ -40,26 +40,37 @@ export default function RequestLessonScreen() {
     }
   }, [id]);
   
+  // Countdown timer - runs every second while waiting
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    let counter = 0;
+    if (status !== 'waiting') return;
     
-    if (status === 'waiting' && waitTime > 0) {
-      interval = setInterval(() => {
-        setWaitTime((prev) => prev - 1);
-        counter++;
-        // Poll every 5 ticks instead of every tick
-        if (counter % 5 === 0) {
-          checkSessionStatus();
+    const timer = setInterval(() => {
+      setWaitTime((prev) => {
+        if (prev <= 1) {
+          Alert.alert('Timeout', 'Il teacher non ha risposto. Riprova più tardi.');
+          router.back();
+          return 0;
         }
-      }, 1000);
-    } else if (waitTime === 0 && status === 'waiting') {
-      Alert.alert('Timeout', 'The teacher did not respond. Please try again later.');
-      router.back();
-    }
+        return prev - 1;
+      });
+    }, 1000);
     
-    return () => clearInterval(interval);
-  }, [status, waitTime]);
+    return () => clearInterval(timer);
+  }, [status]);
+
+  // Polling for session status - separate from timer to avoid reset
+  useEffect(() => {
+    if (status !== 'waiting' || !sessionId) return;
+    
+    const pollInterval = setInterval(() => {
+      checkSessionStatus();
+    }, 3000);
+    
+    // Also check immediately
+    checkSessionStatus();
+    
+    return () => clearInterval(pollInterval);
+  }, [status, sessionId]);
   
   const loadUser = async () => {
     try {
