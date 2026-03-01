@@ -13,18 +13,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { WebView } from 'react-native-webview';
 import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
 import api, { getMediaUrl } from '../../src/services/api';
-import { useVideoPlayer, VideoView } from 'expo-video';
 
-// Each reel video: autoplay always, tap to pause/play
+// Each reel video: WebView approach for guaranteed iOS playback
 function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: boolean }) {
-  const player = useVideoPlayer(mediaUrl, (p) => {
-    p.loop = true;
-    p.play();
-  });
-
   if (!mediaUrl) {
     return (
       <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
@@ -33,25 +28,18 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
     );
   }
 
+  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100vw;height:100vh;object-fit:cover}</style></head><body><video src="${mediaUrl}" autoplay loop muted playsinline webkit-playsinline></video><script>var v=document.querySelector('video');document.addEventListener('click',function(){v.paused?v.play():v.pause()});</script></body></html>`;
+
   return (
-    <TouchableOpacity
-      activeOpacity={1}
+    <WebView
+      source={{ html }}
       style={{ flex: 1 }}
-      onPress={() => {
-        if (player.playing) {
-          player.pause();
-        } else {
-          player.play();
-        }
-      }}
-    >
-      <VideoView
-        player={player}
-        style={{ width: '100%', height: '100%' }}
-        contentFit="cover"
-        nativeControls={false}
-      />
-    </TouchableOpacity>
+      scrollEnabled={false}
+      bounces={false}
+      allowsInlineMediaPlayback={true}
+      mediaPlaybackRequiresUserAction={false}
+      javaScriptEnabled={true}
+    />
   );
 }
 
