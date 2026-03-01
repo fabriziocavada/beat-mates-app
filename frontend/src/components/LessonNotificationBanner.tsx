@@ -14,6 +14,77 @@ import { useRouter } from 'expo-router';
 import api from '../services/api';
 import { useAuthStore } from '../store/authStore';
 
+// Generate a simple WAV beep as a base64 data URI for native audio
+function generateBeepWav(): string {
+  const sampleRate = 22050;
+  const duration = 1.2; // seconds - ring ring pattern
+  const numSamples = Math.floor(sampleRate * duration);
+  const dataSize = numSamples * 2;
+  const fileSize = 44 + dataSize;
+  
+  const buffer = new ArrayBuffer(fileSize);
+  const view = new DataView(buffer);
+  
+  // WAV header
+  const writeString = (offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+  };
+  writeString(0, 'RIFF');
+  view.setUint32(4, fileSize - 8, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeString(36, 'data');
+  view.setUint32(40, dataSize, true);
+  
+  // Generate ring-ring tone: two bursts of 880Hz
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    let amplitude = 0;
+    // Ring pattern: 0-0.25s ON, 0.25-0.4s OFF, 0.4-0.65s ON, 0.65-0.8s OFF, 0.8-1.05s ON
+    if ((t >= 0 && t < 0.25) || (t >= 0.4 && t < 0.65) || (t >= 0.8 && t < 1.05)) {
+      amplitude = Math.sin(2 * Math.PI * 880 * t) * 0.4;
+    }
+    const sample = Math.max(-1, Math.min(1, amplitude));
+    view.setInt16(44 + i * 2, sample * 32767, true);
+  }
+  
+  // Convert to base64
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  // Use btoa if available, otherwise manual base64
+  let base64: string;
+  if (typeof btoa !== 'undefined') {
+    base64 = btoa(binary);
+  } else {
+    // React Native polyfill
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    let result = '';
+    let i = 0;
+    while (i < binary.length) {
+      const a = binary.charCodeAt(i++);
+      const b = i < binary.length ? binary.charCodeAt(i++) : 0;
+      const c = i < binary.length ? binary.charCodeAt(i++) : 0;
+      const triplet = (a << 16) | (b << 8) | c;
+      result += chars[(triplet >> 18) & 63] + chars[(triplet >> 12) & 63];
+      result += i > binary.length + 1 ? '=' : chars[(triplet >> 6) & 63];
+      result += i > binary.length ? '=' : chars[triplet & 63];
+    }
+    base64 = result;
+  }
+  
+  return `data:audio/wav;base64,${base64}`;
+}
+
 export default function LessonNotificationBanner() {
   const router = useRouter();
   const { user } = useAuthStore();
