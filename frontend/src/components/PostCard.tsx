@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Video, ResizeMode } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import api, { getMediaUrl } from '../services/api';
 
 const { width } = Dimensions.get('window');
@@ -31,15 +31,30 @@ interface PostCardProps {
 }
 
 function VideoPlayer({ mediaUrl, autoPlay }: { mediaUrl: string; autoPlay?: boolean }) {
+  const player = useVideoPlayer(mediaUrl, (p) => {
+    p.loop = true;
+    if (autoPlay !== false) p.play();
+  });
+
   return (
-    <Video
-      source={{ uri: mediaUrl }}
+    <TouchableOpacity
+      activeOpacity={1}
       style={{ width: '100%', height: '100%' }}
-      resizeMode={ResizeMode.COVER}
-      shouldPlay={autoPlay !== false}
-      isLooping
-      isMuted={false}
-    />
+      onPress={() => {
+        if (player.playing) {
+          player.pause();
+        } else {
+          player.play();
+        }
+      }}
+    >
+      <VideoView
+        player={player}
+        style={{ width: '100%', height: '100%' }}
+        contentFit="cover"
+        nativeControls={false}
+      />
+    </TouchableOpacity>
   );
 }
 
@@ -70,48 +85,35 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
     return date.toLocaleDateString();
   };
   
-  const isVideo = post.type === 'video' || (post.media && post.media.includes('video'));
-  const mediaUrl = getMediaUrl(post.media);
-  const profileUrl = getMediaUrl(post.user?.profile_image);
+  const isVideo = post.type === 'video';
+  const mediaUrl = post.media ? getMediaUrl(post.media) : '';
   
   return (
     <View style={styles.container}>
       {/* Header */}
-      <TouchableOpacity
-        style={styles.header}
-        onPress={() => onUserPress?.(post.user_id)}
-      >
-        <View style={styles.userInfo}>
-          <View style={styles.avatar}>
-            {profileUrl ? (
-              <Image
-                source={{ uri: profileUrl }}
-                style={styles.avatarImage}
-              />
-            ) : (
-              <Ionicons name="person" size={20} color="#FFFFFF" />
-            )}
-          </View>
-          <View>
-            <Text style={styles.username}>{post.user?.username || 'Unknown'}</Text>
-          </View>
+      <TouchableOpacity style={styles.header} onPress={() => onUserPress?.(post.user_id)}>
+        <View style={styles.avatarContainer}>
+          {post.user?.profile_image ? (
+            <Image source={{ uri: getMediaUrl(post.user.profile_image) }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+              <Ionicons name="person" size={16} color="#666" />
+            </View>
+          )}
         </View>
-        <TouchableOpacity>
-          <Ionicons name="ellipsis-horizontal" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
+        <View style={styles.headerInfo}>
+          <Text style={styles.username}>{post.user?.username || 'Unknown'}</Text>
+          <Text style={styles.date}>{formatDate(post.created_at)}</Text>
+        </View>
       </TouchableOpacity>
-      
-      {/* Media - Instagram-style responsive */}
-      {mediaUrl && (
+
+      {/* Media */}
+      {mediaUrl ? (
         <View style={styles.mediaContainer}>
           {isVideo ? (
             <VideoPlayer mediaUrl={mediaUrl} autoPlay />
           ) : (
-            <Image
-              source={{ uri: mediaUrl }}
-              style={styles.media}
-              resizeMode="cover"
-            />
+            <Image source={{ uri: mediaUrl }} style={styles.media} resizeMode="cover" />
           )}
           {isVideo && (
             <View style={styles.videoIndicator}>
@@ -119,161 +121,142 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
             </View>
           )}
         </View>
-      )}
-      
+      ) : null}
+
       {/* Actions */}
       <View style={styles.actions}>
         <View style={styles.leftActions}>
-          <TouchableOpacity onPress={handleLike} style={styles.actionButton}>
+          <TouchableOpacity onPress={handleLike} style={styles.actionBtn}>
             <Ionicons
               name={isLiked ? 'heart' : 'heart-outline'}
-              size={26}
-              color={isLiked ? '#FF4058' : '#FFFFFF'}
+              size={24}
+              color={isLiked ? '#FF6978' : '#FFF'}
             />
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => onCommentPress?.(post.id)}
-            style={styles.actionButton}
-          >
-            <Ionicons name="chatbubble-outline" size={24} color="#FFFFFF" />
+          <TouchableOpacity onPress={() => onCommentPress?.(post.id)} style={styles.actionBtn}>
+            <Ionicons name="chatbubble-outline" size={22} color="#FFF" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="paper-plane-outline" size={24} color="#FFFFFF" />
+          <TouchableOpacity style={styles.actionBtn}>
+            <Ionicons name="paper-plane-outline" size={22} color="#FFF" />
           </TouchableOpacity>
         </View>
         <TouchableOpacity>
-          <Ionicons name="bookmark-outline" size={24} color="#FFFFFF" />
+          <Ionicons name="bookmark-outline" size={22} color="#FFF" />
         </TouchableOpacity>
       </View>
-      
-      {/* Likes count */}
-      {likesCount > 0 && (
-        <Text style={styles.likesCount}>
-          {likesCount.toLocaleString()} {likesCount === 1 ? 'like' : 'likes'}
-        </Text>
-      )}
-      
-      {/* Caption */}
-      {post.caption && (
-        <View style={styles.captionContainer}>
+
+      {/* Likes & Caption */}
+      <View style={styles.footer}>
+        {likesCount > 0 && (
+          <Text style={styles.likes}>{likesCount} like{likesCount !== 1 ? 's' : ''}</Text>
+        )}
+        {post.caption ? (
           <Text style={styles.caption}>
             <Text style={styles.captionUsername}>{post.user?.username} </Text>
             {post.caption}
           </Text>
-        </View>
-      )}
-      
-      {/* Comments */}
-      {post.comments_count > 0 && (
-        <TouchableOpacity onPress={() => onCommentPress?.(post.id)}>
-          <Text style={styles.viewComments}>
-            View all {post.comments_count} comments
-          </Text>
-        </TouchableOpacity>
-      )}
-      
-      {/* Time */}
-      <Text style={styles.time}>{formatDate(post.created_at)}</Text>
+        ) : null}
+        {post.comments_count > 0 && (
+          <TouchableOpacity onPress={() => onCommentPress?.(post.id)}>
+            <Text style={styles.viewComments}>
+              View all {post.comments_count} comment{post.comments_count !== 1 ? 's' : ''}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#000000',
+    backgroundColor: '#0a0a1a',
     marginBottom: 8,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     padding: 12,
   },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  avatarContainer: {
+    marginRight: 10,
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#1C1C1E',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  avatarPlaceholder: {
+    backgroundColor: '#1a1a2e',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
-    overflow: 'hidden',
   },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
+  headerInfo: {
+    flex: 1,
   },
   username: {
-    color: '#FFFFFF',
+    color: '#FFF',
     fontWeight: '600',
     fontSize: 14,
+  },
+  date: {
+    color: '#888',
+    fontSize: 11,
+    marginTop: 1,
   },
   mediaContainer: {
     width: '100%',
     aspectRatio: 4 / 5,
-    backgroundColor: '#1C1C1E',
     maxHeight: 500,
     position: 'relative',
-  },
-  videoIndicator: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 12,
-    padding: 6,
   },
   media: {
     width: '100%',
     height: '100%',
   },
+  videoIndicator: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 12,
+    padding: 4,
+  },
   actions: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
   leftActions: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  actionButton: {
+  actionBtn: {
     marginRight: 16,
   },
-  likesCount: {
-    color: '#FFFFFF',
-    fontWeight: '600',
+  footer: {
     paddingHorizontal: 12,
-    marginBottom: 6,
-    fontSize: 14,
+    marginBottom: 8,
   },
-  captionContainer: {
-    paddingHorizontal: 12,
-    marginBottom: 6,
+  likes: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 13,
+    marginBottom: 4,
   },
   caption: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    lineHeight: 20,
+    color: '#FFF',
+    fontSize: 13,
+    lineHeight: 18,
   },
   captionUsername: {
     fontWeight: '600',
   },
   viewComments: {
-    color: '#8E8E93',
-    paddingHorizontal: 12,
-    marginBottom: 4,
-    fontSize: 14,
-  },
-  time: {
-    color: '#636366',
-    fontSize: 12,
-    paddingHorizontal: 12,
-    marginBottom: 8,
+    color: '#888',
+    fontSize: 13,
+    marginTop: 4,
   },
 });
