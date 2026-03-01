@@ -34,7 +34,17 @@ export default function VideoCallScreen() {
       if (session.room_url) {
         setRoomUrl(session.room_url);
       } else {
-        setError('Nessuna stanza video disponibile');
+        // No room yet - try to create one
+        try {
+          const roomRes = await api.post(`/video-call/create-room?session_id=${sessionId}`);
+          if (roomRes.data.room_url) {
+            setRoomUrl(roomRes.data.room_url);
+          } else {
+            setError('Impossibile creare la stanza video');
+          }
+        } catch (e) {
+          setError('Nessuna stanza video disponibile');
+        }
       }
     } catch (err) {
       setError('Impossibile caricare la sessione');
