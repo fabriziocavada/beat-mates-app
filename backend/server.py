@@ -132,6 +132,7 @@ class PostResponse(BaseModel):
     user: Optional[dict] = None
     type: str
     media: Optional[str] = None
+    thumbnail: Optional[str] = None
     caption: str = ""
     likes_count: int = 0
     comments_count: int = 0
@@ -1131,6 +1132,21 @@ async def toggle_availability(current_user: dict = Depends(get_current_user)):
 # ==================== FILE UPLOAD ====================
 
 import subprocess
+
+def generate_video_thumbnail(video_path: str, thumb_path: str) -> bool:
+    """Extract first frame from video as JPEG thumbnail."""
+    try:
+        cmd = [
+            'ffmpeg', '-y', '-i', video_path,
+            '-vframes', '1', '-q:v', '3',
+            '-vf', 'scale=320:-1',
+            thumb_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, timeout=15)
+        return result.returncode == 0
+    except Exception as e:
+        logger.error(f"Thumbnail generation failed: {e}")
+        return False
 
 def convert_video_to_mp4(input_path: str, output_path: str) -> bool:
     """Convert any video to H.264 MP4 format for browser compatibility."""
