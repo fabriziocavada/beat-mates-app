@@ -1224,7 +1224,17 @@ async def upload_file(
 
     url = f"/api/uploads/{filename}"
     media_type = "video" if is_video else "image"
-    return {"url": url, "filename": filename, "media_type": media_type}
+    
+    # Generate thumbnail for videos
+    thumbnail_url = None
+    if is_video:
+        thumb_filename = f"{file_id}_thumb.jpg"
+        thumb_path = UPLOADS_DIR / thumb_filename
+        final_video_path = UPLOADS_DIR / filename
+        if generate_video_thumbnail(str(final_video_path), str(thumb_path)):
+            thumbnail_url = f"/api/uploads/{thumb_filename}"
+    
+    return {"url": url, "filename": filename, "media_type": media_type, "thumbnail": thumbnail_url}
 
 # Video streaming endpoint - returns base64 data URL for short videos
 @api_router.get("/media/{filename}")
