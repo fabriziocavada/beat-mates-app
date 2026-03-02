@@ -81,4 +81,18 @@ export function isVideoUrl(path: string | null | undefined): boolean {
   return lower.includes('.mp4') || lower.includes('.mov') || lower.includes('.webm') || lower.includes('video');
 }
 
+// Get thumbnail URL for a video file
+export function getThumbnailUrl(mediaPath: string | null | undefined): string | null {
+  if (!mediaPath) return null;
+  // Extract filename from path like /api/uploads/xxx.mp4
+  let filename = mediaPath;
+  if (filename.includes('/api/uploads/')) {
+    filename = filename.replace('/api/uploads/', '');
+  } else if (filename.startsWith('/')) {
+    filename = filename.split('/').pop() || '';
+  }
+  if (!filename) return null;
+  return `${baseURL}/api/thumbnail/${filename}`;
+}
+
 export default api;
