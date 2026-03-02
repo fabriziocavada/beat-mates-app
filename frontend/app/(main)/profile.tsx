@@ -130,7 +130,7 @@ export default function ProfileScreen() {
   
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await Promise.all([loadPosts(), refreshUser()]);
+    await Promise.all([loadPosts(), loadUserStories(), refreshUser()]);
     setIsRefreshing(false);
   }, []);
   
