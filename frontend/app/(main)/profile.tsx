@@ -22,7 +22,7 @@ import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
 import LessonNotificationBanner from '../../src/components/LessonNotificationBanner';
 import { useAuthStore } from '../../src/store/authStore';
-import api, { uploadFile, getMediaUrl } from '../../src/services/api';
+import api, { uploadFile, getMediaUrl, getThumbnailUrl } from '../../src/services/api';
 
 const { width } = Dimensions.get('window');
 const POST_SIZE = (width - 4) / 3;
@@ -33,11 +33,18 @@ interface Post {
   media: string | null;
 }
 
+interface UserStory {
+  id: string;
+  media: string;
+  type: string;
+}
+
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, toggleAvailability, refreshUser, logout } = useAuthStore();
   
   const [posts, setPosts] = useState<Post[]>([]);
+  const [userStories, setUserStories] = useState<UserStory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'shop'>('posts');
@@ -47,6 +54,7 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (user?.id && (pathname === '/profile' || pathname === '/(main)/profile')) {
       loadPosts();
+      loadUserStories();
       refreshUser();
     }
   }, [user?.id, pathname]);
@@ -59,6 +67,17 @@ export default function ProfileScreen() {
       console.error('Failed to load posts', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadUserStories = async () => {
+    try {
+      const response = await api.get('/stories');
+      const allStoryUsers = response.data;
+      const myStories = allStoryUsers.find((su: any) => su.user_id === user?.id);
+      setUserStories(myStories?.stories || []);
+    } catch (error) {
+      console.error('Failed to load stories', error);
     }
   };
   
