@@ -114,10 +114,7 @@ export default function HomeScreen() {
     <StoriesBar
       stories={stories}
       onStoryPress={(userId) => {
-        const userStories = stories.find(s => s.user_id === userId);
-        if (userStories && userStories.stories.length > 0) {
-          router.push(`/(main)/story/${userStories.stories[0].id}`);
-        }
+        router.push(`/(main)/story/${userId}`);
       }}
       onAddStoryPress={() => router.push('/(main)/create-story')}
     />
