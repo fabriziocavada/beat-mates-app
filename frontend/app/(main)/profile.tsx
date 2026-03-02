@@ -160,6 +160,7 @@ export default function ProfileScreen() {
   const renderPost = ({ item }: { item: Post }) => {
     const isVideo = item.type === 'video';
     const mediaUrl = getMediaUrl(item.media);
+    const thumbUrl = isVideo ? getThumbnailUrl(item.media) : mediaUrl;
     
     return (
       <TouchableOpacity 
@@ -170,19 +171,15 @@ export default function ProfileScreen() {
           }
         }}
       >
-        {mediaUrl ? (
-          isVideo ? (
-            <View style={styles.videoThumb}>
-              <View style={[styles.postImage, { backgroundColor: '#1a1a2e', justifyContent: 'center', alignItems: 'center' }]}>
-                <Ionicons name="videocam" size={24} color="#FFF" />
-              </View>
+        {thumbUrl ? (
+          <View style={styles.videoThumb}>
+            <Image source={{ uri: thumbUrl }} style={styles.postImage} />
+            {isVideo && (
               <View style={styles.videoPlayOverlay}>
                 <Ionicons name="play" size={24} color="#FFF" />
               </View>
-            </View>
-          ) : (
-            <Image source={{ uri: mediaUrl }} style={styles.postImage} />
-          )
+            )}
+          </View>
         ) : (
           <View style={styles.postPlaceholder}>
             <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
