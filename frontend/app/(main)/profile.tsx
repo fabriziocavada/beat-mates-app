@@ -189,13 +189,14 @@ export default function ProfileScreen() {
     );
   };
   
-  // Mock highlights
-  const highlights = [
-    { id: 'new', isNew: true },
-    { id: '1', image: null },
-    { id: '2', image: null },
-    { id: '3', image: null },
-  ];
+  // Build highlights from real user stories
+  const storyHighlights = userStories.map(story => {
+    const isVideo = story.type === 'video';
+    return {
+      id: story.id,
+      image: isVideo ? getThumbnailUrl(story.media) : getMediaUrl(story.media),
+    };
+  });
   
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
