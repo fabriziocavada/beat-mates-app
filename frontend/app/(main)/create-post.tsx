@@ -91,6 +91,7 @@ export default function CreatePostScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.Videos,
       videoMaxDuration: 10,
       allowsEditing: true,
+      aspect: [9, 16],
     });
     
     if (!result.canceled && result.assets[0]) {
