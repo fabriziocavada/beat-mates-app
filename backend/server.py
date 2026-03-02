@@ -1262,6 +1262,28 @@ async def stream_media(filename: str, request: Request):
         }
     )
 
+@api_router.get("/thumbnail/{filename}")
+async def get_video_thumbnail(filename: str):
+    """Generate and return a thumbnail for a video file (on-the-fly with caching)."""
+    # Strip extension and add _thumb.jpg
+    base_name = filename.rsplit('.', 1)[0] if '.' in filename else filename
+    thumb_filename = f"{base_name}_thumb.jpg"
+    thumb_path = UPLOADS_DIR / thumb_filename
+    
+    # Return cached thumbnail if it exists
+    if thumb_path.exists():
+        return FileResponse(path=str(thumb_path), media_type='image/jpeg')
+    
+    # Generate from video
+    video_path = UPLOADS_DIR / filename
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    if generate_video_thumbnail(str(video_path), str(thumb_path)):
+        return FileResponse(path=str(thumb_path), media_type='image/jpeg')
+    
+    raise HTTPException(status_code=500, detail="Failed to generate thumbnail")
+
 # ==================== HEALTH CHECK ====================
 
 @api_router.get("/")
