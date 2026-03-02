@@ -289,36 +289,37 @@ export default function ProfileScreen() {
           </View>
         </View>
         
-        {/* Highlights */}
+        {/* Story Highlights */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.highlightsContainer}
           contentContainerStyle={styles.highlightsContent}
         >
-          {highlights.map((highlight) => (
+          {/* Add story button */}
+          <TouchableOpacity 
+            style={styles.highlightItem}
+            activeOpacity={0.6}
+            data-testid="add-story-highlight-btn"
+            onPress={() => router.push('/(main)/create-story')}
+          >
+            <View style={[styles.highlightCircle, styles.highlightCircleNew]}>
+              <Ionicons name="add" size={30} color={Colors.text} />
+              <Text style={styles.highlightNewText}>NEW</Text>
+            </View>
+          </TouchableOpacity>
+          
+          {/* Real story thumbnails */}
+          {storyHighlights.map((story) => (
             <TouchableOpacity 
-              key={highlight.id} 
+              key={story.id} 
               style={styles.highlightItem}
               activeOpacity={0.6}
-              data-testid={highlight.isNew ? 'add-story-highlight-btn' : `highlight-${highlight.id}`}
-              onPress={() => {
-                if (highlight.isNew) {
-                  router.push('/(main)/create-story');
-                }
-              }}
+              onPress={() => router.push(`/(main)/story/${user?.id}`)}
             >
-              <View style={[
-                styles.highlightCircle,
-                highlight.isNew && styles.highlightCircleNew
-              ]}>
-                {highlight.isNew ? (
-                  <>
-                    <Ionicons name="add" size={30} color={Colors.text} />
-                    <Text style={styles.highlightNewText}>NEW</Text>
-                  </>
-                ) : highlight.image ? (
-                  <Image source={{ uri: highlight.image }} style={styles.highlightImage} />
+              <View style={[styles.highlightCircle, { borderColor: Colors.accent }]}>
+                {story.image ? (
+                  <Image source={{ uri: story.image }} style={styles.highlightImage} />
                 ) : (
                   <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
                 )}
