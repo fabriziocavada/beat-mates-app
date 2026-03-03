@@ -212,6 +212,22 @@ class VideoLessonResponse(BaseModel):
     duration_minutes: int = 0
     video_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
+    reviews_count: int = 0
+    avg_rating: float = 0.0
+    created_at: datetime
+
+# Reviews
+class ReviewCreate(BaseModel):
+    rating: int
+    text: str = ""
+
+class ReviewResponse(BaseModel):
+    id: str
+    lesson_id: str
+    user_id: str
+    user: Optional[dict] = None
+    rating: int
+    text: str
     created_at: datetime
 
 class LiveSessionRequest(BaseModel):
@@ -1355,6 +1371,8 @@ async def stream_media(filename: str, request: Request):
         'mp4': 'video/mp4', 'mov': 'video/quicktime', 'webm': 'video/webm',
         'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
         'gif': 'image/gif', 'webp': 'image/webp',
+        'mp3': 'audio/mpeg', 'wav': 'audio/wav', 'aac': 'audio/aac',
+        'm4a': 'audio/mp4', 'ogg': 'audio/ogg',
     }
     media_type = content_types.get(ext, 'application/octet-stream')
     
@@ -1639,34 +1657,56 @@ async def create_video_lesson(
     video: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
+    import subprocess
     lesson_id = str(uuid.uuid4())
-    # Save video
-    video_ext = video.filename.split('.')[-1] if video.filename else 'mp4'
-    video_filename = f"{uuid.uuid4()}.{video_ext}"
-    video_path = UPLOADS_DIR / video_filename
+    
+    # Save original upload
+    orig_filename = f"orig_{uuid.uuid4()}.mp4"
+    orig_path = UPLOADS_DIR / orig_filename
     content = await video.read()
-    with open(video_path, "wb") as f:
+    with open(orig_path, "wb") as f:
         f.write(content)
     
+    # Compress video with ffmpeg (lighter format, compatible with iOS)
+    final_filename = f"{uuid.uuid4()}.mp4"
+    final_path = UPLOADS_DIR / final_filename
+    try:
+        subprocess.run([
+            "ffmpeg", "-y", "-i", str(orig_path),
+            "-c:v", "libx264", "-preset", "fast", "-crf", "28",
+            "-c:a", "aac", "-b:a", "128k",
+            "-movflags", "+faststart",
+            "-vf", "scale='min(720,iw)':-2",
+            str(final_path)
+        ], capture_output=True, timeout=120)
+        if final_path.exists() and final_path.stat().st_size > 0:
+            orig_path.unlink(missing_ok=True)
+        else:
+            final_filename = orig_filename
+            final_path = orig_path
+    except Exception:
+        final_filename = orig_filename
+        final_path = orig_path
+    
     # Generate thumbnail
-    thumb_filename = f"thumb_{video_filename.rsplit('.', 1)[0]}.jpg"
+    thumb_filename = f"thumb_{lesson_id}.jpg"
     thumb_path = UPLOADS_DIR / thumb_filename
     try:
-        import subprocess
         subprocess.run([
-            "ffmpeg", "-i", str(video_path), "-ss", "00:00:01",
-            "-vframes", "1", "-vf", "scale=640:-1", str(thumb_path)
+            "ffmpeg", "-y", "-i", str(final_path), "-ss", "00:00:01",
+            "-vframes", "1", "-vf", "scale=640:-1", "-q:v", "4", str(thumb_path)
         ], capture_output=True, timeout=15)
+        if not thumb_path.exists():
+            thumb_filename = None
     except Exception:
         thumb_filename = None
     
     # Get duration
     duration_minutes = 0
     try:
-        import subprocess
         result = subprocess.run([
             "ffprobe", "-v", "error", "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1", str(video_path)
+            "-of", "default=noprint_wrappers=1:nokey=1", str(final_path)
         ], capture_output=True, text=True, timeout=10)
         secs = float(result.stdout.strip())
         duration_minutes = round(secs / 60)
@@ -1681,14 +1721,14 @@ async def create_video_lesson(
         "price": price,
         "currency": currency,
         "duration_minutes": duration_minutes,
-        "video_url": video_filename,
+        "video_url": final_filename,
         "thumbnail_url": thumb_filename,
+        "reviews_count": 0,
+        "avg_rating": 0.0,
         "created_at": datetime.utcnow(),
     }
     await db.video_lessons.insert_one(lesson)
     lesson.pop("_id", None)
-    
-    # Attach user info
     lesson["user"] = {"id": current_user["id"], "username": current_user["username"], "name": current_user["name"], "profile_image": current_user.get("profile_image")}
     return VideoLessonResponse(**lesson)
 
@@ -1699,6 +1739,8 @@ async def list_video_lessons(user_id: Optional[str] = None, current_user: dict =
     for lesson in lessons:
         u = await db.users.find_one({"id": lesson["user_id"]}, {"_id": 0, "id": 1, "username": 1, "name": 1, "profile_image": 1})
         lesson["user"] = u
+        lesson.setdefault("reviews_count", 0)
+        lesson.setdefault("avg_rating", 0.0)
     return [VideoLessonResponse(**l) for l in lessons]
 
 @api_router.get("/users/{user_id}/video-lessons", response_model=List[VideoLessonResponse])
@@ -1707,6 +1749,8 @@ async def get_user_video_lessons(user_id: str, current_user: dict = Depends(get_
     for lesson in lessons:
         u = await db.users.find_one({"id": lesson["user_id"]}, {"_id": 0, "id": 1, "username": 1, "name": 1, "profile_image": 1})
         lesson["user"] = u
+        lesson.setdefault("reviews_count", 0)
+        lesson.setdefault("avg_rating", 0.0)
     return [VideoLessonResponse(**l) for l in lessons]
 
 @api_router.put("/video-lessons/{lesson_id}", response_model=VideoLessonResponse)
@@ -1733,7 +1777,130 @@ async def delete_video_lesson(lesson_id: str, current_user: dict = Depends(get_c
     if lesson["user_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Not your lesson")
     await db.video_lessons.delete_one({"id": lesson_id})
+    await db.lesson_reviews.delete_many({"lesson_id": lesson_id})
     return {"status": "deleted"}
+
+# ====================== LESSON REVIEWS ======================
+
+@api_router.post("/video-lessons/{lesson_id}/reviews", response_model=ReviewResponse)
+async def create_review(lesson_id: str, data: ReviewCreate, current_user: dict = Depends(get_current_user)):
+    lesson = await db.video_lessons.find_one({"id": lesson_id})
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    if lesson["user_id"] == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot review your own lesson")
+    existing = await db.lesson_reviews.find_one({"lesson_id": lesson_id, "user_id": current_user["id"]})
+    if existing:
+        raise HTTPException(status_code=400, detail="Already reviewed")
+    
+    review = {
+        "id": str(uuid.uuid4()),
+        "lesson_id": lesson_id,
+        "user_id": current_user["id"],
+        "rating": max(1, min(5, data.rating)),
+        "text": data.text,
+        "created_at": datetime.utcnow(),
+    }
+    await db.lesson_reviews.insert_one(review)
+    review.pop("_id", None)
+    
+    # Update lesson stats
+    all_reviews = await db.lesson_reviews.find({"lesson_id": lesson_id}, {"_id": 0, "rating": 1}).to_list(1000)
+    avg = sum(r["rating"] for r in all_reviews) / len(all_reviews) if all_reviews else 0
+    await db.video_lessons.update_one({"id": lesson_id}, {"$set": {"reviews_count": len(all_reviews), "avg_rating": round(avg, 1)}})
+    
+    review["user"] = {"id": current_user["id"], "username": current_user["username"], "name": current_user["name"], "profile_image": current_user.get("profile_image")}
+    return ReviewResponse(**review)
+
+@api_router.get("/video-lessons/{lesson_id}/reviews", response_model=List[ReviewResponse])
+async def get_lesson_reviews(lesson_id: str, current_user: dict = Depends(get_current_user)):
+    reviews = await db.lesson_reviews.find({"lesson_id": lesson_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    for r in reviews:
+        u = await db.users.find_one({"id": r["user_id"]}, {"_id": 0, "id": 1, "username": 1, "name": 1, "profile_image": 1})
+        r["user"] = u
+    return [ReviewResponse(**r) for r in reviews]
+
+# ====================== CHAT / MESSAGING ======================
+
+@api_router.get("/conversations")
+async def get_conversations(current_user: dict = Depends(get_current_user)):
+    convos = await db.conversations.find(
+        {"participants": current_user["id"]}, {"_id": 0}
+    ).sort("updated_at", -1).to_list(50)
+    
+    for c in convos:
+        other_id = [p for p in c["participants"] if p != current_user["id"]]
+        if other_id:
+            other_user = await db.users.find_one({"id": other_id[0]}, {"_id": 0, "id": 1, "username": 1, "name": 1, "profile_image": 1})
+            c["other_user"] = other_user
+        else:
+            c["other_user"] = None
+    return convos
+
+@api_router.post("/conversations")
+async def create_or_get_conversation(data: dict, current_user: dict = Depends(get_current_user)):
+    other_id = data.get("user_id")
+    if not other_id:
+        raise HTTPException(status_code=400, detail="user_id required")
+    
+    # Check if conversation already exists
+    existing = await db.conversations.find_one({
+        "participants": {"$all": [current_user["id"], other_id]}
+    }, {"_id": 0})
+    if existing:
+        return existing
+    
+    convo = {
+        "id": str(uuid.uuid4()),
+        "participants": [current_user["id"], other_id],
+        "last_message": None,
+        "updated_at": datetime.utcnow(),
+        "created_at": datetime.utcnow(),
+    }
+    await db.conversations.insert_one(convo)
+    convo.pop("_id", None)
+    return convo
+
+@api_router.get("/conversations/{convo_id}/messages")
+async def get_messages(convo_id: str, current_user: dict = Depends(get_current_user)):
+    convo = await db.conversations.find_one({"id": convo_id})
+    if not convo or current_user["id"] not in convo.get("participants", []):
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    messages = await db.messages.find({"conversation_id": convo_id}, {"_id": 0}).sort("created_at", 1).to_list(200)
+    for m in messages:
+        u = await db.users.find_one({"id": m["sender_id"]}, {"_id": 0, "id": 1, "username": 1, "profile_image": 1})
+        m["sender"] = u
+    return messages
+
+@api_router.post("/conversations/{convo_id}/messages")
+async def send_message(convo_id: str, data: dict, current_user: dict = Depends(get_current_user)):
+    convo = await db.conversations.find_one({"id": convo_id})
+    if not convo or current_user["id"] not in convo.get("participants", []):
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    text = data.get("text", "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Message text required")
+    
+    msg = {
+        "id": str(uuid.uuid4()),
+        "conversation_id": convo_id,
+        "sender_id": current_user["id"],
+        "text": text,
+        "created_at": datetime.utcnow(),
+    }
+    await db.messages.insert_one(msg)
+    msg.pop("_id", None)
+    
+    # Update conversation
+    await db.conversations.update_one(
+        {"id": convo_id},
+        {"$set": {"last_message": text, "updated_at": datetime.utcnow()}}
+    )
+    
+    msg["sender"] = {"id": current_user["id"], "username": current_user["username"], "profile_image": current_user.get("profile_image")}
+    return msg
 
 # Include the router in the main app
 app.include_router(api_router)

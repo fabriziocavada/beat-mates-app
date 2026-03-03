@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Dimensions, PanResponder, Image,
-  LayoutChangeEvent,
+  View, Text, StyleSheet, TouchableOpacity, Dimensions, Image,
+  LayoutChangeEvent, Platform, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import Colors from '../../../src/constants/colors';
+import TabBar from '../../../src/components/TabBar';
 import api, { getMediaUrl } from '../../../src/services/api';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -30,14 +31,16 @@ export default function PlayerScreen() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [speed, setSpeed] = useState(0); // continuous float -5 to +5
+  const [speedVal, setSpeedVal] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
   const soundRef = useRef<Audio.Sound | null>(null);
   const positionInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Layout widths for sliders
-  const [progressBarWidth, setProgressBarWidth] = useState(SCREEN_W - 100);
-  const [speedBarWidth, setSpeedBarWidth] = useState(SCREEN_W - 140);
+  // Refs for bar positions (measured via onLayout)
+  const progressBarRef = useRef<View>(null);
+  const speedBarRef = useRef<View>(null);
+  const [progressBarLayout, setProgressBarLayout] = useState({ x: 0, width: SCREEN_W - 100 });
+  const [speedBarLayout, setSpeedBarLayout] = useState({ x: 0, width: SCREEN_W - 140 });
 
   useEffect(() => {
     loadSong();
@@ -53,9 +56,7 @@ export default function PlayerScreen() {
         setDuration(found.duration || 0);
         await loadAudio(found);
       }
-    } catch (e) {
-      console.error('Failed to load song', e);
-    }
+    } catch (e) { console.error('Failed to load song', e); }
   };
 
   const loadAudio = async (songData: Song) => {
@@ -69,9 +70,7 @@ export default function PlayerScreen() {
       if (status.isLoaded && status.durationMillis) {
         setDuration(status.durationMillis / 1000);
       }
-    } catch (e) {
-      console.error('Failed to load audio', e);
-    }
+    } catch (e) { console.error('Failed to load audio', e); }
   };
 
   const unloadSound = () => {
@@ -106,121 +105,84 @@ export default function PlayerScreen() {
               }
             }
           } catch {}
-        }, 200);
+        }, 250);
       }
-    } catch (e) {
-      console.error('Playback error', e);
-    }
+    } catch (e) { console.error('Playback error', e); }
   };
 
   const seekTo = async (pct: number) => {
     if (!soundRef.current || duration === 0) return;
-    const clamped = Math.max(0, Math.min(1, pct));
-    const ms = clamped * duration * 1000;
+    const c = Math.max(0, Math.min(1, pct));
     try {
-      await soundRef.current.setPositionAsync(ms);
-      setPosition(clamped * duration);
+      await soundRef.current.setPositionAsync(c * duration * 1000);
+      setPosition(c * duration);
     } catch {}
   };
 
   const applySpeed = async (newSpeed: number) => {
-    const clamped = Math.max(-5, Math.min(5, newSpeed));
-    setSpeed(clamped);
+    const c = Math.max(-5, Math.min(5, newSpeed));
+    setSpeedVal(c);
     if (!soundRef.current) return;
-    const rate = 1 + (clamped * 0.1);
-    try {
-      await soundRef.current.setRateAsync(rate, true);
-    } catch {}
+    try { await soundRef.current.setRateAsync(1 + (c * 0.1), true); } catch {}
   };
 
   const skipForward = async () => {
     if (!soundRef.current) return;
-    const newPos = Math.min(position + 10, duration);
-    await soundRef.current.setPositionAsync(newPos * 1000);
-    setPosition(newPos);
+    const np = Math.min(position + 10, duration);
+    await soundRef.current.setPositionAsync(np * 1000).catch(() => {});
+    setPosition(np);
   };
-
   const skipBackward = async () => {
     if (!soundRef.current) return;
-    const newPos = Math.max(position - 10, 0);
-    await soundRef.current.setPositionAsync(newPos * 1000);
-    setPosition(newPos);
+    const np = Math.max(position - 10, 0);
+    await soundRef.current.setPositionAsync(np * 1000).catch(() => {});
+    setPosition(np);
   };
 
-  const formatTime = (secs: number) => {
+  const fmt = (secs: number) => {
     const m = Math.floor(secs / 60);
     const s = Math.floor(secs % 60);
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  // ========= PROGRESS BAR PanResponder =========
-  const progressPanResponder = useMemo(() => {
-    let barX = 0;
-    return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (evt) => {
-        setIsSeeking(true);
-        const x = evt.nativeEvent.locationX;
-        const pct = x / progressBarWidth;
-        setPosition(Math.max(0, Math.min(1, pct)) * duration);
-      },
-      onPanResponderMove: (evt) => {
-        const x = evt.nativeEvent.locationX;
-        const pct = x / progressBarWidth;
-        const clampedPct = Math.max(0, Math.min(1, pct));
-        setPosition(clampedPct * duration);
-      },
-      onPanResponderRelease: (evt) => {
-        const x = evt.nativeEvent.locationX;
-        const pct = Math.max(0, Math.min(1, x / progressBarWidth));
-        seekTo(pct);
-        setIsSeeking(false);
-      },
-    });
-  }, [progressBarWidth, duration]);
+  // ============ Touch handlers using pageX (reliable on web + native) ============
+  const handleProgressTouch = (pageX: number, final: boolean) => {
+    const barLeft = progressBarLayout.x;
+    const barW = progressBarLayout.width;
+    const x = pageX - barLeft;
+    const pct = Math.max(0, Math.min(1, x / barW));
+    setPosition(pct * duration);
+    if (final) {
+      seekTo(pct);
+      setIsSeeking(false);
+    }
+  };
 
-  // ========= SPEED SLIDER PanResponder =========
-  const speedPanResponder = useMemo(() => {
-    return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (evt) => {
-        const x = evt.nativeEvent.locationX;
-        const pct = x / speedBarWidth;
-        const newSpeed = -5 + (Math.max(0, Math.min(1, pct)) * 10);
-        setSpeed(newSpeed);
-      },
-      onPanResponderMove: (evt) => {
-        const x = evt.nativeEvent.locationX;
-        const pct = x / speedBarWidth;
-        const newSpeed = -5 + (Math.max(0, Math.min(1, pct)) * 10);
-        setSpeed(newSpeed);
-      },
-      onPanResponderRelease: (evt) => {
-        const x = evt.nativeEvent.locationX;
-        const pct = Math.max(0, Math.min(1, x / speedBarWidth));
-        const finalSpeed = -5 + pct * 10;
-        applySpeed(finalSpeed);
-      },
-    });
-  }, [speedBarWidth]);
+  const handleSpeedTouch = (pageX: number, final: boolean) => {
+    const barLeft = speedBarLayout.x;
+    const barW = speedBarLayout.width;
+    const x = pageX - barLeft;
+    const pct = Math.max(0, Math.min(1, x / barW));
+    const newSpeed = -5 + pct * 10;
+    if (final) {
+      applySpeed(newSpeed);
+    } else {
+      setSpeedVal(Math.max(-5, Math.min(5, newSpeed)));
+    }
+  };
 
   const progress = duration > 0 ? position / duration : 0;
-  const speedPct = (speed + 5) / 10; // 0 to 1
-  const rateValue = 1 + (speed * 0.1);
-  const rateLabel = speed === 0 ? '1.0x' : `${rateValue.toFixed(1)}x`;
-  const speedPercentLabel = `${speed >= 0 ? '+' : ''}${Math.round(speed * 10)}%`;
+  const speedPct = (speedVal + 5) / 10;
+  const rateValue = 1 + (speedVal * 0.1);
+  const speedLabel = `${speedVal >= 0 ? '+' : ''}${Math.round(speedVal * 10)}%`;
 
   // Waveform bars
   const waveformBars = useMemo(() => {
-    const numBars = 60;
     const bars = [];
-    for (let i = 0; i < numBars; i++) {
+    for (let i = 0; i < 50; i++) {
       const seed = songId ? songId.charCodeAt(i % songId.length) : i;
-      const h = 15 + ((seed * (i + 1) * 7) % 45);
-      const isActive = (i / numBars) <= progress;
-      bars.push({ height: h, active: isActive, key: i });
+      const h = 12 + ((seed * (i + 1) * 7) % 40);
+      bars.push({ height: h, active: (i / 50) <= progress, key: i });
     }
     return bars;
   }, [progress, songId]);
@@ -228,9 +190,10 @@ export default function PlayerScreen() {
   if (!song) {
     return (
       <View style={styles.container}>
-        <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
           <Text style={{ color: '#FFF' }}>Caricamento...</Text>
         </SafeAreaView>
+        <TabBar />
       </View>
     );
   }
@@ -238,108 +201,125 @@ export default function PlayerScreen() {
   return (
     <View style={styles.container}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Ionicons name="search" size={22} color="#FFF" />
-          <Text style={styles.headerTitle}>BEAT <Text style={{ color: Colors.primary }}>MATES</Text></Text>
-          <View style={styles.headerRight}>
-            <Ionicons name="heart-outline" size={22} color="#FFF" />
-            <Ionicons name="paper-plane-outline" size={22} color="#FFF" style={{ marginLeft: 16 }} />
+        <ScrollView style={{ flex: 1 }} bounces={false} showsVerticalScrollIndicator={false}>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} data-testid="player-back-btn">
+              <Ionicons name="chevron-back" size={26} color="#FFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>BEAT <Text style={{ color: Colors.primary }}>MATES</Text></Text>
+            <View style={{ width: 26 }} />
           </View>
-        </View>
 
-        {/* Playlist info */}
-        <View style={styles.playlistInfo}>
-          <Text style={styles.playlistLabel}>PLAYING FROM PLAYLIST:</Text>
-          <Text style={styles.playlistName}>{song.playlist_name || song.genre}</Text>
-          <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn} data-testid="player-close-btn">
-            <Ionicons name="close" size={26} color="#FFF" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Cover art with real image */}
-        <View style={styles.coverArt}>
-          <Image source={{ uri: COVER_IMAGE }} style={styles.coverImage} resizeMode="cover" />
-          <View style={styles.coverOverlay}>
-            <Text style={styles.coverText}>BEATMATES!</Text>
-            <Text style={styles.coverSubtext}>THE RHYTHM</Text>
+          {/* Cover art */}
+          <View style={styles.coverArt}>
+            <Image source={{ uri: COVER_IMAGE }} style={styles.coverImage} resizeMode="cover" />
+            <View style={styles.coverOverlay}>
+              <Text style={styles.coverText}>BEATMATES!</Text>
+              <Text style={styles.coverSubtext}>THE RHYTHM</Text>
+            </View>
           </View>
-        </View>
 
-        {/* Song title */}
-        <Text style={styles.songTitle}>{song.title}</Text>
-        <Text style={styles.songArtist}>{song.artist}</Text>
+          {/* Song info */}
+          <Text style={styles.songTitle}>{song.title}</Text>
+          <Text style={styles.songArtist}>{song.artist}</Text>
 
-        {/* Progress bar - PanResponder based for smooth dragging */}
-        <View style={styles.progressContainer}>
-          <Text style={styles.timeText}>{formatTime(position)}</Text>
-          <View
-            style={styles.progressBar}
-            onLayout={(e: LayoutChangeEvent) => setProgressBarWidth(e.nativeEvent.layout.width)}
-            {...progressPanResponder.panHandlers}
-          >
-            <View style={styles.progressBg}>
-              <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+          {/* ========= PROGRESS BAR (touch-based) ========= */}
+          <View style={styles.progressContainer}>
+            <Text style={styles.timeText}>{fmt(position)}</Text>
+            <View
+              ref={progressBarRef}
+              style={styles.progressBarOuter}
+              onLayout={(e: LayoutChangeEvent) => {
+                const { x, width } = e.nativeEvent.layout;
+                // Measure absolute position on screen
+                progressBarRef.current?.measureInWindow?.((px: number) => {
+                  setProgressBarLayout({ x: px, width });
+                });
+                setProgressBarLayout(prev => ({ ...prev, width }));
+              }}
+              onStartShouldSetResponder={() => true}
+              onMoveShouldSetResponder={() => true}
+              onResponderGrant={(e) => {
+                setIsSeeking(true);
+                handleProgressTouch(e.nativeEvent.pageX, false);
+              }}
+              onResponderMove={(e) => handleProgressTouch(e.nativeEvent.pageX, false)}
+              onResponderRelease={(e) => handleProgressTouch(e.nativeEvent.pageX, true)}
+            >
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+              </View>
               <View style={[styles.progressDot, { left: `${progress * 100}%` }]} />
             </View>
+            <Text style={styles.timeText}>{fmt(duration)}</Text>
           </View>
-          <Text style={styles.timeText}>{formatTime(duration)}</Text>
-        </View>
 
-        {/* Controls */}
-        <View style={styles.controls}>
-          <TouchableOpacity onPress={() => {}}>
-            <Ionicons name="shuffle" size={24} color="#888" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={skipBackward}>
-            <Ionicons name="play-skip-back" size={32} color="#FFF" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.playButton} onPress={togglePlayback} data-testid="play-pause-btn">
-            <Ionicons name={isPlaying ? 'pause' : 'play'} size={36} color="#000" style={!isPlaying ? { marginLeft: 4 } : {}} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={skipForward}>
-            <Ionicons name="play-skip-forward" size={32} color="#FFF" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Waveform */}
-        <View style={styles.waveformContainer}>
-          <View style={styles.waveform}>
-            {waveformBars.map(bar => (
-              <View key={bar.key} style={[styles.waveBar, { height: bar.height }, bar.active && styles.waveBarActive]} />
-            ))}
-          </View>
-          <View style={styles.waveformTimes}>
-            <Text style={styles.waveTimeText}>{formatTime(position)}</Text>
-            <Text style={styles.waveTimeText}>{formatTime(duration)}</Text>
-          </View>
-        </View>
-
-        {/* Speed control - PanResponder based for smooth dragging */}
-        <View style={styles.speedSection}>
-          <Text style={styles.speedLabel}>slow down or speed up</Text>
-          <View style={styles.speedRow}>
-            <TouchableOpacity style={styles.speedEndBtn} onPress={() => applySpeed(-5)}>
-              <Text style={styles.speedEndText}>-5</Text>
+          {/* Controls */}
+          <View style={styles.controls}>
+            <TouchableOpacity onPress={skipBackward} data-testid="skip-back-btn">
+              <Ionicons name="play-skip-back" size={30} color="#FFF" />
             </TouchableOpacity>
-            <View
-              style={styles.speedSliderContainer}
-              onLayout={(e: LayoutChangeEvent) => setSpeedBarWidth(e.nativeEvent.layout.width)}
-              {...speedPanResponder.panHandlers}
-            >
-              <View style={styles.speedSliderTrack} />
-              {/* Speed indicator pill */}
-              <View style={[styles.speedIndicator, { left: `${speedPct * 100}%` }]}>
-                <Text style={styles.speedIndicatorText}>{speedPercentLabel}</Text>
-              </View>
+            <TouchableOpacity style={styles.playButton} onPress={togglePlayback} data-testid="play-pause-btn">
+              <Ionicons name={isPlaying ? 'pause' : 'play'} size={34} color="#000" style={!isPlaying ? { marginLeft: 3 } : {}} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={skipForward} data-testid="skip-forward-btn">
+              <Ionicons name="play-skip-forward" size={30} color="#FFF" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Waveform */}
+          <View style={styles.waveformContainer}>
+            <View style={styles.waveform}>
+              {waveformBars.map(bar => (
+                <View key={bar.key} style={[styles.waveBar, { height: bar.height }, bar.active && styles.waveBarActive]} />
+              ))}
             </View>
-            <TouchableOpacity style={styles.speedEndBtn} onPress={() => applySpeed(5)}>
-              <Text style={styles.speedEndText}>+5</Text>
-            </TouchableOpacity>
           </View>
-          <Text style={styles.speedRateText}>{rateLabel}</Text>
-        </View>
+
+          {/* ========= SPEED CONTROL (touch-based) ========= */}
+          <View style={styles.speedSection}>
+            <Text style={styles.speedLabel}>slow down or speed up</Text>
+            <View style={styles.speedRow}>
+              <TouchableOpacity style={styles.speedEndBtn} onPress={() => applySpeed(-5)}>
+                <Text style={styles.speedEndText}>-5</Text>
+              </TouchableOpacity>
+              <View
+                ref={speedBarRef}
+                style={styles.speedSliderOuter}
+                onLayout={(e: LayoutChangeEvent) => {
+                  const { width } = e.nativeEvent.layout;
+                  speedBarRef.current?.measureInWindow?.((px: number) => {
+                    setSpeedBarLayout({ x: px, width });
+                  });
+                  setSpeedBarLayout(prev => ({ ...prev, width }));
+                }}
+                onStartShouldSetResponder={() => true}
+                onMoveShouldSetResponder={() => true}
+                onResponderGrant={(e) => handleSpeedTouch(e.nativeEvent.pageX, false)}
+                onResponderMove={(e) => handleSpeedTouch(e.nativeEvent.pageX, false)}
+                onResponderRelease={(e) => handleSpeedTouch(e.nativeEvent.pageX, true)}
+              >
+                <View style={styles.speedTrack} />
+                {/* Speed fill */}
+                <View style={[styles.speedFill, {
+                  left: Math.min(speedPct, 0.5) * 100 + '%',
+                  width: Math.abs(speedPct - 0.5) * 100 + '%',
+                }]} />
+                {/* Thumb dot */}
+                <View style={[styles.speedThumb, { left: `${speedPct * 100}%` }]} />
+              </View>
+              <TouchableOpacity style={styles.speedEndBtn} onPress={() => applySpeed(5)}>
+                <Text style={styles.speedEndText}>+5</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.speedValueText}>{speedLabel} ({rateValue.toFixed(1)}x)</Text>
+          </View>
+
+          <View style={{ height: 20 }} />
+        </ScrollView>
       </SafeAreaView>
+      <TabBar />
     </View>
   );
 }
@@ -348,54 +328,41 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 },
   headerTitle: { color: '#FFF', fontSize: 18, fontWeight: '900', letterSpacing: 2 },
-  headerRight: { flexDirection: 'row' },
-  playlistInfo: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginBottom: 8 },
-  playlistLabel: { color: '#888', fontSize: 10, letterSpacing: 1 },
-  playlistName: { color: Colors.primary, fontSize: 14, fontWeight: '600', marginLeft: 6, flex: 1 },
-  closeBtn: { padding: 4 },
-  coverArt: { marginHorizontal: 16, height: 200, borderRadius: 12, overflow: 'hidden', marginBottom: 16, position: 'relative' },
+  coverArt: { marginHorizontal: 16, height: 180, borderRadius: 12, overflow: 'hidden', marginBottom: 14, position: 'relative' },
   coverImage: { width: '100%', height: '100%' },
-  coverOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  coverText: { color: '#FFD700', fontSize: 28, fontWeight: '900', letterSpacing: 3 },
-  coverSubtext: { color: '#FF6978', fontSize: 16, fontWeight: '700', letterSpacing: 2, marginTop: 2 },
-  songTitle: { color: '#FFF', fontSize: 22, fontWeight: '700', paddingHorizontal: 16, letterSpacing: 1 },
-  songArtist: { color: '#888', fontSize: 14, paddingHorizontal: 16, marginTop: 2, marginBottom: 12 },
-  progressContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginBottom: 16 },
+  coverOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.3)' },
+  coverText: { color: '#FFD700', fontSize: 26, fontWeight: '900', letterSpacing: 3 },
+  coverSubtext: { color: '#FF6978', fontSize: 14, fontWeight: '700', letterSpacing: 2, marginTop: 2 },
+  songTitle: { color: '#FFF', fontSize: 20, fontWeight: '700', paddingHorizontal: 16, letterSpacing: 1 },
+  songArtist: { color: '#888', fontSize: 13, paddingHorizontal: 16, marginTop: 2, marginBottom: 16 },
+
+  // Progress
+  progressContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginBottom: 18 },
   timeText: { color: Colors.primary, fontSize: 11, width: 36, textAlign: 'center' },
-  progressBar: { flex: 1, height: 30, justifyContent: 'center', marginHorizontal: 4 },
-  progressBg: { height: 4, backgroundColor: '#333', borderRadius: 2, position: 'relative' },
+  progressBarOuter: { flex: 1, height: 36, justifyContent: 'center', marginHorizontal: 6, position: 'relative' },
+  progressTrack: { height: 4, backgroundColor: '#333', borderRadius: 2, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 2 },
-  progressDot: { position: 'absolute', top: -6, width: 16, height: 16, borderRadius: 8, backgroundColor: Colors.primary, marginLeft: -8, borderWidth: 2, borderColor: '#FFF' },
-  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 28, marginBottom: 16 },
-  playButton: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center' },
-  waveformContainer: { paddingHorizontal: 16, marginBottom: 12 },
-  waveform: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 50, gap: 2 },
-  waveBar: { width: 3, borderRadius: 1.5, backgroundColor: 'rgba(255,255,255,0.2)' },
+  progressDot: { position: 'absolute', top: 10, width: 16, height: 16, borderRadius: 8, backgroundColor: Colors.primary, marginLeft: -8, borderWidth: 2, borderColor: '#FFF' },
+
+  // Controls
+  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 36, marginBottom: 18 },
+  playButton: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center' },
+
+  // Waveform
+  waveformContainer: { paddingHorizontal: 16, marginBottom: 16 },
+  waveform: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 40, gap: 2 },
+  waveBar: { width: 3, borderRadius: 1.5, backgroundColor: 'rgba(255,255,255,0.15)' },
   waveBarActive: { backgroundColor: Colors.primary },
-  waveformTimes: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  waveTimeText: { color: '#888', fontSize: 11 },
-  speedSection: { paddingHorizontal: 16, marginTop: 4 },
-  speedLabel: { color: '#FFF', fontSize: 14, textAlign: 'center', marginBottom: 12 },
-  speedRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  speedEndBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, borderColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
-  speedEndText: { color: Colors.primary, fontSize: 11, fontWeight: '700' },
-  speedSliderContainer: { flex: 1, height: 44, justifyContent: 'center', position: 'relative' },
-  speedSliderTrack: { height: 3, backgroundColor: '#444', borderRadius: 1.5, position: 'absolute', left: 0, right: 0 },
-  speedIndicator: {
-    position: 'absolute',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
-    backgroundColor: '#111',
-    transform: [{ translateX: -28 }],
-  },
-  speedIndicatorText: { color: '#FFF', fontSize: 13, fontWeight: '600', textAlign: 'center' },
-  speedRateText: { color: '#888', fontSize: 12, textAlign: 'center', marginTop: 8 },
+
+  // Speed
+  speedSection: { paddingHorizontal: 16, marginTop: 4, paddingBottom: 10 },
+  speedLabel: { color: '#FFF', fontSize: 13, textAlign: 'center', marginBottom: 14 },
+  speedRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  speedEndBtn: { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
+  speedEndText: { color: Colors.primary, fontSize: 10, fontWeight: '700' },
+  speedSliderOuter: { flex: 1, height: 36, justifyContent: 'center', position: 'relative' },
+  speedTrack: { height: 3, backgroundColor: '#333', borderRadius: 1.5, position: 'absolute', left: 0, right: 0, top: 16 },
+  speedFill: { height: 3, backgroundColor: Colors.primary, borderRadius: 1.5, position: 'absolute', top: 16 },
+  speedThumb: { position: 'absolute', top: 8, width: 20, height: 20, borderRadius: 10, backgroundColor: Colors.primary, marginLeft: -10, borderWidth: 2, borderColor: '#FFF' },
+  speedValueText: { color: '#888', fontSize: 12, textAlign: 'center', marginTop: 10 },
 });

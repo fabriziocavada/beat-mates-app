@@ -219,8 +219,11 @@ export default function UserProfileScreen() {
                 </Text>
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.messageButton} onPress={() => {
-                Alert.alert('Messaggi', 'La funzione messaggi sara disponibile presto!');
+              <TouchableOpacity style={styles.messageButton} onPress={async () => {
+                try {
+                  const res = await api.post('/conversations', { user_id: userId });
+                  router.push(`/(main)/chat/${res.data.id}`);
+                } catch (e) { Alert.alert('Errore', 'Impossibile avviare la chat'); }
               }}>
                 <Text style={styles.messageButtonText}>Messaggio</Text>
               </TouchableOpacity>

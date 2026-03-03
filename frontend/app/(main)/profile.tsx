@@ -15,6 +15,7 @@ import {
   Platform,
   Modal,
   TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
@@ -72,6 +73,10 @@ export default function ProfileScreen() {
   const [editTitle, setEditTitle] = useState('');
   const [editPrice, setEditPrice] = useState('');
   const [editDesc, setEditDesc] = useState('');
+  const [isUploadingLesson, setIsUploadingLesson] = useState(false);
+  const [showReviewsModal, setShowReviewsModal] = useState(false);
+  const [reviewsLessonId, setReviewsLessonId] = useState('');
+  const [lessonReviews, setLessonReviews] = useState<any[]>([]);
   const pathname = usePathname();
   
   useEffect(() => {
@@ -130,6 +135,7 @@ export default function ProfileScreen() {
   };
 
   const uploadLessonWithTitle = async (videoUri: string, title: string) => {
+    setIsUploadingLesson(true);
     try {
       const formData = new FormData();
       formData.append('title', title);
@@ -137,11 +143,13 @@ export default function ProfileScreen() {
       formData.append('price', '5');
       formData.append('currency', 'EUR');
       formData.append('video', { uri: videoUri, name: 'lesson.mp4', type: 'video/mp4' } as any);
-      await api.post('/video-lessons', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await api.post('/video-lessons', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 300000 });
       Alert.alert('Fatto!', 'Videolezione caricata. Puoi modificare titolo e prezzo.');
       loadVideoLessons();
     } catch (error) {
-      Alert.alert('Errore', 'Upload fallito. Riprova.');
+      Alert.alert('Errore', 'Upload fallito. Il video potrebbe essere troppo pesante, riprova con un video piu corto.');
+    } finally {
+      setIsUploadingLesson(false);
     }
   };
 
@@ -173,6 +181,15 @@ export default function ProfileScreen() {
         try { await api.delete(`/video-lessons/${lessonId}`); loadVideoLessons(); } catch {}
       }},
     ]);
+  };
+
+  const handleShowReviews = async (lessonId: string) => {
+    setReviewsLessonId(lessonId);
+    try {
+      const res = await api.get(`/video-lessons/${lessonId}/reviews`);
+      setLessonReviews(res.data);
+    } catch { setLessonReviews([]); }
+    setShowReviewsModal(true);
   };
   
   const handleChangeProfilePicture = async () => {
@@ -306,6 +323,10 @@ export default function ProfileScreen() {
           <View style={styles.menuSheet} onStartShouldSetResponder={() => true}>
             <View style={styles.menuHandle} />
             
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); router.push('/(main)/chat'); }}>
+              <Ionicons name="chatbubble-outline" size={22} color="#FFF" />
+              <Text style={styles.menuItemText}>Messaggi</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); router.push('/(main)/activity'); }}>
               <Ionicons name="time-outline" size={24} color={Colors.text} />
               <Text style={styles.menuItemText}>La tua attivita</Text>
@@ -528,12 +549,20 @@ export default function ProfileScreen() {
         
         {activeTab === 'shop' && (
           <View style={styles.shopContainer}>
-            <TouchableOpacity style={styles.uploadLessonBtn} onPress={handleUploadLesson} data-testid="upload-lesson-btn">
-              <Ionicons name="cloud-upload-outline" size={20} color="#FFF" />
-              <Text style={styles.uploadLessonText}>Carica videolezione</Text>
-            </TouchableOpacity>
+            {isUploadingLesson ? (
+              <View style={styles.uploadingOverlay}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+                <Text style={styles.uploadingText}>Caricamento e compressione video...</Text>
+                <Text style={styles.uploadingSubtext}>Potrebbe richiedere qualche minuto</Text>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.uploadLessonBtn} onPress={handleUploadLesson} data-testid="upload-lesson-btn">
+                <Ionicons name="cloud-upload-outline" size={20} color="#FFF" />
+                <Text style={styles.uploadLessonText}>Carica videolezione</Text>
+              </TouchableOpacity>
+            )}
             
-            {videoLessons.length === 0 ? (
+            {videoLessons.length === 0 && !isUploadingLesson ? (
               <View style={styles.emptyShop}>
                 <Ionicons name="videocam-outline" size={40} color={Colors.textMuted} />
                 <Text style={styles.emptyText}>Nessuna lezione in vendita</Text>
@@ -542,7 +571,6 @@ export default function ProfileScreen() {
             ) : (
               videoLessons.map((lesson) => (
                 <View key={lesson.id} style={styles.lessonCard} data-testid={`lesson-card-${lesson.id}`}>
-                  {/* Video thumbnail with play overlay */}
                   <View style={styles.lessonThumbContainer}>
                     {lesson.thumbnail_url ? (
                       <Image source={{ uri: getMediaUrl(lesson.thumbnail_url) || '' }} style={styles.lessonThumb} />
@@ -556,16 +584,24 @@ export default function ProfileScreen() {
                         <Ionicons name="play" size={28} color="#FFF" />
                       </View>
                     </View>
+                    {/* Reviews button */}
+                    <TouchableOpacity 
+                      style={styles.reviewsBadge} 
+                      onPress={() => handleShowReviews(lesson.id)}
+                      data-testid={`reviews-btn-${lesson.id}`}
+                    >
+                      <Ionicons name="chatbubble-ellipses" size={14} color="#FFF" />
+                      <Text style={styles.reviewsBadgeText}>Recensioni</Text>
+                    </TouchableOpacity>
                   </View>
                   
-                  {/* Lesson info row */}
                   <View style={styles.lessonInfoRow}>
                     <View style={styles.lessonInfoLeft}>
                       <Text style={styles.lessonTitle}>{lesson.title}</Text>
                       <Text style={styles.lessonDuration}>
                         {String(Math.floor(lesson.duration_minutes / 60)).padStart(2, '0')}:{String(lesson.duration_minutes % 60).padStart(2, '0')} min
                       </Text>
-                      <Text style={styles.lessonPrice}>{lesson.price} {lesson.currency}</Text>
+                      <Text style={styles.lessonPrice}>{lesson.price.toFixed(2)} EUR</Text>
                     </View>
                     <View style={styles.lessonActions}>
                       <TouchableOpacity style={styles.editLessonBtn} onPress={() => handleEditLesson(lesson)} data-testid={`edit-lesson-${lesson.id}`}>
@@ -585,36 +621,70 @@ export default function ProfileScreen() {
 
         {/* Edit Lesson Modal */}
         <Modal visible={showEditModal} transparent animationType="slide" onRequestClose={() => setShowEditModal(false)}>
-          <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setShowEditModal(false)}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+            <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setShowEditModal(false)}>
+              <View style={styles.editLessonSheet} onStartShouldSetResponder={() => true}>
+                <View style={styles.menuHandle} />
+                <Text style={styles.editLessonTitle}>Modifica lezione</Text>
+                <TextInput
+                  style={styles.editInput}
+                  value={editTitle}
+                  onChangeText={setEditTitle}
+                  placeholder="Titolo"
+                  placeholderTextColor="#666"
+                />
+                <TextInput
+                  style={styles.editInput}
+                  value={editDesc}
+                  onChangeText={setEditDesc}
+                  placeholder="Descrizione"
+                  placeholderTextColor="#666"
+                  multiline
+                />
+                <View style={styles.priceInputRow}>
+                  <TextInput
+                    style={[styles.editInput, { flex: 1 }]}
+                    value={editPrice}
+                    onChangeText={setEditPrice}
+                    placeholder="Prezzo"
+                    placeholderTextColor="#666"
+                    keyboardType="numeric"
+                  />
+                  <Text style={styles.currencyLabel}>EUR</Text>
+                </View>
+                <TouchableOpacity style={styles.saveLessonBtn} onPress={handleSaveLesson} data-testid="save-lesson-edit-btn">
+                  <Text style={styles.saveLessonText}>Salva</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </Modal>
+
+        {/* Reviews Modal */}
+        <Modal visible={showReviewsModal} transparent animationType="slide" onRequestClose={() => setShowReviewsModal(false)}>
+          <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setShowReviewsModal(false)}>
             <View style={styles.editLessonSheet} onStartShouldSetResponder={() => true}>
               <View style={styles.menuHandle} />
-              <Text style={styles.editLessonTitle}>Modifica lezione</Text>
-              <TextInput
-                style={styles.editInput}
-                value={editTitle}
-                onChangeText={setEditTitle}
-                placeholder="Titolo"
-                placeholderTextColor="#666"
-              />
-              <TextInput
-                style={styles.editInput}
-                value={editDesc}
-                onChangeText={setEditDesc}
-                placeholder="Descrizione"
-                placeholderTextColor="#666"
-                multiline
-              />
-              <TextInput
-                style={styles.editInput}
-                value={editPrice}
-                onChangeText={setEditPrice}
-                placeholder="Prezzo (EUR)"
-                placeholderTextColor="#666"
-                keyboardType="numeric"
-              />
-              <TouchableOpacity style={styles.saveLessonBtn} onPress={handleSaveLesson} data-testid="save-lesson-edit-btn">
-                <Text style={styles.saveLessonText}>Salva</Text>
-              </TouchableOpacity>
+              <Text style={styles.editLessonTitle}>Recensioni</Text>
+              {lessonReviews.length === 0 ? (
+                <Text style={styles.noReviewsText}>Nessuna recensione ancora</Text>
+              ) : (
+                <ScrollView style={{ maxHeight: 300 }}>
+                  {lessonReviews.map((r: any) => (
+                    <View key={r.id} style={styles.reviewItem}>
+                      <View style={styles.reviewHeader}>
+                        <Text style={styles.reviewUser}>{r.user?.username || 'utente'}</Text>
+                        <View style={styles.reviewStars}>
+                          {[1,2,3,4,5].map(s => (
+                            <Ionicons key={s} name={s <= r.rating ? 'star' : 'star-outline'} size={14} color="#FFD700" />
+                          ))}
+                        </View>
+                      </View>
+                      {r.text ? <Text style={styles.reviewText}>{r.text}</Text> : null}
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
             </View>
           </TouchableOpacity>
         </Modal>
@@ -1024,6 +1094,79 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: '700',
+  },
+  uploadingOverlay: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  uploadingText: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '600',
+    marginTop: 16,
+  },
+  uploadingSubtext: {
+    color: '#888',
+    fontSize: 13,
+    marginTop: 4,
+  },
+  priceInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  currencyLabel: {
+    color: Colors.primary,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  reviewsBadge: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  reviewsBadgeText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  noReviewsText: {
+    color: '#888',
+    fontSize: 14,
+    textAlign: 'center',
+    paddingVertical: 30,
+  },
+  reviewItem: {
+    paddingVertical: 10,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#333',
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  reviewUser: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  reviewStars: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  reviewText: {
+    color: '#CCC',
+    fontSize: 13,
+    marginTop: 4,
   },
   headerUsername: {
     color: Colors.text,

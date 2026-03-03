@@ -5,7 +5,7 @@ const baseURL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
 
 const api = axios.create({
   baseURL: `${baseURL}/api`,
-  timeout: 60000,
+  timeout: 180000,
   headers: {
     'Content-Type': 'application/json',
   },
