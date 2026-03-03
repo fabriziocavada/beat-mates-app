@@ -1,55 +1,72 @@
-# BEAT MATES - Product Requirements Document
+# BEAT MATES - PRD (Product Requirements Document)
+
+## Original Problem Statement
+Social media mobile app for dancers called "BEAT MATES". Built with Expo (React Native) + FastAPI + MongoDB.
+
+## Core Requirements
+- **User System:** Register/login (email + planned Google auth)
+- **Dance Disciplines:** Users select dance categories, feed filtered by them
+- **Social Feed:** Instagram-like feed for photos, videos, text posts
+- **Likes & Comments:** Like/comment with user thumbnail display
+- **Stories:** Instagram-like stories with swipe navigation
+- **Profile:** Editable profile with post grid, hamburger menu
+- **Paid Lessons:** Live and pre-recorded dance lessons
+- **Availability Calendar:** Teachers set availability
+- **Music Page:** Upload music, playlists, player with speed controls
+- **Video & Camera:** Vertical video recording (max 10s)
+- **Dark theme** with coral accent (`#FF6978`)
 
 ## Tech Stack
-- Frontend: React Native (Expo SDK 54), TypeScript, Zustand, Expo Router, react-native-webview, expo-av (audio), expo-document-picker
-- Backend: Python 3, FastAPI, Uvicorn, motor (async MongoDB)
+- Frontend: React Native (Expo), TypeScript, Zustand, Expo Router
+- Backend: FastAPI, Motor (async MongoDB), Python
 - Database: MongoDB
-- Video Calls: Daily.co (WebRTC via daily-js SDK in WebView, auto-join)
-- Thumbnails: ffmpeg/ffprobe (first frame extraction + audio duration)
-- Media: Direct file serving via /api/uploads/
+- Video Calls: Daily.co
+- Video Processing: ffmpeg
 
-## What's Implemented
-- User registration & login (JWT), dance categories, social feed, stories, profiles
-- Video playback via WebView with HTML5 <video> tag (DO NOT CHANGE)
-- Daily.co video call: auto-join senza popup (JS SDK)
-- Story viewer Instagram-like: progress bar, auto-advance, swipe tra utenti
-- Video thumbnails generati con ffmpeg nel profilo
-- Notifiche lezione: Modal a schermo intero bloccante
-- Hamburger menu profilo Instagram-style (slide-up sheet)
-- Like con thumbnail profilo recenti (stile Instagram)
-- **MUSIC PAGE**: Libreria musicale completa con:
-  - Filtri genere (ALL, SAMBA, TANGO, LATIN, HIP HOP, JAZZ, CONTEMPORARY, AFRO, REGGAETON)
-  - Upload canzoni dal dispositivo
-  - Creazione/gestione playlist
-  - Like/Unlike canzoni
-  - Spostamento tracce tra playlist
-  - Player con waveform, progress bar, controlli (play/pause/skip)
-  - Speed control (slow down / speed up: -5 a +5, 0.5x-1.5x) per ballare
+## What's Implemented (as of March 2026)
+- User auth (JWT), registration, login
+- Post/Story creation with photo/video
+- Feed with likes, comments, carousels
+- Reels page with video playback (WebView)
+- Profile page with post grid, hamburger menu, edit profile
+- Stories with sequential viewing and swipe
+- Music upload, playlists, player page with smooth PanResponder sliders
+- Video calls via Daily.co
+- Teacher availability calendar with close button
+- Lesson request notifications (blocking modal with sound)
+- Save post feature
+- Thumbnail generation (ffmpeg)
+- Post detail page (full post view from profile grid click)
 
-## Changes - Mar 3, 2026 (Session 5)
-- ADDED: Music page (/(main)/music.tsx) - libreria musicale completa
-- ADDED: Player page (/(main)/player/[id].tsx) - player con waveform e speed control
-- ADDED: 9 endpoint backend per musica: genres, playlists CRUD, songs upload/list/like/move/delete
-- ADDED: ffprobe per rilevamento durata audio
-- ADDED: expo-document-picker per selezione file audio
-- ADDED: data-testid su tutti i tab della TabBar
+## Key API Endpoints
+- Auth: POST /api/auth/register, POST /api/auth/login
+- Users: GET /api/users/me, PUT /api/users/me
+- Posts: GET /api/posts, GET /api/posts/{id}, POST /api/posts
+- Likes: POST /api/posts/{id}/like
+- Comments: GET/POST /api/posts/{id}/comments
+- Save: POST /api/posts/{id}/save, GET /api/posts/saved
+- Stories: GET /api/stories, POST /api/stories
+- Music: GET/POST /api/music/songs, GET/POST /api/music/playlists
+- Rooms: POST /api/rooms
 
-## Test Credentials
-- mario@test.com / password123 (student)
-- teacher@test.com / password123 (teacher)
+## DB Schema
+- users: {id, username, name, email, password_hash, profile_image, bio, dance_categories, is_available, hourly_rate, saved_posts}
+- posts: {id, user_id, media_urls, media_type, thumbnail_url, likes, caption}
+- stories: {id, user_id, media_url, media_type, thumbnail_url}
+- live_sessions: {id, student_id, teacher_id, status, room_url}
+- songs: {id, user_id, title, artist, genre, file_url, duration, playlist_id}
+- playlists: {id, user_id, name}
 
-## Upcoming Tasks
+## Backlog
+### P0 (None remaining)
+
 ### P1
-- Messaggi diretti (DM) - chat 1:1 tra utenti
-- Caroselli nei post (multiple foto swipabili)
-- Teacher-set lesson prices UI
+- Chat/Messaging between users
+- Teacher-set lesson price UI
+- Full Saved/Archive/Activity/Notifications page content
 
 ### P2
-- Post/Story video recording
-- Calendario disponibilita futura
-- Fix autoplay video Reels/Home
-
-### P3/Backlog
-- Payment flow (Stripe/PayPal) - MOCKATO
+- Payment flow (Stripe/PayPal)
 - Google social login
-- Follow/Unfollow
+- Follow/Unfollow system
+- Refactoring server.py into APIRouter modules
