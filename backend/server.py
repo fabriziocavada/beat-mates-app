@@ -186,6 +186,37 @@ class BookingResponse(BaseModel):
 class LiveSessionRequest(BaseModel):
     teacher_id: str
 
+# Video Lessons Models
+class VideoLessonCreate(BaseModel):
+    title: str
+    description: Optional[str] = ""
+    price: float
+    currency: str = "EUR"
+    duration_minutes: int = 0
+
+class VideoLessonUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    price: Optional[float] = None
+    currency: Optional[str] = None
+    duration_minutes: Optional[int] = None
+
+class VideoLessonResponse(BaseModel):
+    id: str
+    user_id: str
+    user: Optional[dict] = None
+    title: str
+    description: str = ""
+    price: float
+    currency: str = "EUR"
+    duration_minutes: int = 0
+    video_url: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    created_at: datetime
+
+class LiveSessionRequest(BaseModel):
+    teacher_id: str
+
 class LiveSessionResponse(BaseModel):
     id: str
     student_id: str
@@ -1595,6 +1626,113 @@ async def move_song_to_playlist(song_id: str, playlist_id: Optional[str] = None,
 async def delete_song(song_id: str, current_user: dict = Depends(get_current_user)):
     await db.songs.delete_one({"id": song_id, "user_id": current_user["id"]})
     await db.song_likes.delete_many({"song_id": song_id})
+    return {"status": "deleted"}
+
+# ====================== VIDEO LESSONS ======================
+
+@api_router.post("/video-lessons", response_model=VideoLessonResponse)
+async def create_video_lesson(
+    title: str = Form(...),
+    description: str = Form(""),
+    price: float = Form(...),
+    currency: str = Form("EUR"),
+    video: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    lesson_id = str(uuid.uuid4())
+    # Save video
+    video_ext = video.filename.split('.')[-1] if video.filename else 'mp4'
+    video_filename = f"{uuid.uuid4()}.{video_ext}"
+    video_path = UPLOADS_DIR / video_filename
+    content = await video.read()
+    with open(video_path, "wb") as f:
+        f.write(content)
+    
+    # Generate thumbnail
+    thumb_filename = f"thumb_{video_filename.rsplit('.', 1)[0]}.jpg"
+    thumb_path = UPLOADS_DIR / thumb_filename
+    try:
+        import subprocess
+        subprocess.run([
+            "ffmpeg", "-i", str(video_path), "-ss", "00:00:01",
+            "-vframes", "1", "-vf", "scale=640:-1", str(thumb_path)
+        ], capture_output=True, timeout=15)
+    except Exception:
+        thumb_filename = None
+    
+    # Get duration
+    duration_minutes = 0
+    try:
+        import subprocess
+        result = subprocess.run([
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1", str(video_path)
+        ], capture_output=True, text=True, timeout=10)
+        secs = float(result.stdout.strip())
+        duration_minutes = round(secs / 60)
+    except Exception:
+        pass
+    
+    lesson = {
+        "id": lesson_id,
+        "user_id": current_user["id"],
+        "title": title,
+        "description": description,
+        "price": price,
+        "currency": currency,
+        "duration_minutes": duration_minutes,
+        "video_url": video_filename,
+        "thumbnail_url": thumb_filename,
+        "created_at": datetime.utcnow(),
+    }
+    await db.video_lessons.insert_one(lesson)
+    lesson.pop("_id", None)
+    
+    # Attach user info
+    lesson["user"] = {"id": current_user["id"], "username": current_user["username"], "name": current_user["name"], "profile_image": current_user.get("profile_image")}
+    return VideoLessonResponse(**lesson)
+
+@api_router.get("/video-lessons", response_model=List[VideoLessonResponse])
+async def list_video_lessons(user_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    query = {"user_id": user_id} if user_id else {}
+    lessons = await db.video_lessons.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    for lesson in lessons:
+        u = await db.users.find_one({"id": lesson["user_id"]}, {"_id": 0, "id": 1, "username": 1, "name": 1, "profile_image": 1})
+        lesson["user"] = u
+    return [VideoLessonResponse(**l) for l in lessons]
+
+@api_router.get("/users/{user_id}/video-lessons", response_model=List[VideoLessonResponse])
+async def get_user_video_lessons(user_id: str, current_user: dict = Depends(get_current_user)):
+    lessons = await db.video_lessons.find({"user_id": user_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    for lesson in lessons:
+        u = await db.users.find_one({"id": lesson["user_id"]}, {"_id": 0, "id": 1, "username": 1, "name": 1, "profile_image": 1})
+        lesson["user"] = u
+    return [VideoLessonResponse(**l) for l in lessons]
+
+@api_router.put("/video-lessons/{lesson_id}", response_model=VideoLessonResponse)
+async def update_video_lesson(lesson_id: str, data: VideoLessonUpdate, current_user: dict = Depends(get_current_user)):
+    lesson = await db.video_lessons.find_one({"id": lesson_id})
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    if lesson["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not your lesson")
+    
+    update_data = {k: v for k, v in data.dict().items() if v is not None}
+    if update_data:
+        await db.video_lessons.update_one({"id": lesson_id}, {"$set": update_data})
+    
+    updated = await db.video_lessons.find_one({"id": lesson_id}, {"_id": 0})
+    updated["user"] = {"id": current_user["id"], "username": current_user["username"], "name": current_user["name"], "profile_image": current_user.get("profile_image")}
+    return VideoLessonResponse(**updated)
+
+@api_router.delete("/video-lessons/{lesson_id}")
+async def delete_video_lesson(lesson_id: str, current_user: dict = Depends(get_current_user)):
+    lesson = await db.video_lessons.find_one({"id": lesson_id})
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    if lesson["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not your lesson")
+    await db.video_lessons.delete_one({"id": lesson_id})
     return {"status": "deleted"}
 
 # Include the router in the main app

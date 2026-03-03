@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Platform,
   Modal,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
@@ -38,6 +39,20 @@ interface UserStory {
   id: string;
   media: string;
   type: string;
+  thumbnail?: string;
+}
+
+interface VideoLesson {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string;
+  price: number;
+  currency: string;
+  duration_minutes: number;
+  video_url: string | null;
+  thumbnail_url: string | null;
+  created_at: string;
 }
 
 export default function ProfileScreen() {
@@ -46,17 +61,24 @@ export default function ProfileScreen() {
   
   const [posts, setPosts] = useState<Post[]>([]);
   const [userStories, setUserStories] = useState<UserStory[]>([]);
+  const [videoLessons, setVideoLessons] = useState<VideoLesson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'shop'>('posts');
   const [isUploadingPic, setIsUploadingPic] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [editingLesson, setEditingLesson] = useState<VideoLesson | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editPrice, setEditPrice] = useState('');
+  const [editDesc, setEditDesc] = useState('');
   const pathname = usePathname();
   
   useEffect(() => {
     if (user?.id && (pathname === '/profile' || pathname === '/(main)/profile')) {
       loadPosts();
       loadUserStories();
+      loadVideoLessons();
       refreshUser();
     }
   }, [user?.id, pathname]);
@@ -81,6 +103,76 @@ export default function ProfileScreen() {
     } catch (error) {
       console.error('Failed to load stories', error);
     }
+  };
+
+  const loadVideoLessons = async () => {
+    try {
+      const response = await api.get(`/users/${user?.id}/video-lessons`);
+      setVideoLessons(response.data);
+    } catch (error) {
+      console.error('Failed to load video lessons', error);
+    }
+  };
+  
+  const handleUploadLesson = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Permesso necessario'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      quality: 0.7,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    
+    Alert.prompt ? Alert.prompt('Titolo lezione', 'Inserisci il titolo della videolezione:', [
+      { text: 'Annulla', style: 'cancel' },
+      { text: 'OK', onPress: (title) => uploadLessonWithTitle(result.assets[0].uri, title || 'Lezione') },
+    ]) : uploadLessonWithTitle(result.assets[0].uri, 'Nuova lezione');
+  };
+
+  const uploadLessonWithTitle = async (videoUri: string, title: string) => {
+    try {
+      const formData = new FormData();
+      formData.append('title', title);
+      formData.append('description', '');
+      formData.append('price', '5');
+      formData.append('currency', 'EUR');
+      formData.append('video', { uri: videoUri, name: 'lesson.mp4', type: 'video/mp4' } as any);
+      await api.post('/video-lessons', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      Alert.alert('Fatto!', 'Videolezione caricata. Puoi modificare titolo e prezzo.');
+      loadVideoLessons();
+    } catch (error) {
+      Alert.alert('Errore', 'Upload fallito. Riprova.');
+    }
+  };
+
+  const handleEditLesson = (lesson: VideoLesson) => {
+    setEditingLesson(lesson);
+    setEditTitle(lesson.title);
+    setEditPrice(lesson.price.toString());
+    setEditDesc(lesson.description);
+    setShowEditModal(true);
+  };
+
+  const handleSaveLesson = async () => {
+    if (!editingLesson) return;
+    try {
+      await api.put(`/video-lessons/${editingLesson.id}`, {
+        title: editTitle,
+        price: parseFloat(editPrice) || 0,
+        description: editDesc,
+      });
+      setShowEditModal(false);
+      loadVideoLessons();
+    } catch { Alert.alert('Errore', 'Salvataggio fallito'); }
+  };
+
+  const handleDeleteLesson = async (lessonId: string) => {
+    Alert.alert('Elimina', 'Vuoi eliminare questa videolezione?', [
+      { text: 'Annulla', style: 'cancel' },
+      { text: 'Elimina', style: 'destructive', onPress: async () => {
+        try { await api.delete(`/video-lessons/${lessonId}`); loadVideoLessons(); } catch {}
+      }},
+    ]);
   };
   
   const handleChangeProfilePicture = async () => {
@@ -132,7 +224,7 @@ export default function ProfileScreen() {
   
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await Promise.all([loadPosts(), loadUserStories(), refreshUser()]);
+    await Promise.all([loadPosts(), loadUserStories(), loadVideoLessons(), refreshUser()]);
     setIsRefreshing(false);
   }, []);
   
@@ -346,7 +438,7 @@ export default function ProfileScreen() {
           </View>
         </View>
         
-        {/* Story Highlights */}
+        {/* Story Highlights - Rectangular vertical format */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -360,13 +452,13 @@ export default function ProfileScreen() {
             data-testid="add-story-highlight-btn"
             onPress={() => router.push('/(main)/create-story')}
           >
-            <View style={[styles.highlightCircle, styles.highlightCircleNew]}>
-              <Ionicons name="add" size={30} color={Colors.text} />
+            <View style={styles.highlightRectNew}>
+              <Ionicons name="add" size={28} color={Colors.text} />
               <Text style={styles.highlightNewText}>NEW</Text>
             </View>
           </TouchableOpacity>
           
-          {/* Real story thumbnails */}
+          {/* Real story thumbnails - rectangular */}
           {storyHighlights.map((story) => (
             <TouchableOpacity 
               key={story.id} 
@@ -374,7 +466,7 @@ export default function ProfileScreen() {
               activeOpacity={0.6}
               onPress={() => router.push(`/(main)/story/${user?.id}`)}
             >
-              <View style={[styles.highlightCircle, { borderColor: Colors.accent }]}>
+              <View style={styles.highlightRect}>
                 {story.image ? (
                   <Image source={{ uri: story.image }} style={styles.highlightImage} />
                 ) : (
@@ -436,9 +528,96 @@ export default function ProfileScreen() {
         
         {activeTab === 'shop' && (
           <View style={styles.shopContainer}>
-            <Text style={styles.emptyText}>No lessons for sale yet</Text>
+            <TouchableOpacity style={styles.uploadLessonBtn} onPress={handleUploadLesson} data-testid="upload-lesson-btn">
+              <Ionicons name="cloud-upload-outline" size={20} color="#FFF" />
+              <Text style={styles.uploadLessonText}>Carica videolezione</Text>
+            </TouchableOpacity>
+            
+            {videoLessons.length === 0 ? (
+              <View style={styles.emptyShop}>
+                <Ionicons name="videocam-outline" size={40} color={Colors.textMuted} />
+                <Text style={styles.emptyText}>Nessuna lezione in vendita</Text>
+                <Text style={styles.emptySubtext}>Carica la tua prima videolezione</Text>
+              </View>
+            ) : (
+              videoLessons.map((lesson) => (
+                <View key={lesson.id} style={styles.lessonCard} data-testid={`lesson-card-${lesson.id}`}>
+                  {/* Video thumbnail with play overlay */}
+                  <View style={styles.lessonThumbContainer}>
+                    {lesson.thumbnail_url ? (
+                      <Image source={{ uri: getMediaUrl(lesson.thumbnail_url) || '' }} style={styles.lessonThumb} />
+                    ) : (
+                      <View style={[styles.lessonThumb, { backgroundColor: '#1C1C1E', alignItems: 'center', justifyContent: 'center' }]}>
+                        <Ionicons name="videocam" size={36} color="#555" />
+                      </View>
+                    )}
+                    <View style={styles.lessonPlayOverlay}>
+                      <View style={styles.lessonPlayCircle}>
+                        <Ionicons name="play" size={28} color="#FFF" />
+                      </View>
+                    </View>
+                  </View>
+                  
+                  {/* Lesson info row */}
+                  <View style={styles.lessonInfoRow}>
+                    <View style={styles.lessonInfoLeft}>
+                      <Text style={styles.lessonTitle}>{lesson.title}</Text>
+                      <Text style={styles.lessonDuration}>
+                        {String(Math.floor(lesson.duration_minutes / 60)).padStart(2, '0')}:{String(lesson.duration_minutes % 60).padStart(2, '0')} min
+                      </Text>
+                      <Text style={styles.lessonPrice}>{lesson.price} {lesson.currency}</Text>
+                    </View>
+                    <View style={styles.lessonActions}>
+                      <TouchableOpacity style={styles.editLessonBtn} onPress={() => handleEditLesson(lesson)} data-testid={`edit-lesson-${lesson.id}`}>
+                        <Ionicons name="pencil" size={16} color={Colors.primary} />
+                        <Text style={styles.editLessonText}>Edit</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.deleteLessonBtn} onPress={() => handleDeleteLesson(lesson.id)}>
+                        <Ionicons name="trash-outline" size={16} color="#FF3B30" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              ))
+            )}
           </View>
         )}
+
+        {/* Edit Lesson Modal */}
+        <Modal visible={showEditModal} transparent animationType="slide" onRequestClose={() => setShowEditModal(false)}>
+          <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setShowEditModal(false)}>
+            <View style={styles.editLessonSheet} onStartShouldSetResponder={() => true}>
+              <View style={styles.menuHandle} />
+              <Text style={styles.editLessonTitle}>Modifica lezione</Text>
+              <TextInput
+                style={styles.editInput}
+                value={editTitle}
+                onChangeText={setEditTitle}
+                placeholder="Titolo"
+                placeholderTextColor="#666"
+              />
+              <TextInput
+                style={styles.editInput}
+                value={editDesc}
+                onChangeText={setEditDesc}
+                placeholder="Descrizione"
+                placeholderTextColor="#666"
+                multiline
+              />
+              <TextInput
+                style={styles.editInput}
+                value={editPrice}
+                onChangeText={setEditPrice}
+                placeholder="Prezzo (EUR)"
+                placeholderTextColor="#666"
+                keyboardType="numeric"
+              />
+              <TouchableOpacity style={styles.saveLessonBtn} onPress={handleSaveLesson} data-testid="save-lesson-edit-btn">
+                <Text style={styles.saveLessonText}>Salva</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
       </ScrollView>
       
       <LessonNotificationBanner />
@@ -599,24 +778,32 @@ const styles = StyleSheet.create({
   highlightItem: {
     marginHorizontal: 4,
   },
-  highlightCircle: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+  highlightRectNew: {
+    width: 68,
+    height: 88,
+    borderRadius: 10,
     borderWidth: 2,
-    borderColor: Colors.highlightBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  highlightCircleNew: {
     borderStyle: 'dashed',
     borderColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1C1C1E',
+  },
+  highlightRect: {
+    width: 68,
+    height: 88,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    overflow: 'hidden',
+    backgroundColor: '#1C1C1E',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   highlightNewText: {
     color: Colors.text,
     fontSize: 10,
-    marginTop: -4,
+    marginTop: 2,
   },
   highlightImage: {
     width: '100%',
@@ -692,8 +879,151 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   shopContainer: {
+    paddingHorizontal: 12,
+    paddingBottom: 24,
+  },
+  uploadLessonBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.primary,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  uploadLessonText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  emptyShop: {
     alignItems: 'center',
     padding: 40,
+  },
+  emptySubtext: {
+    color: '#666',
+    fontSize: 13,
+    marginTop: 4,
+  },
+  lessonCard: {
+    marginBottom: 16,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: '#0A0A0A',
+  },
+  lessonThumbContainer: {
+    width: '100%',
+    height: 200,
+    position: 'relative',
+  },
+  lessonThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  lessonPlayOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  lessonPlayCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 2,
+    borderColor: '#FFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: 3,
+  },
+  lessonInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  lessonInfoLeft: {
+    flex: 1,
+  },
+  lessonTitle: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  lessonDuration: {
+    color: '#888',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  lessonPrice: {
+    color: '#4CD964',
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  lessonActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  editLessonBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  editLessonText: {
+    color: Colors.primary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  deleteLessonBtn: {
+    padding: 6,
+  },
+  editLessonSheet: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 40,
+    paddingTop: 8,
+    paddingHorizontal: 24,
+  },
+  editLessonTitle: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  editInput: {
+    backgroundColor: '#1C1C1E',
+    color: '#FFF',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  saveLessonBtn: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  saveLessonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
   headerUsername: {
     color: Colors.text,

@@ -30,53 +30,57 @@ export default function StoriesBar({ stories, onStoryPress, onAddStoryPress }: S
     >
       {/* Add Story */}
       <TouchableOpacity style={styles.storyItem} onPress={onAddStoryPress}>
-        <View style={styles.addStoryContainer}>
-          <View style={styles.storyImageContainer}>
-            {user?.profile_image ? (
-              <Image
-                source={{ uri: getMediaUrl(user.profile_image) || '' }}
-                style={styles.storyImage}
-              />
-            ) : (
-              <View style={styles.placeholderImage}>
-                <Ionicons name="person" size={28} color="#8E8E93" />
-              </View>
-            )}
-          </View>
-          <View style={styles.addButton}>
-            <Ionicons name="add" size={14} color="#FFFFFF" />
+        <View style={styles.addStoryThumb}>
+          {user?.profile_image ? (
+            <Image
+              source={{ uri: getMediaUrl(user.profile_image) || '' }}
+              style={styles.storyImage}
+            />
+          ) : (
+            <View style={styles.placeholderImage}>
+              <Ionicons name="person" size={24} color="#8E8E93" />
+            </View>
+          )}
+          <View style={styles.addBadge}>
+            <Ionicons name="add" size={14} color="#FFF" />
           </View>
         </View>
         <Text style={styles.storyUsername} numberOfLines={1}>Your Story</Text>
       </TouchableOpacity>
       
-      {/* Other Stories */}
-      {stories.map((story) => (
-        <TouchableOpacity
-          key={story.user_id}
-          style={styles.storyItem}
-          onPress={() => onStoryPress?.(story.user_id)}
-        >
-          <View style={[
-            styles.storyBorder,
-            story.has_unread && styles.storyBorderActive
-          ]}>
-            <View style={styles.storyImageContainer}>
-              {story.profile_image ? (
-                <Image
-                  source={{ uri: getMediaUrl(story.profile_image) || '' }}
-                  style={styles.storyImage}
-                />
+      {/* Other Stories - Rectangular vertical format */}
+      {stories.map((story) => {
+        const firstStory = story.stories?.[0];
+        const thumbUri = firstStory?.thumbnail 
+          ? getMediaUrl(firstStory.thumbnail)
+          : firstStory?.media 
+            ? getMediaUrl(firstStory.media)
+            : story.profile_image 
+              ? getMediaUrl(story.profile_image) 
+              : null;
+        
+        return (
+          <TouchableOpacity
+            key={story.user_id}
+            style={styles.storyItem}
+            onPress={() => onStoryPress?.(story.user_id)}
+          >
+            <View style={[
+              styles.storyThumb,
+              story.has_unread ? styles.storyThumbActive : styles.storyThumbSeen,
+            ]}>
+              {thumbUri ? (
+                <Image source={{ uri: thumbUri }} style={styles.storyImage} />
               ) : (
                 <View style={styles.placeholderImage}>
-                  <Ionicons name="person" size={28} color="#8E8E93" />
+                  <Ionicons name="person" size={24} color="#8E8E93" />
                 </View>
               )}
             </View>
-          </View>
-          <Text style={styles.storyUsername} numberOfLines={1}>{story.username}</Text>
-        </TouchableOpacity>
-      ))}
+            <Text style={styles.storyUsername} numberOfLines={1}>{story.username}</Text>
+          </TouchableOpacity>
+        );
+      })}
     </ScrollView>
   );
 }
@@ -93,27 +97,46 @@ const styles = StyleSheet.create({
   },
   storyItem: {
     alignItems: 'center',
-    marginHorizontal: 6,
+    marginHorizontal: 4,
+    width: 72,
+  },
+  addStoryThumb: {
     width: 68,
-  },
-  addStoryContainer: {
-    position: 'relative',
-  },
-  storyBorder: {
-    padding: 2,
-    borderRadius: 35,
+    height: 88,
+    borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#3A3A3C',
-  },
-  storyBorderActive: {
     borderColor: '#FF6978',
-  },
-  storyImageContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    borderStyle: 'dashed',
     overflow: 'hidden',
     backgroundColor: '#1C1C1E',
+    position: 'relative',
+  },
+  addBadge: {
+    position: 'absolute',
+    bottom: 4,
+    alignSelf: 'center',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FF6978',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#000',
+  },
+  storyThumb: {
+    width: 68,
+    height: 88,
+    borderRadius: 10,
+    borderWidth: 2,
+    overflow: 'hidden',
+    backgroundColor: '#1C1C1E',
+  },
+  storyThumbActive: {
+    borderColor: '#FF6978',
+  },
+  storyThumbSeen: {
+    borderColor: '#3A3A3C',
   },
   storyImage: {
     width: '100%',
@@ -126,22 +149,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#1C1C1E',
   },
-  addButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#FF6978',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#000000',
-  },
   storyUsername: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 10,
     marginTop: 4,
     textAlign: 'center',
   },
