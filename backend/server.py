@@ -137,6 +137,7 @@ class PostResponse(BaseModel):
     likes_count: int = 0
     comments_count: int = 0
     is_liked: bool = False
+    recent_likers: List[dict] = []
     created_at: datetime
 
 class CommentCreate(BaseModel):
@@ -500,6 +501,17 @@ async def get_posts(current_user: dict = Depends(get_current_user)):
                 "profile_image": user.get("profile_image")
             }
         post["is_liked"] = post["id"] in liked_post_ids
+        # Get recent likers (up to 5)
+        if post.get("likes_count", 0) > 0:
+            recent_likes = await db.likes.find({"post_id": post["id"]}).sort("created_at", -1).to_list(5)
+            likers = []
+            for lk in recent_likes:
+                liker = await db.users.find_one({"id": lk["user_id"]}, {"_id": 0, "id": 1, "username": 1, "profile_image": 1})
+                if liker:
+                    likers.append(liker)
+            post["recent_likers"] = likers
+        else:
+            post["recent_likers"] = []
         result.append(PostResponse(**post))
     
     return result
@@ -551,6 +563,17 @@ async def like_post(post_id: str, current_user: dict = Depends(get_current_user)
         await db.likes.insert_one(like)
         await db.posts.update_one({"id": post_id}, {"$inc": {"likes_count": 1}})
         return {"liked": True}
+
+@api_router.get("/posts/{post_id}/likers")
+async def get_post_likers(post_id: str, limit: int = 5):
+    """Get recent likers for a post with their profile info."""
+    likes = await db.likes.find({"post_id": post_id}).sort("created_at", -1).to_list(limit)
+    likers = []
+    for like in likes:
+        user = await db.users.find_one({"id": like["user_id"]}, {"_id": 0, "id": 1, "username": 1, "profile_image": 1})
+        if user:
+            likers.append(user)
+    return likers
 
 @api_router.post("/posts/{post_id}/comments", response_model=CommentResponse)
 async def create_comment(post_id: str, data: CommentCreate, current_user: dict = Depends(get_current_user)):
@@ -1308,7 +1331,7 @@ async def create_video_room(session_id: str = None, current_user: dict = Depends
         response = await client_http.post(
             f"{DAILY_API_URL}/rooms",
             headers={"Authorization": f"Bearer {DAILY_API_KEY}", "Content-Type": "application/json"},
-            json={"name": room_name, "privacy": "public", "properties": {"exp": exp_timestamp, "enable_chat": True, "max_participants": 2}}
+            json={"name": room_name, "privacy": "public", "properties": {"exp": exp_timestamp, "enable_chat": True, "max_participants": 2, "enable_prejoin_ui": False, "enable_knocking": False, "enable_screenshare": False}}
         )
         if response.status_code != 200:
             logger.error(f"Daily.co room creation failed: {response.text}")

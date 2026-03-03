@@ -7,297 +7,355 @@ import {
   TouchableOpacity,
   Vibration,
   Platform,
+  Modal,
+  Image,
+  Dimensions,
 } from 'react-native';
 import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import api from '../services/api';
+import api, { getMediaUrl } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 
-// Generate a simple WAV beep as a base64 data URI for native audio
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+
 function generateBeepWav(): string {
   const sampleRate = 22050;
-  const duration = 1.2; // seconds - ring ring pattern
+  const duration = 1.2;
   const numSamples = Math.floor(sampleRate * duration);
   const dataSize = numSamples * 2;
   const fileSize = 44 + dataSize;
-  
   const buffer = new ArrayBuffer(fileSize);
   const view = new DataView(buffer);
-  
-  // WAV header
-  const writeString = (offset: number, str: string) => {
-    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
-  };
-  writeString(0, 'RIFF');
-  view.setUint32(4, fileSize - 8, true);
-  writeString(8, 'WAVE');
-  writeString(12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  writeString(36, 'data');
-  view.setUint32(40, dataSize, true);
-  
-  // Generate ring-ring tone: two bursts of 880Hz
+  const ws = (o: number, s: string) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+  ws(0, 'RIFF'); view.setUint32(4, fileSize - 8, true); ws(8, 'WAVE'); ws(12, 'fmt ');
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true); view.setUint16(34, 16, true); ws(36, 'data'); view.setUint32(40, dataSize, true);
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
-    let amplitude = 0;
-    // Ring pattern: 0-0.25s ON, 0.25-0.4s OFF, 0.4-0.65s ON, 0.65-0.8s OFF, 0.8-1.05s ON
+    let amp = 0;
     if ((t >= 0 && t < 0.25) || (t >= 0.4 && t < 0.65) || (t >= 0.8 && t < 1.05)) {
-      amplitude = Math.sin(2 * Math.PI * 880 * t) * 0.4;
+      amp = Math.sin(2 * Math.PI * 880 * t) * 0.4;
     }
-    const sample = Math.max(-1, Math.min(1, amplitude));
-    view.setInt16(44 + i * 2, sample * 32767, true);
+    view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, amp)) * 32767, true);
   }
-  
-  // Convert to base64
   const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  // Use btoa if available, otherwise manual base64
-  let base64: string;
-  if (typeof btoa !== 'undefined') {
-    base64 = btoa(binary);
-  } else {
-    // React Native polyfill
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-    let result = '';
-    let i = 0;
-    while (i < binary.length) {
-      const a = binary.charCodeAt(i++);
-      const b = i < binary.length ? binary.charCodeAt(i++) : 0;
-      const c = i < binary.length ? binary.charCodeAt(i++) : 0;
-      const triplet = (a << 16) | (b << 8) | c;
-      result += chars[(triplet >> 18) & 63] + chars[(triplet >> 12) & 63];
-      result += i > binary.length + 1 ? '=' : chars[(triplet >> 6) & 63];
-      result += i > binary.length ? '=' : chars[triplet & 63];
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  const b64 = typeof btoa !== 'undefined' ? btoa(bin) : (() => {
+    const c = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    let r = '', j = 0;
+    while (j < bin.length) {
+      const a = bin.charCodeAt(j++), b = j < bin.length ? bin.charCodeAt(j++) : 0, cc = j < bin.length ? bin.charCodeAt(j++) : 0;
+      const t = (a << 16) | (b << 8) | cc;
+      r += c[(t >> 18) & 63] + c[(t >> 12) & 63] + (j > bin.length + 1 ? '=' : c[(t >> 6) & 63]) + (j > bin.length ? '=' : c[t & 63]);
     }
-    base64 = result;
-  }
-  
-  return `data:audio/wav;base64,${base64}`;
+    return r;
+  })();
+  return `data:audio/wav;base64,${b64}`;
 }
 
 export default function LessonNotificationBanner() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const [pendingCount, setPendingCount] = useState(0);
-  const [showBanner, setShowBanner] = useState(false);
-  const [newRequest, setNewRequest] = useState(false);
-  const slideAnim = useRef(new Animated.Value(100)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const [pendingRequest, setPendingRequest] = useState<any>(null);
+  const [showModal, setShowModal] = useState(false);
   const lastCountRef = useRef(0);
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const vibrationInterval = useRef<NodeJS.Timeout | null>(null);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const ringAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!user?.is_available) {
-      setShowBanner(false);
+      setShowModal(false);
+      stopAlerts();
       return;
     }
-
     checkPending();
-    const interval = setInterval(checkPending, 5000);
-    return () => clearInterval(interval);
+    const interval = setInterval(checkPending, 3000);
+    return () => { clearInterval(interval); stopAlerts(); };
   }, [user?.is_available]);
 
+  // Pulse + ring animation when modal is showing
   useEffect(() => {
-    if (showBanner) {
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        friction: 8,
-        tension: 40,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      Animated.timing(slideAnim, {
-        toValue: 100,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [showBanner]);
-
-  useEffect(() => {
-    if (newRequest) {
+    if (showModal) {
       const pulse = Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.05, duration: 500, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-        ]),
-        { iterations: 3 }
+          Animated.timing(pulseAnim, { toValue: 1.08, duration: 600, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+        ])
       );
-      pulse.start(() => setNewRequest(false));
+      const ring = Animated.loop(
+        Animated.sequence([
+          Animated.timing(ringAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+          Animated.timing(ringAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
+        ])
+      );
+      pulse.start();
+      ring.start();
+      return () => { pulse.stop(); ring.stop(); };
     }
-  }, [newRequest]);
+  }, [showModal]);
+
+  const stopAlerts = () => {
+    if (vibrationInterval.current) {
+      clearInterval(vibrationInterval.current);
+      vibrationInterval.current = null;
+    }
+    Vibration.cancel();
+    if (soundRef.current) {
+      soundRef.current.stopAsync().catch(() => {});
+      soundRef.current.unloadAsync().catch(() => {});
+      soundRef.current = null;
+    }
+  };
+
+  const startAlerts = () => {
+    // Continuous vibration
+    if (Platform.OS !== 'web') {
+      Vibration.vibrate([0, 500, 300, 500, 300, 500], true);
+    }
+    // Play ringtone sound
+    playRingtone();
+  };
+
+  const playRingtone = async () => {
+    if (Platform.OS === 'web') {
+      try {
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const playTone = (st: number, f: number, d: number) => {
+          const osc = ctx.createOscillator(); const gain = ctx.createGain();
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.frequency.value = f; osc.type = 'sine';
+          gain.gain.setValueAtTime(0.3, st);
+          gain.gain.exponentialRampToValueAtTime(0.01, st + d);
+          osc.start(st); osc.stop(st + d);
+        };
+        for (let i = 0; i < 5; i++) {
+          playTone(ctx.currentTime + i * 1.5, 880, 0.3);
+          playTone(ctx.currentTime + i * 1.5 + 0.4, 880, 0.3);
+        }
+        setTimeout(() => ctx.close(), 8000);
+      } catch {}
+    } else {
+      try {
+        await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: false });
+        const wav = generateBeepWav();
+        const { sound } = await Audio.Sound.createAsync({ uri: wav }, { shouldPlay: true, volume: 1.0, isLooping: true });
+        soundRef.current = sound;
+      } catch (e) { console.log('Audio err:', e); }
+    }
+  };
 
   const checkPending = async () => {
     try {
       const response = await api.get('/live-sessions/pending/count');
       const count = response.data.count || 0;
 
-      if (count > lastCountRef.current && lastCountRef.current >= 0) {
-        // New request arrived!
-        triggerAlert();
+      if (count > 0 && count > lastCountRef.current) {
+        // Load request details
+        try {
+          const reqRes = await api.get('/live-sessions/pending');
+          if (reqRes.data && reqRes.data.length > 0) {
+            const req = reqRes.data[0];
+            setPendingRequest(req);
+            setShowModal(true);
+            startAlerts();
+          }
+        } catch {}
+      } else if (count === 0 && showModal) {
+        setShowModal(false);
+        stopAlerts();
       }
 
       lastCountRef.current = count;
-      setPendingCount(count);
-      setShowBanner(count > 0);
-    } catch (error) {
-      // Silently fail
+    } catch {}
+  };
+
+  const handleAccept = async () => {
+    stopAlerts();
+    setShowModal(false);
+    if (pendingRequest?.id) {
+      router.push('/(main)/lesson-requests');
     }
   };
 
-  const playNotificationSound = async () => {
-    if (Platform.OS === 'web') {
-      // Web: use AudioContext to generate a ring-ring tone
+  const handleReject = async () => {
+    stopAlerts();
+    setShowModal(false);
+    if (pendingRequest?.id) {
       try {
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const playTone = (startTime: number, freq: number, duration: number) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.frequency.value = freq;
-          osc.type = 'sine';
-          gain.gain.setValueAtTime(0.3, startTime);
-          gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
-          osc.start(startTime);
-          osc.stop(startTime + duration);
-        };
-        // Ring-ring pattern: two short bursts
-        playTone(ctx.currentTime, 880, 0.25);
-        playTone(ctx.currentTime + 0.35, 880, 0.25);
-        playTone(ctx.currentTime + 0.8, 880, 0.25);
-        playTone(ctx.currentTime + 1.15, 880, 0.25);
-        setTimeout(() => ctx.close(), 2000);
-      } catch (e) { /* audio not available */ }
-    } else {
-      // Native: use expo-av to play a generated ringtone sound
-      try {
-        await Audio.setAudioModeAsync({
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: false,
-        });
-        // Create a simple ringtone using expo-av with a system-compatible beep
-        // We'll generate a WAV beep inline as a base64 data URI
-        const beepBase64 = generateBeepWav();
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: beepBase64 },
-          { shouldPlay: true, volume: 1.0 }
-        );
-        sound.setOnPlaybackStatusUpdate((status) => {
-          if ('didJustFinish' in status && status.didJustFinish) {
-            sound.unloadAsync();
-          }
-        });
-      } catch (e) {
-        console.log('Audio notification error:', e);
-      }
+        await api.post(`/live-sessions/${pendingRequest.id}/reject`);
+      } catch {}
     }
+    setPendingRequest(null);
+    lastCountRef.current = 0;
   };
 
-  const triggerAlert = () => {
-    setNewRequest(true);
-    // Vibrate pattern: ring-ring feel
-    if (Platform.OS !== 'web') {
-      Vibration.vibrate([0, 300, 200, 300, 200, 300]);
-    }
-    playNotificationSound();
-  };
-
-  if (!showBanner || !user?.is_available) return null;
+  if (!user?.is_available) return null;
 
   return (
-    <Animated.View
-      style={[
-        styles.banner,
-        {
-          transform: [
-            { translateY: slideAnim },
-            { scale: pulseAnim },
-          ],
-        },
-      ]}
+    <Modal
+      visible={showModal}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => {}}
     >
-      <TouchableOpacity
-        style={styles.bannerContent}
-        onPress={() => router.push('/(main)/lesson-requests')}
-        activeOpacity={0.8}
-        data-testid="lesson-notification-banner"
-      >
-        <View style={styles.iconContainer}>
-          <Ionicons name="videocam" size={22} color="#FFF" />
-          {newRequest && <View style={styles.pulsingDot} />}
+      <View style={styles.overlay}>
+        <View style={styles.modalContent}>
+          {/* Phone icon ringing */}
+          <Animated.View style={[styles.phoneIconContainer, {
+            transform: [
+              { scale: pulseAnim },
+              { rotate: ringAnim.interpolate({ inputRange: [0, 1], outputRange: ['-10deg', '10deg'] }) },
+            ]
+          }]}>
+            <View style={styles.phoneCircle}>
+              <Ionicons name="videocam" size={40} color="#FFF" />
+            </View>
+          </Animated.View>
+
+          <Text style={styles.title}>Richiesta Lezione Live</Text>
+
+          {/* Student info */}
+          {pendingRequest?.student && (
+            <View style={styles.studentInfo}>
+              <View style={styles.studentAvatar}>
+                {pendingRequest.student.profile_image ? (
+                  <Image source={{ uri: getMediaUrl(pendingRequest.student.profile_image) || '' }} style={styles.studentAvatarImg} />
+                ) : (
+                  <Ionicons name="person" size={28} color="#FFF" />
+                )}
+              </View>
+              <Text style={styles.studentName}>{pendingRequest.student.name || pendingRequest.student.username}</Text>
+            </View>
+          )}
+
+          <Text style={styles.subtitle}>vuole fare una lezione con te</Text>
+
+          {/* Action buttons */}
+          <View style={styles.actionRow}>
+            <TouchableOpacity style={styles.rejectBtn} onPress={handleReject} data-testid="reject-call-btn">
+              <View style={styles.rejectCircle}>
+                <Ionicons name="close" size={32} color="#FFF" />
+              </View>
+              <Text style={styles.btnLabel}>Rifiuta</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.acceptBtn} onPress={handleAccept} data-testid="accept-call-btn">
+              <View style={styles.acceptCircle}>
+                <Ionicons name="videocam" size={32} color="#FFF" />
+              </View>
+              <Text style={styles.btnLabel}>Accetta</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-        <View style={styles.textContainer}>
-          <Text style={styles.title}>
-            {pendingCount === 1 ? 'Nuova richiesta di lezione!' : `${pendingCount} richieste di lezione!`}
-          </Text>
-          <Text style={styles.subtitle}>Tocca per vedere</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color="#FFF" />
-      </TouchableOpacity>
-    </Animated.View>
+      </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  banner: {
-    position: 'absolute',
-    bottom: 80,
-    left: 12,
-    right: 12,
-    zIndex: 999,
-  },
-  bannerContent: {
-    flexDirection: 'row',
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FF6978',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    shadowColor: '#FF6978',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
   },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  modalContent: {
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    width: '100%',
+  },
+  phoneIconContainer: {
+    marginBottom: 30,
+  },
+  phoneCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#FF6978',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
-  },
-  pulsingDot: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#FFEB3B',
-  },
-  textContainer: {
-    flex: 1,
+    shadowColor: '#FF6978',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 30,
+    elevation: 20,
   },
   title: {
-    color: '#FFFFFF',
-    fontSize: 15,
+    color: '#FFF',
+    fontSize: 24,
     fontWeight: '700',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  studentInfo: {
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  studentAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#1C1C1E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: '#FF6978',
+  },
+  studentAvatarImg: {
+    width: '100%',
+    height: '100%',
+  },
+  studentName: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '600',
   },
   subtitle: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 12,
-    marginTop: 2,
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 15,
+    marginBottom: 50,
+    textAlign: 'center',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 60,
+  },
+  rejectBtn: {
+    alignItems: 'center',
+  },
+  acceptBtn: {
+    alignItems: 'center',
+  },
+  rejectCircle: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  acceptCircle: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#34C759',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  btnLabel: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

@@ -219,8 +219,10 @@ export default function UserProfileScreen() {
                 </Text>
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.messageButton}>
-                <Text style={styles.messageButtonText}>Message</Text>
+              <TouchableOpacity style={styles.messageButton} onPress={() => {
+                Alert.alert('Messaggi', 'La funzione messaggi sara disponibile presto!');
+              }}>
+                <Text style={styles.messageButtonText}>Messaggio</Text>
               </TouchableOpacity>
             </View>
           )}

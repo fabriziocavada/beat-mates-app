@@ -13,6 +13,7 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
@@ -49,6 +50,7 @@ export default function ProfileScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'shop'>('posts');
   const [isUploadingPic, setIsUploadingPic] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const pathname = usePathname();
   
   useEffect(() => {
@@ -201,12 +203,69 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <View style={styles.headerLeft} />
+        <Text style={styles.headerUsername}>@{user?.username}</Text>
         <View style={styles.headerCenter} />
-        <TouchableOpacity style={styles.menuButton} onPress={handleLogout}>
+        <TouchableOpacity style={styles.menuButton} onPress={() => setShowMenu(true)} data-testid="hamburger-menu-btn">
           <Ionicons name="menu" size={28} color={Colors.text} />
         </TouchableOpacity>
       </View>
+
+      {/* Hamburger Menu Modal (Instagram-style) */}
+      <Modal visible={showMenu} transparent animationType="slide" onRequestClose={() => setShowMenu(false)}>
+        <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setShowMenu(false)}>
+          <View style={styles.menuSheet}>
+            <View style={styles.menuHandle} />
+            
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); router.push('/(main)/calendar'); }}>
+              <Ionicons name="time-outline" size={24} color={Colors.text} />
+              <Text style={styles.menuItemText}>La tua attivita</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); Alert.alert('Archivio', 'I tuoi post archiviati appariranno qui'); }}>
+              <Ionicons name="archive-outline" size={24} color={Colors.text} />
+              <Text style={styles.menuItemText}>Archivio</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); Alert.alert('Salvati', 'I tuoi post salvati appariranno qui'); }}>
+              <Ionicons name="bookmark-outline" size={24} color={Colors.text} />
+              <Text style={styles.menuItemText}>Salvati</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); Alert.alert('Preferiti', 'I tuoi amici preferiti appariranno qui'); }}>
+              <Ionicons name="star-outline" size={24} color={Colors.text} />
+              <Text style={styles.menuItemText}>Preferiti</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); Alert.alert('Amici Stretti', 'La tua lista di amici stretti apparira qui'); }}>
+              <Ionicons name="people-outline" size={24} color={Colors.text} />
+              <Text style={styles.menuItemText}>Amici stretti</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); handleToggleAvailability(); }}>
+              <Ionicons name={user?.is_available ? "radio-button-on" : "radio-button-off"} size={24} color={user?.is_available ? Colors.success : Colors.text} />
+              <Text style={styles.menuItemText}>{user?.is_available ? 'Disponibile per lezioni' : 'Non disponibile'}</Text>
+            </TouchableOpacity>
+            
+            <View style={styles.menuDivider} />
+            
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); Alert.alert('Impostazioni', 'Le impostazioni dell\'app appariranno qui'); }}>
+              <Ionicons name="settings-outline" size={24} color={Colors.text} />
+              <Text style={styles.menuItemText}>Impostazioni e privacy</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.menuItem} onPress={() => {
+              setShowMenu(false);
+              Alert.alert('Esci', 'Vuoi uscire dal tuo account?', [
+                { text: 'Annulla', style: 'cancel' },
+                { text: 'Esci', style: 'destructive', onPress: handleLogout },
+              ]);
+            }}>
+              <Ionicons name="log-out-outline" size={24} color="#FF3B30" />
+              <Text style={[styles.menuItemText, { color: '#FF3B30' }]}>Esci</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
       
       <ScrollView
         refreshControl={
@@ -637,5 +696,47 @@ const styles = StyleSheet.create({
   shopContainer: {
     alignItems: 'center',
     padding: 40,
+  },
+  headerUsername: {
+    color: Colors.text,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  menuSheet: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 40,
+    paddingTop: 8,
+  },
+  menuHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#666',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    gap: 16,
+  },
+  menuItemText: {
+    color: Colors.text,
+    fontSize: 16,
+  },
+  menuDivider: {
+    height: 0.5,
+    backgroundColor: Colors.border,
+    marginVertical: 8,
+    marginHorizontal: 24,
   },
 });

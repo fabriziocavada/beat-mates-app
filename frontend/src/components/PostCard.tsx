@@ -6,6 +6,12 @@ import api, { getMediaUrl } from '../services/api';
 
 const { width } = Dimensions.get('window');
 
+interface Liker {
+  id: string;
+  username: string;
+  profile_image: string | null;
+}
+
 interface Post {
   id: string;
   user_id: string;
@@ -21,6 +27,7 @@ interface Post {
   likes_count: number;
   comments_count: number;
   is_liked: boolean;
+  recent_likers?: Liker[];
   created_at: string;
 }
 
@@ -49,12 +56,20 @@ function NativeVideoPlayer({ url, height }: { url: string; height: number }) {
 export default function PostCard({ post, onUserPress, onCommentPress }: PostCardProps) {
   const [isLiked, setIsLiked] = useState(post.is_liked);
   const [likesCount, setLikesCount] = useState(post.likes_count);
+  const [recentLikers, setRecentLikers] = useState<Liker[]>(post.recent_likers || []);
   
   const handleLike = async () => {
     try {
       const response = await api.post(`/posts/${post.id}/like`);
       setIsLiked(response.data.liked);
       setLikesCount((prev) => response.data.liked ? prev + 1 : prev - 1);
+      // Refresh likers
+      if (response.data.liked) {
+        try {
+          const likersRes = await api.get(`/posts/${post.id}/likers`);
+          setRecentLikers(likersRes.data);
+        } catch {}
+      }
     } catch (error) {
       console.error('Failed to like post', error);
     }
@@ -65,11 +80,11 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
-    if (hours < 1) return 'Just now';
-    if (hours < 24) return `${hours}h ago`;
+    if (hours < 1) return 'Adesso';
+    if (hours < 24) return `${hours}h fa`;
     const days = Math.floor(hours / 24);
-    if (days < 7) return `${days}d ago`;
-    return date.toLocaleDateString();
+    if (days < 7) return `${days}g fa`;
+    return date.toLocaleDateString('it-IT');
   };
   
   const isVideo = post.type === 'video';
@@ -114,7 +129,7 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
       {/* Actions */}
       <View style={styles.actions}>
         <View style={styles.leftActions}>
-          <TouchableOpacity onPress={handleLike} style={styles.actionBtn}>
+          <TouchableOpacity onPress={handleLike} style={styles.actionBtn} data-testid={`like-btn-${post.id}`}>
             <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={24} color={isLiked ? '#FF6978' : '#FFF'} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => onCommentPress?.(post.id)} style={styles.actionBtn}>
@@ -129,10 +144,32 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
         </TouchableOpacity>
       </View>
 
-      {/* Likes & Caption */}
+      {/* Likes with profile thumbs (Instagram style) */}
       <View style={styles.footer}>
         {likesCount > 0 && (
-          <Text style={styles.likes}>{likesCount} like{likesCount !== 1 ? 's' : ''}</Text>
+          <View style={styles.likesRow}>
+            {recentLikers.length > 0 && (
+              <View style={styles.likerThumbs}>
+                {recentLikers.slice(0, 4).map((liker, idx) => (
+                  <View key={liker.id} style={[styles.likerThumb, { marginLeft: idx > 0 ? -8 : 0, zIndex: 10 - idx }]}>
+                    {liker.profile_image ? (
+                      <Image source={{ uri: getMediaUrl(liker.profile_image) || '' }} style={styles.likerImg} />
+                    ) : (
+                      <View style={[styles.likerImg, styles.likerImgPlaceholder]}>
+                        <Ionicons name="person" size={10} color="#999" />
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
+            <Text style={styles.likes}>
+              {recentLikers.length > 0 && likesCount > recentLikers.length
+                ? `Piace a ${recentLikers[0]?.username} e altri ${likesCount - 1}`
+                : `${likesCount} like${likesCount !== 1 ? '' : ''}`
+              }
+            </Text>
+          </View>
         )}
         {post.caption ? (
           <Text style={styles.caption}>
@@ -143,7 +180,7 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
         {post.comments_count > 0 && (
           <TouchableOpacity onPress={() => onCommentPress?.(post.id)}>
             <Text style={styles.viewComments}>
-              View all {post.comments_count} comment{post.comments_count !== 1 ? 's' : ''}
+              Vedi tutti i {post.comments_count} commenti
             </Text>
           </TouchableOpacity>
         )}
@@ -168,7 +205,19 @@ const styles = StyleSheet.create({
   leftActions: { flexDirection: 'row', alignItems: 'center' },
   actionBtn: { marginRight: 16 },
   footer: { paddingHorizontal: 12, marginBottom: 8 },
-  likes: { color: '#FFF', fontWeight: '600', fontSize: 13, marginBottom: 4 },
+  likesRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  likerThumbs: { flexDirection: 'row', marginRight: 8 },
+  likerThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: '#0a0a1a',
+    overflow: 'hidden',
+  },
+  likerImg: { width: '100%', height: '100%', borderRadius: 11 },
+  likerImgPlaceholder: { backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center' },
+  likes: { color: '#FFF', fontWeight: '600', fontSize: 13 },
   caption: { color: '#FFF', fontSize: 13, lineHeight: 18 },
   captionUsername: { fontWeight: '600' },
   viewComments: { color: '#888', fontSize: 13, marginTop: 4 },

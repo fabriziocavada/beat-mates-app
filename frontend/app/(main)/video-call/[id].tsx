@@ -19,6 +19,7 @@ export default function VideoCallScreen() {
   const router = useRouter();
   const { id: sessionId } = useLocalSearchParams<{ id: string }>();
   const [roomUrl, setRoomUrl] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [callEnded, setCallEnded] = useState(false);
@@ -33,8 +34,14 @@ export default function VideoCallScreen() {
       const session = response.data;
       if (session.room_url) {
         setRoomUrl(session.room_url);
+        // Try to get a meeting token for auto-join
+        try {
+          const tokenRes = await api.post(`/video-call/token?session_id=${sessionId}`);
+          setToken(tokenRes.data.token);
+        } catch {
+          // Token is optional, room URL alone works
+        }
       } else {
-        // No room yet - try to create one
         try {
           const roomRes = await api.post(`/video-call/create-room?session_id=${sessionId}`);
           if (roomRes.data.room_url) {
@@ -42,11 +49,11 @@ export default function VideoCallScreen() {
           } else {
             setError('Impossibile creare la stanza video');
           }
-        } catch (e) {
+        } catch {
           setError('Nessuna stanza video disponibile');
         }
       }
-    } catch (err) {
+    } catch {
       setError('Impossibile caricare la sessione');
     } finally {
       setLoading(false);
@@ -65,7 +72,7 @@ export default function VideoCallScreen() {
           onPress: async () => {
             try {
               await api.post(`/live-sessions/${sessionId}/end`);
-            } catch (e) {}
+            } catch {}
             setCallEnded(true);
             setTimeout(() => router.back(), 1500);
           },
@@ -104,41 +111,92 @@ export default function VideoCallScreen() {
     );
   }
 
-  // Daily.co prebuilt URL - add query params for UI customization
-  const dailyUrl = `${roomUrl}?t=${encodeURIComponent('')}`;
+  // Build HTML that uses Daily.co JS SDK to auto-join without any pre-join UI
+  const dailyHtml = `<!DOCTYPE html>
+<html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; background:#000; overflow:hidden; }
+#call-frame { width:100%; height:100%; border:none; }
+#loading { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#fff; font-family:sans-serif; text-align:center; }
+#loading .spinner { width:40px; height:40px; border:3px solid rgba(255,255,255,0.2); border-top-color:#FF6978; border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 12px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+</style>
+</head><body>
+<div id="loading"><div class="spinner"></div><div>Connessione...</div></div>
+<script src="https://unpkg.com/@daily-co/daily-js"></script>
+<script>
+  const callFrame = window.DailyIframe.createFrame(document.body, {
+    iframeStyle: {
+      position: 'fixed',
+      top: 0, left: 0,
+      width: '100%',
+      height: '100%',
+      border: 'none',
+      zIndex: 100,
+    },
+    showLeaveButton: false,
+    showFullscreenButton: false,
+  });
+  
+  callFrame.join({
+    url: '${roomUrl}',
+    ${token ? `token: '${token}',` : ''}
+    startVideoOff: false,
+    startAudioOff: false,
+  }).then(() => {
+    document.getElementById('loading').style.display = 'none';
+  }).catch((err) => {
+    document.getElementById('loading').innerHTML = '<div style="color:#FF6978">Errore connessione</div>';
+  });
+  
+  callFrame.on('left-meeting', () => {
+    window.ReactNativeWebView && window.ReactNativeWebView.postMessage('call-ended');
+  });
+</script>
+</body></html>`;
+
+  const handleWebViewMessage = (event: any) => {
+    if (event.nativeEvent.data === 'call-ended') {
+      setCallEnded(true);
+      setTimeout(() => router.back(), 1500);
+    }
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: '#000' }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        {/* Top bar with end call button */}
+        {/* Top bar */}
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => router.back()} style={styles.topBtn}>
             <Ionicons name="chevron-back" size={24} color="#FFF" />
           </TouchableOpacity>
           <Text style={styles.topTitle}>Lezione Live</Text>
-          <TouchableOpacity onPress={handleEndCall} style={styles.endBtn}>
+          <TouchableOpacity onPress={handleEndCall} style={styles.endBtn} data-testid="end-call-btn">
             <Ionicons name="call" size={20} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
           </TouchableOpacity>
         </View>
 
-        {/* Daily.co WebView */}
+        {/* Daily.co via JS SDK in WebView - auto-joins immediately */}
         {Platform.OS === 'web' ? (
           <View style={{ flex: 1 }}>
             {React.createElement('iframe', {
-              src: roomUrl,
+              srcDoc: dailyHtml,
               style: { width: '100%', height: '100%', border: 'none' },
               allow: 'camera; microphone; autoplay; display-capture',
             })}
           </View>
         ) : (
           <WebView
-            source={{ uri: roomUrl }}
+            source={{ html: dailyHtml }}
             style={{ flex: 1 }}
             javaScriptEnabled
             domStorageEnabled
             mediaPlaybackRequiresUserAction={false}
             allowsInlineMediaPlayback
             mediaCapturePermissionGrantType="grant"
+            onMessage={handleWebViewMessage}
             startInLoadingState
             renderLoading={() => (
               <View style={styles.webviewLoading}>
