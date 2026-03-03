@@ -66,12 +66,12 @@ export function getMediaUrl(path: string | null | undefined): string | null {
   if (!path) return null;
   if (path.startsWith('http') || path.startsWith('data:') || path.startsWith('blob:')) return path;
   if (path.startsWith('/api/uploads/')) {
-    // Use the media endpoint for proper serving
     const filename = path.replace('/api/uploads/', '');
     return `${baseURL}/api/media/${filename}`;
   }
   if (path.startsWith('/api/')) return `${baseURL}${path}`;
-  return path;
+  // Plain filename - construct full media URL
+  return `${baseURL}/api/media/${path}`;
 }
 
 // Check if a media path is a video
