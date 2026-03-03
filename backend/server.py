@@ -1359,7 +1359,7 @@ async def upload_file(
     return {"url": url, "filename": filename, "media_type": media_type, "thumbnail": thumbnail_url}
 
 # Video streaming endpoint - returns base64 data URL for short videos
-@api_router.get("/media/{filename}")
+@api_router.api_route("/media/{filename}", methods=["GET", "HEAD"])
 async def stream_media(filename: str, request: Request):
     filepath = UPLOADS_DIR / filename
     if not filepath.exists():
