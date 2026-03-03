@@ -8,11 +8,11 @@ Social media mobile app for dancers called "BEAT MATES". Built with Expo (React 
 - **Dance Disciplines:** Users select dance categories, feed filtered by them
 - **Social Feed:** Instagram-like feed for photos, videos, text posts
 - **Likes & Comments:** Like/comment with user thumbnail display
-- **Stories:** Instagram-like stories with swipe navigation
-- **Profile:** Editable profile with post grid, hamburger menu
-- **Paid Lessons:** Live and pre-recorded dance lessons
+- **Stories:** Instagram-like stories in rectangular vertical format with swipe navigation
+- **Profile:** Editable profile with post grid, hamburger menu, e-commerce tab for video lessons
+- **Paid Lessons:** Live and pre-recorded dance lessons with video upload and pricing
 - **Availability Calendar:** Teachers set availability
-- **Music Page:** Upload music, playlists, player with speed controls
+- **Music Page:** Upload music, playlists, player with smooth PanResponder speed controls
 - **Video & Camera:** Vertical video recording (max 10s)
 - **Dark theme** with coral accent (`#FF6978`)
 
@@ -29,7 +29,8 @@ Social media mobile app for dancers called "BEAT MATES". Built with Expo (React 
 - Feed with likes, comments, carousels
 - Reels page with video playback (WebView)
 - Profile page with post grid, hamburger menu, edit profile
-- Stories with sequential viewing and swipe
+- **Stories in rectangular vertical format** (home + profile)
+- **E-commerce tab on profile** with video lesson cards (upload, edit, delete, pricing)
 - Music upload, playlists, player page with smooth PanResponder sliders
 - Video calls via Daily.co
 - Teacher availability calendar with close button
@@ -37,6 +38,7 @@ Social media mobile app for dancers called "BEAT MATES". Built with Expo (React 
 - Save post feature
 - Thumbnail generation (ffmpeg)
 - Post detail page (full post view from profile grid click)
+- Video lessons backend CRUD with file upload, ffmpeg thumbnails, duration detection
 
 ## Key API Endpoints
 - Auth: POST /api/auth/register, POST /api/auth/login
@@ -47,6 +49,7 @@ Social media mobile app for dancers called "BEAT MATES". Built with Expo (React 
 - Save: POST /api/posts/{id}/save, GET /api/posts/saved
 - Stories: GET /api/stories, POST /api/stories
 - Music: GET/POST /api/music/songs, GET/POST /api/music/playlists
+- **Video Lessons: POST/GET /api/video-lessons, GET /api/users/{id}/video-lessons, PUT/DELETE /api/video-lessons/{id}**
 - Rooms: POST /api/rooms
 
 ## DB Schema
@@ -56,17 +59,17 @@ Social media mobile app for dancers called "BEAT MATES". Built with Expo (React 
 - live_sessions: {id, student_id, teacher_id, status, room_url}
 - songs: {id, user_id, title, artist, genre, file_url, duration, playlist_id}
 - playlists: {id, user_id, name}
+- **video_lessons: {id, user_id, title, description, price, currency, duration_minutes, video_url, thumbnail_url, created_at}**
 
 ## Backlog
-### P0 (None remaining)
-
 ### P1
-- Chat/Messaging between users
-- Teacher-set lesson price UI
-- Full Saved/Archive/Activity/Notifications page content
+- Chat/Messaggistica tra utenti (direct messaging)
+- Contenuti completi per Salvati, Archivio, Attività, Notifiche
+- Payment flow for video lessons (buyer side)
+- Video lesson playback page for buyers
 
 ### P2
-- Payment flow (Stripe/PayPal)
+- Payment integration (Stripe/PayPal) for video lessons
 - Google social login
 - Follow/Unfollow system
 - Refactoring server.py into APIRouter modules
