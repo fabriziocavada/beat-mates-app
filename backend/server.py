@@ -1369,6 +1369,182 @@ async def end_video_call(room_name: str, current_user: dict = Depends(get_curren
         await db.live_sessions.update_one({"room_name": room_name}, {"$set": {"status": "completed", "ended_at": datetime.utcnow()}})
     return {"status": "ended"}
 
+# ==================== MUSIC / PLAYLISTS ====================
+
+class PlaylistCreate(BaseModel):
+    name: str
+    genre: Optional[str] = "ALL"
+
+class PlaylistResponse(BaseModel):
+    id: str
+    user_id: str
+    name: str
+    genre: str
+    song_count: int = 0
+    created_at: datetime
+
+class SongResponse(BaseModel):
+    id: str
+    user_id: str
+    title: str
+    artist: str
+    genre: str
+    file_url: str
+    cover_image: Optional[str] = None
+    duration: float = 0
+    is_liked: bool = False
+    playlist_id: Optional[str] = None
+    playlist_name: Optional[str] = None
+    created_at: datetime
+
+MUSIC_GENRES = ["ALL", "SAMBA", "TANGO", "LATIN", "HIP HOP", "JAZZ", "CONTEMPORARY", "AFRO", "REGGAETON"]
+
+@api_router.get("/music/genres")
+async def get_music_genres():
+    return MUSIC_GENRES
+
+@api_router.post("/music/playlists")
+async def create_playlist(data: PlaylistCreate, current_user: dict = Depends(get_current_user)):
+    playlist = {
+        "id": str(uuid.uuid4()),
+        "user_id": current_user["id"],
+        "name": data.name,
+        "genre": data.genre,
+        "created_at": datetime.utcnow(),
+    }
+    await db.playlists.insert_one(playlist)
+    playlist.pop("_id", None)
+    playlist["song_count"] = 0
+    return PlaylistResponse(**playlist)
+
+@api_router.get("/music/playlists")
+async def get_playlists(current_user: dict = Depends(get_current_user)):
+    playlists = await db.playlists.find({"user_id": current_user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    result = []
+    for p in playlists:
+        count = await db.songs.count_documents({"playlist_id": p["id"]})
+        p["song_count"] = count
+        result.append(PlaylistResponse(**p))
+    return result
+
+@api_router.delete("/music/playlists/{playlist_id}")
+async def delete_playlist(playlist_id: str, current_user: dict = Depends(get_current_user)):
+    await db.playlists.delete_one({"id": playlist_id, "user_id": current_user["id"]})
+    await db.songs.update_many({"playlist_id": playlist_id}, {"$set": {"playlist_id": None}})
+    return {"status": "deleted"}
+
+@api_router.post("/music/songs/upload")
+async def upload_song(
+    file: UploadFile = File(...),
+    title: str = Form(...),
+    artist: str = Form(""),
+    genre: str = Form("ALL"),
+    playlist_id: Optional[str] = Form(None),
+    current_user: dict = Depends(get_current_user),
+):
+    file_id = str(uuid.uuid4())
+    ext = file.filename.split('.')[-1] if '.' in file.filename else 'mp3'
+    filename = f"{file_id}.{ext}"
+    file_path = UPLOADS_DIR / filename
+    content = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    # Try to get duration using ffprobe
+    duration = 0.0
+    try:
+        import subprocess
+        result = subprocess.run(
+            ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', str(file_path)],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            duration = float(result.stdout.strip())
+    except:
+        pass
+
+    # Get playlist name if playlist_id provided
+    playlist_name = None
+    if playlist_id:
+        pl = await db.playlists.find_one({"id": playlist_id}, {"_id": 0, "name": 1})
+        if pl:
+            playlist_name = pl["name"]
+
+    song = {
+        "id": file_id,
+        "user_id": current_user["id"],
+        "title": title,
+        "artist": artist or "Unknown",
+        "genre": genre,
+        "file_url": f"/api/uploads/{filename}",
+        "cover_image": None,
+        "duration": duration,
+        "playlist_id": playlist_id,
+        "playlist_name": playlist_name,
+        "created_at": datetime.utcnow(),
+    }
+    await db.songs.insert_one(song)
+    song.pop("_id", None)
+
+    # Check if user liked this song
+    song["is_liked"] = False
+    return SongResponse(**song)
+
+@api_router.get("/music/songs")
+async def get_songs(genre: Optional[str] = None, playlist_id: Optional[str] = None, liked_only: bool = False, current_user: dict = Depends(get_current_user)):
+    query = {"user_id": current_user["id"]}
+    if genre and genre != "ALL":
+        query["genre"] = genre
+    if playlist_id:
+        query["playlist_id"] = playlist_id
+
+    songs = await db.songs.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+    # Get liked song IDs
+    liked_songs = await db.song_likes.find({"user_id": current_user["id"]}).to_list(500)
+    liked_ids = {l["song_id"] for l in liked_songs}
+
+    if liked_only:
+        songs = [s for s in songs if s["id"] in liked_ids]
+
+    result = []
+    for s in songs:
+        s["is_liked"] = s["id"] in liked_ids
+        # Get playlist name
+        if s.get("playlist_id") and not s.get("playlist_name"):
+            pl = await db.playlists.find_one({"id": s["playlist_id"]}, {"_id": 0, "name": 1})
+            s["playlist_name"] = pl["name"] if pl else None
+        result.append(SongResponse(**s))
+    return result
+
+@api_router.post("/music/songs/{song_id}/like")
+async def toggle_song_like(song_id: str, current_user: dict = Depends(get_current_user)):
+    existing = await db.song_likes.find_one({"song_id": song_id, "user_id": current_user["id"]})
+    if existing:
+        await db.song_likes.delete_one({"_id": existing["_id"]})
+        return {"liked": False}
+    else:
+        await db.song_likes.insert_one({"song_id": song_id, "user_id": current_user["id"], "created_at": datetime.utcnow()})
+        return {"liked": True}
+
+@api_router.put("/music/songs/{song_id}/playlist")
+async def move_song_to_playlist(song_id: str, playlist_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """Move a song to a different playlist or remove from playlist."""
+    update = {"playlist_id": playlist_id}
+    if playlist_id:
+        pl = await db.playlists.find_one({"id": playlist_id}, {"_id": 0, "name": 1})
+        update["playlist_name"] = pl["name"] if pl else None
+    else:
+        update["playlist_name"] = None
+    await db.songs.update_one({"id": song_id, "user_id": current_user["id"]}, {"$set": update})
+    return {"status": "updated"}
+
+@api_router.delete("/music/songs/{song_id}")
+async def delete_song(song_id: str, current_user: dict = Depends(get_current_user)):
+    await db.songs.delete_one({"id": song_id, "user_id": current_user["id"]})
+    await db.song_likes.delete_many({"song_id": song_id})
+    return {"status": "deleted"}
+
 # Include the router in the main app
 app.include_router(api_router)
 

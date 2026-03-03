@@ -50,6 +50,7 @@ export default function TabBar({ activeTab, onTabPress }: TabBarProps) {
             key={tab.id}
             style={styles.tab}
             onPress={() => onTabPress(tab.id)}
+            data-testid={`tab-${tab.id}`}
           >
             <View style={styles.iconWrapper}>
               <Ionicons

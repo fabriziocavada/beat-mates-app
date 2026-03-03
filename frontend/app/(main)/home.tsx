@@ -95,6 +95,7 @@ export default function HomeScreen() {
         router.push('/(main)/reels');
         break;
       case 'music':
+        router.push('/(main)/music');
         break;
       case 'profile':
         router.push('/(main)/profile');
