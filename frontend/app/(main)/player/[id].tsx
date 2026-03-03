@@ -145,11 +145,12 @@ export default function PlayerScreen() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  // ============ Touch handlers using pageX (reliable on web + native) ============
+  // ============ Touch handlers - measure position on each touch ============
   const handleProgressTouch = (pageX: number, final: boolean) => {
-    const barLeft = progressBarLayout.x;
     const barW = progressBarLayout.width;
-    const x = pageX - barLeft;
+    if (barW <= 0) return;
+    // Use stored left position from latest measure
+    const x = pageX - progressBarLayout.x;
     const pct = Math.max(0, Math.min(1, x / barW));
     setPosition(pct * duration);
     if (final) {
@@ -159,9 +160,9 @@ export default function PlayerScreen() {
   };
 
   const handleSpeedTouch = (pageX: number, final: boolean) => {
-    const barLeft = speedBarLayout.x;
     const barW = speedBarLayout.width;
-    const x = pageX - barLeft;
+    if (barW <= 0) return;
+    const x = pageX - speedBarLayout.x;
     const pct = Math.max(0, Math.min(1, x / barW));
     const newSpeed = -5 + pct * 10;
     if (final) {
@@ -169,6 +170,29 @@ export default function PlayerScreen() {
     } else {
       setSpeedVal(Math.max(-5, Math.min(5, newSpeed)));
     }
+  };
+
+  // Measure bar position on screen (called on each touch start)
+  const measureProgress = (callback: () => void) => {
+    if (progressBarRef.current) {
+      (progressBarRef.current as any).measure?.((x: number, y: number, w: number, h: number, px: number, py: number) => {
+        if (typeof px === 'number' && typeof w === 'number') {
+          setProgressBarLayout({ x: px, width: w });
+        }
+        callback();
+      });
+    } else { callback(); }
+  };
+
+  const measureSpeed = (callback: () => void) => {
+    if (speedBarRef.current) {
+      (speedBarRef.current as any).measure?.((x: number, y: number, w: number, h: number, px: number, py: number) => {
+        if (typeof px === 'number' && typeof w === 'number') {
+          setSpeedBarLayout({ x: px, width: w });
+        }
+        callback();
+      });
+    } else { callback(); }
   };
 
   const progress = duration > 0 ? position / duration : 0;
@@ -242,7 +266,10 @@ export default function PlayerScreen() {
               onMoveShouldSetResponder={() => true}
               onResponderGrant={(e) => {
                 setIsSeeking(true);
-                handleProgressTouch(e.nativeEvent.pageX, false);
+                // Re-measure position on touch start (handles scroll offset)
+                measureProgress(() => {
+                  handleProgressTouch(e.nativeEvent.pageX, false);
+                });
               }}
               onResponderMove={(e) => handleProgressTouch(e.nativeEvent.pageX, false)}
               onResponderRelease={(e) => handleProgressTouch(e.nativeEvent.pageX, true)}
@@ -296,7 +323,11 @@ export default function PlayerScreen() {
                 }}
                 onStartShouldSetResponder={() => true}
                 onMoveShouldSetResponder={() => true}
-                onResponderGrant={(e) => handleSpeedTouch(e.nativeEvent.pageX, false)}
+                onResponderGrant={(e) => {
+                  measureSpeed(() => {
+                    handleSpeedTouch(e.nativeEvent.pageX, false);
+                  });
+                }}
                 onResponderMove={(e) => handleSpeedTouch(e.nativeEvent.pageX, false)}
                 onResponderRelease={(e) => handleSpeedTouch(e.nativeEvent.pageX, true)}
               >
