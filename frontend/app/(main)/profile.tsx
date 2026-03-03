@@ -123,8 +123,7 @@ export default function ProfileScreen() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) { Alert.alert('Permesso necessario'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-      quality: 0.7,
+      mediaTypes: ['videos'],      quality: 0.7,
     });
     if (result.canceled || !result.assets?.[0]) return;
     
@@ -213,7 +212,7 @@ export default function ProfileScreen() {
           const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
           if (!perm.granted) { Alert.alert('Permesso necessario'); return; }
           const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ['images'],
             allowsEditing: true, aspect: [1, 1], quality: 0.5,
           });
           if (!result.canceled && result.assets[0]) {
