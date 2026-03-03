@@ -150,6 +150,7 @@ export default function ProfileScreen() {
       case 'create': router.push('/(main)/create-post'); break;
       case 'available': router.push('/(main)/available'); break;
       case 'reels': router.push('/(main)/reels'); break;
+      case 'music': router.push('/(main)/music'); break;
       case 'profile': break;
     }
   };
@@ -167,11 +168,8 @@ export default function ProfileScreen() {
     return (
       <TouchableOpacity 
         style={styles.postItem}
-        onPress={() => {
-          if (isVideo) {
-            router.push('/(main)/reels');
-          }
-        }}
+        onPress={() => router.push(`/(main)/post/${item.id}`)}
+        data-testid={`profile-post-${item.id}`}
       >
         {thumbUrl ? (
           <View style={styles.videoThumb}>
@@ -213,32 +211,32 @@ export default function ProfileScreen() {
       {/* Hamburger Menu Modal (Instagram-style) */}
       <Modal visible={showMenu} transparent animationType="slide" onRequestClose={() => setShowMenu(false)}>
         <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setShowMenu(false)}>
-          <View style={styles.menuSheet}>
+          <View style={styles.menuSheet} onStartShouldSetResponder={() => true}>
             <View style={styles.menuHandle} />
             
-            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); router.push('/(main)/calendar'); }}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); router.push('/(main)/activity'); }}>
               <Ionicons name="time-outline" size={24} color={Colors.text} />
               <Text style={styles.menuItemText}>La tua attivita</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); Alert.alert('Archivio', 'I tuoi post archiviati appariranno qui'); }}>
-              <Ionicons name="archive-outline" size={24} color={Colors.text} />
-              <Text style={styles.menuItemText}>Archivio</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); Alert.alert('Salvati', 'I tuoi post salvati appariranno qui'); }}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); router.push('/(main)/saved'); }}>
               <Ionicons name="bookmark-outline" size={24} color={Colors.text} />
               <Text style={styles.menuItemText}>Salvati</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); Alert.alert('Preferiti', 'I tuoi amici preferiti appariranno qui'); }}>
-              <Ionicons name="star-outline" size={24} color={Colors.text} />
-              <Text style={styles.menuItemText}>Preferiti</Text>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); router.push('/(main)/archive'); }}>
+              <Ionicons name="archive-outline" size={24} color={Colors.text} />
+              <Text style={styles.menuItemText}>Archivio</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); Alert.alert('Amici Stretti', 'La tua lista di amici stretti apparira qui'); }}>
-              <Ionicons name="people-outline" size={24} color={Colors.text} />
-              <Text style={styles.menuItemText}>Amici stretti</Text>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); router.push('/(main)/notifications'); }}>
+              <Ionicons name="notifications-outline" size={24} color={Colors.text} />
+              <Text style={styles.menuItemText}>Notifiche</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); router.push('/(main)/calendar'); }}>
+              <Ionicons name="calendar-outline" size={24} color={Colors.text} />
+              <Text style={styles.menuItemText}>Calendario lezioni</Text>
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); handleToggleAvailability(); }}>
@@ -248,7 +246,7 @@ export default function ProfileScreen() {
             
             <View style={styles.menuDivider} />
             
-            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); Alert.alert('Impostazioni', 'Le impostazioni dell\'app appariranno qui'); }}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); router.push('/(main)/edit-profile'); }}>
               <Ionicons name="settings-outline" size={24} color={Colors.text} />
               <Text style={styles.menuItemText}>Impostazioni e privacy</Text>
             </TouchableOpacity>
@@ -322,7 +320,7 @@ export default function ProfileScreen() {
             </View>
           </View>
           
-          <TouchableOpacity style={styles.editButton}>
+          <TouchableOpacity style={styles.editButton} onPress={() => router.push('/(main)/edit-profile')}>
             <Text style={styles.editButtonText}>Edit Profile</Text>
           </TouchableOpacity>
           

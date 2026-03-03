@@ -57,6 +57,7 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
   const [isLiked, setIsLiked] = useState(post.is_liked);
   const [likesCount, setLikesCount] = useState(post.likes_count);
   const [recentLikers, setRecentLikers] = useState<Liker[]>(post.recent_likers || []);
+  const [isSaved, setIsSaved] = useState(false);
   
   const handleLike = async () => {
     try {
@@ -75,6 +76,13 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
     }
   };
   
+  const handleSave = async () => {
+    try {
+      const res = await api.post(`/posts/${post.id}/save`);
+      setIsSaved(res.data.saved);
+    } catch {}
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -139,8 +147,8 @@ export default function PostCard({ post, onUserPress, onCommentPress }: PostCard
             <Ionicons name="paper-plane-outline" size={22} color="#FFF" />
           </TouchableOpacity>
         </View>
-        <TouchableOpacity>
-          <Ionicons name="bookmark-outline" size={22} color="#FFF" />
+        <TouchableOpacity onPress={handleSave}>
+          <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={22} color={isSaved ? '#FFF' : '#FFF'} />
         </TouchableOpacity>
       </View>
 

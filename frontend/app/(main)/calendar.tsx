@@ -12,7 +12,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../../src/constants/colors';
-import Header from '../../src/components/Header';
 import TabBar from '../../src/components/TabBar';
 import api from '../../src/services/api';
 
@@ -106,7 +105,13 @@ export default function CalendarScreen() {
   
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Header showSearch={true} />
+      <View style={styles.calendarHeader}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn} data-testid="calendar-close-btn">
+          <Ionicons name="close" size={28} color="#FFF" />
+        </TouchableOpacity>
+        <Text style={styles.calendarHeaderTitle}>Calendario lezioni</Text>
+        <View style={{ width: 28 }} />
+      </View>
       
       <ScrollView style={styles.content}>
         <Text style={styles.title}>Lesson calendar</Text>
@@ -305,6 +310,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#1C1C1E',
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  calendarHeaderTitle: {
+    color: '#FFF',
+    fontSize: 17,
+    fontWeight: '600',
   },
   content: {
     flex: 1,

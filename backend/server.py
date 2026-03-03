@@ -110,6 +110,7 @@ class UserResponse(BaseModel):
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
+    username: Optional[str] = None
     bio: Optional[str] = None
     profile_image: Optional[str] = None
     dance_categories: Optional[List[str]] = None
@@ -323,6 +324,10 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 @api_router.put("/users/me", response_model=UserResponse)
 async def update_me(data: UserUpdate, current_user: dict = Depends(get_current_user)):
     update_data = {k: v for k, v in data.dict().items() if v is not None}
+    if "username" in update_data:
+        existing = await db.users.find_one({"username": update_data["username"], "id": {"$ne": current_user["id"]}})
+        if existing:
+            raise HTTPException(status_code=400, detail="Username already taken")
     if update_data:
         await db.users.update_one({"id": current_user["id"]}, {"$set": update_data})
     
@@ -564,8 +569,30 @@ async def like_post(post_id: str, current_user: dict = Depends(get_current_user)
         await db.posts.update_one({"id": post_id}, {"$inc": {"likes_count": 1}})
         return {"liked": True}
 
+@api_router.post("/posts/{post_id}/save")
+async def toggle_save_post(post_id: str, current_user: dict = Depends(get_current_user)):
+    existing = await db.saved_posts.find_one({"post_id": post_id, "user_id": current_user["id"]})
+    if existing:
+        await db.saved_posts.delete_one({"_id": existing["_id"]})
+        return {"saved": False}
+    else:
+        await db.saved_posts.insert_one({"post_id": post_id, "user_id": current_user["id"], "created_at": datetime.utcnow()})
+        return {"saved": True}
+
+@api_router.get("/posts/saved")
+async def get_saved_posts(current_user: dict = Depends(get_current_user)):
+    saved = await db.saved_posts.find({"user_id": current_user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    post_ids = [s["post_id"] for s in saved]
+    posts = await db.posts.find({"id": {"$in": post_ids}}, {"_id": 0}).to_list(100)
+    for p in posts:
+        user = await db.users.find_one({"id": p["user_id"]}, {"_id": 0, "id": 1, "username": 1, "name": 1, "profile_image": 1})
+        p["user"] = user or {}
+        p["is_liked"] = False
+        p["recent_likers"] = []
+    return [PostResponse(**p) for p in posts]
+
 @api_router.get("/posts/{post_id}/likers")
-async def get_post_likers(post_id: str, limit: int = 5):
+async def get_post_likers(post_id: str, limit: int = 5, current_user: dict = Depends(get_current_user)):
     """Get recent likers for a post with their profile info."""
     likes = await db.likes.find({"post_id": post_id}).sort("created_at", -1).to_list(limit)
     likers = []
@@ -574,6 +601,31 @@ async def get_post_likers(post_id: str, limit: int = 5):
         if user:
             likers.append(user)
     return likers
+
+@api_router.get("/posts/{post_id}", response_model=PostResponse)
+async def get_single_post(post_id: str, current_user: dict = Depends(get_current_user)):
+    post = await db.posts.find_one({"id": post_id})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    user = await db.users.find_one({"id": post["user_id"]})
+    if user:
+        post["user"] = {"id": user["id"], "username": user["username"], "name": user["name"], "profile_image": user.get("profile_image")}
+    # Check if liked
+    existing_like = await db.likes.find_one({"user_id": current_user["id"], "post_id": post_id})
+    post["is_liked"] = existing_like is not None
+    # Get recent likers
+    if post.get("likes_count", 0) > 0:
+        recent_likes = await db.likes.find({"post_id": post_id}).sort("created_at", -1).to_list(5)
+        likers = []
+        for lk in recent_likes:
+            liker = await db.users.find_one({"id": lk["user_id"]}, {"_id": 0, "id": 1, "username": 1, "profile_image": 1})
+            if liker:
+                likers.append(liker)
+        post["recent_likers"] = likers
+    else:
+        post["recent_likers"] = []
+    post.pop("_id", None)
+    return PostResponse(**post)
 
 @api_router.post("/posts/{post_id}/comments", response_model=CommentResponse)
 async def create_comment(post_id: str, data: CommentCreate, current_user: dict = Depends(get_current_user)):

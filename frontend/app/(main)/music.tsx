@@ -57,8 +57,15 @@ export default function MusicScreen() {
 
   const loadData = async () => {
     try {
+      const isPlaylistFilter = selectedGenre !== 'ALL' && playlists.some(p => p.id === selectedGenre);
+      const params: any = {};
+      if (isPlaylistFilter) {
+        params.playlist_id = selectedGenre;
+      }
+      if (showLiked) params.liked_only = true;
+      
       const [songsRes, playlistsRes] = await Promise.all([
-        api.get('/music/songs', { params: { genre: selectedGenre !== 'ALL' ? selectedGenre : undefined, liked_only: showLiked || undefined } }),
+        api.get('/music/songs', { params }),
         api.get('/music/playlists'),
       ]);
       setSongs(songsRes.data);
@@ -230,15 +237,21 @@ export default function MusicScreen() {
           {/* Title */}
           <Text style={styles.playlistTitle}>Your playlist</Text>
 
-          {/* Genre filter */}
+          {/* Genre filter - shows user playlists as pills */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.genreBar} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
-            {GENRES.map(g => (
+            <TouchableOpacity
+              style={[styles.genrePill, selectedGenre === 'ALL' && styles.genrePillActive]}
+              onPress={() => { setSelectedGenre('ALL'); setShowLiked(false); }}
+            >
+              <Text style={[styles.genrePillText, selectedGenre === 'ALL' && styles.genrePillTextActive]}>ALL</Text>
+            </TouchableOpacity>
+            {playlists.map(pl => (
               <TouchableOpacity
-                key={g}
-                style={[styles.genrePill, selectedGenre === g && styles.genrePillActive]}
-                onPress={() => { setSelectedGenre(g); setShowLiked(false); }}
+                key={pl.id}
+                style={[styles.genrePill, selectedGenre === pl.id && styles.genrePillActive]}
+                onPress={() => { setSelectedGenre(pl.id); setShowLiked(false); }}
               >
-                <Text style={[styles.genrePillText, selectedGenre === g && styles.genrePillTextActive]}>{g}</Text>
+                <Text style={[styles.genrePillText, selectedGenre === pl.id && styles.genrePillTextActive]}>{pl.name}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -269,7 +282,7 @@ export default function MusicScreen() {
             <View style={styles.playlistSection}>
               {playlists.map(pl => (
                 <TouchableOpacity key={pl.id} style={styles.playlistRow} onPress={() => {
-                  // Filter by playlist
+                  setSelectedGenre(pl.id);
                 }}>
                   <Ionicons name="musical-notes" size={18} color={Colors.primary} />
                   <Text style={styles.playlistRowName}>{pl.name}</Text>

@@ -212,7 +212,7 @@ export default function ReelsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={[]}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Reels</Text>
