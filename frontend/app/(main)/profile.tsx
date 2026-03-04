@@ -268,6 +268,29 @@ export default function ProfileScreen() {
     router.replace('/(auth)/login');
   };
   
+  const handleDeletePost = async (postId: string) => {
+    Alert.alert(
+      'Elimina post',
+      'Sei sicuro di voler eliminare questo post?',
+      [
+        { text: 'Annulla', style: 'cancel' },
+        {
+          text: 'Elimina',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete(`/posts/${postId}`);
+              setPosts(prev => prev.filter(p => p.id !== postId));
+              refreshUser();
+            } catch (e) {
+              Alert.alert('Errore', 'Impossibile eliminare il post');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const renderPost = ({ item }: { item: Post }) => {
     const isVideo = item.type === 'video';
     const mediaUrl = getMediaUrl(item.media);
@@ -277,6 +300,8 @@ export default function ProfileScreen() {
       <TouchableOpacity 
         style={styles.postItem}
         onPress={() => router.push(`/(main)/post/${item.id}`)}
+        onLongPress={() => handleDeletePost(item.id)}
+        delayLongPress={500}
         data-testid={`profile-post-${item.id}`}
       >
         {thumbUrl ? (

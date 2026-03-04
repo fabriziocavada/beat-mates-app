@@ -124,7 +124,8 @@ class DanceCategory(BaseModel):
 
 class PostCreate(BaseModel):
     type: str  # photo, video, text
-    media: Optional[str] = None  # base64 encoded
+    media: Optional[str] = None
+    media_urls: Optional[List[str]] = None  # carousel: multiple media URLs
     caption: Optional[str] = ""
 
 class PostResponse(BaseModel):
@@ -133,6 +134,7 @@ class PostResponse(BaseModel):
     user: Optional[dict] = None
     type: str
     media: Optional[str] = None
+    media_urls: List[str] = []
     thumbnail: Optional[str] = None
     caption: str = ""
     likes_count: int = 0
@@ -381,6 +383,17 @@ async def update_me(data: UserUpdate, current_user: dict = Depends(get_current_u
     updated_user = await db.users.find_one({"id": current_user["id"]})
     return UserResponse(**{k: v for k, v in updated_user.items() if k != "password_hash"})
 
+@api_router.get("/users/search")
+async def search_users(q: str = "", current_user: dict = Depends(get_current_user)):
+    if not q or len(q) < 1:
+        return []
+    regex = {"$regex": q, "$options": "i"}
+    users = await db.users.find(
+        {"$or": [{"username": regex}, {"name": regex}], "id": {"$ne": current_user["id"]}},
+        {"_id": 0, "password_hash": 0, "password": 0}
+    ).to_list(20)
+    return users
+
 @api_router.get("/users/{user_id}", response_model=UserResponse)
 async def get_user(user_id: str, current_user: dict = Depends(get_current_user)):
     user = await db.users.find_one({"id": user_id})
@@ -454,11 +467,17 @@ async def get_dance_categories():
 async def create_post(data: PostCreate, current_user: dict = Depends(get_current_user)):
     post_id = str(uuid.uuid4())
     
-    # Save media to file if it's base64
+    # Handle carousel (multiple media URLs)
+    media_urls = []
+    if data.media_urls:
+        for url in data.media_urls:
+            if url and not url.startswith('file://'):
+                media_urls.append(url)
+    
+    # Handle single media (backward compat)
     media_url = None
     if data.media:
         if data.media.startswith('data:'):
-            # Base64 encoded - save to file
             try:
                 header, b64data = data.media.split(',', 1)
                 ext = 'jpg' if 'jpeg' in header or 'jpg' in header else 'png'
@@ -472,18 +491,25 @@ async def create_post(data: PostCreate, current_user: dict = Depends(get_current
                 media_url = f"/api/uploads/{filename}"
             except Exception as e:
                 logger.error(f"Failed to save media: {e}")
-                media_url = data.media  # fallback to base64
+                media_url = data.media
         elif data.media.startswith('file://'):
-            # Local file URI - can't use server-side, skip
             media_url = None
         else:
             media_url = data.media
+    
+    # If single media provided but no media_urls, put it in the array
+    if media_url and not media_urls:
+        media_urls = [media_url]
+    # First item in media_urls is the primary media (backward compat)
+    if media_urls and not media_url:
+        media_url = media_urls[0]
     
     post = {
         "id": post_id,
         "user_id": current_user["id"],
         "type": data.type,
         "media": media_url,
+        "media_urls": media_urls,
         "caption": data.caption or "",
         "likes_count": 0,
         "comments_count": 0,
@@ -553,6 +579,9 @@ async def get_posts(current_user: dict = Depends(get_current_user)):
                 "profile_image": user.get("profile_image")
             }
         post["is_liked"] = post["id"] in liked_post_ids
+        # Ensure media_urls backward compat
+        if "media_urls" not in post or not post["media_urls"]:
+            post["media_urls"] = [post["media"]] if post.get("media") else []
         # Get recent likers (up to 5)
         if post.get("likes_count", 0) > 0:
             recent_likes = await db.likes.find({"post_id": post["id"]}).sort("created_at", -1).to_list(5)
@@ -585,6 +614,8 @@ async def get_user_posts(user_id: str, current_user: dict = Depends(get_current_
                 "profile_image": user.get("profile_image")
             }
         post["is_liked"] = post["id"] in liked_post_ids
+        if "media_urls" not in post or not post["media_urls"]:
+            post["media_urls"] = [post["media"]] if post.get("media") else []
         result.append(PostResponse(**post))
     return result
 
@@ -672,7 +703,25 @@ async def get_single_post(post_id: str, current_user: dict = Depends(get_current
     else:
         post["recent_likers"] = []
     post.pop("_id", None)
+    if "media_urls" not in post or not post["media_urls"]:
+        post["media_urls"] = [post["media"]] if post.get("media") else []
     return PostResponse(**post)
+
+@api_router.delete("/posts/{post_id}")
+async def delete_post(post_id: str, current_user: dict = Depends(get_current_user)):
+    post = await db.posts.find_one({"id": post_id})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    if post["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    await db.posts.delete_one({"id": post_id})
+    await db.likes.delete_many({"post_id": post_id})
+    await db.comments.delete_many({"post_id": post_id})
+    await db.saved_posts.delete_many({"post_id": post_id})
+    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"posts_count": -1}})
+    return {"status": "deleted"}
+
+
 
 @api_router.post("/posts/{post_id}/comments", response_model=CommentResponse)
 async def create_comment(post_id: str, data: CommentCreate, current_user: dict = Depends(get_current_user)):

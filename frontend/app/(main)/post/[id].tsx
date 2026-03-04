@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity,
   Image, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
-  Dimensions,
+  Dimensions, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -18,6 +18,7 @@ interface Liker { id: string; username: string; profile_image: string | null; }
 
 interface Post {
   id: string; user_id: string; type: string; media: string | null;
+  media_urls?: string[];
   caption: string; likes_count: number; comments_count: number;
   is_liked: boolean; recent_likers?: Liker[];
   user?: { id: string; username: string; name: string; profile_image: string | null; };
@@ -46,6 +47,7 @@ export default function PostDetailScreen() {
   const [isLiked, setIsLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
+  const [carouselIdx, setCarouselIdx] = useState(0);
 
   useEffect(() => { loadPost(); loadComments(); }, [postId]);
 
@@ -79,6 +81,16 @@ export default function PostDetailScreen() {
       const res = await api.post(`/posts/${postId}/save`);
       setIsSaved(res.data.saved);
     } catch {}
+  };
+
+  const handleDelete = () => {
+    Alert.alert('Elimina post', 'Sei sicuro di voler eliminare questo post?', [
+      { text: 'Annulla', style: 'cancel' },
+      { text: 'Elimina', style: 'destructive', onPress: async () => {
+        try { await api.delete(`/posts/${postId}`); router.back(); } 
+        catch { Alert.alert('Errore', 'Impossibile eliminare il post'); }
+      }},
+    ]);
   };
 
   const handleSend = async () => {
@@ -117,15 +129,28 @@ export default function PostDetailScreen() {
   }
 
   const isVideo = post.type === 'video';
-  const mediaUrl = post.media ? getMediaUrl(post.media) : null;
+  const mediaUrls = (post.media_urls && post.media_urls.length > 0)
+    ? post.media_urls
+    : (post.media ? [post.media] : []);
+  const isCarousel = mediaUrls.length > 1;
   const mediaHeight = Math.min(width * 1.25, 500);
+  const isOwnPost = user?.id === post.user_id;
+
+  const isVideoPath = (p: string) => {
+    const l = p.toLowerCase();
+    return l.includes('.mp4') || l.includes('.mov') || l.includes('video');
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}><Ionicons name="chevron-back" size={28} color="#FFF" /></TouchableOpacity>
         <Text style={styles.headerTitle}>Post</Text>
-        <View style={{ width: 28 }} />
+        {isOwnPost ? (
+          <TouchableOpacity onPress={handleDelete} data-testid="post-delete-btn">
+            <Ionicons name="trash-outline" size={22} color="#FF6978" />
+          </TouchableOpacity>
+        ) : <View style={{ width: 28 }} />}
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }} keyboardVerticalOffset={90}>
@@ -145,13 +170,41 @@ export default function PostDetailScreen() {
             </View>
           </TouchableOpacity>
 
-          {/* Media */}
-          {mediaUrl && (
-            <View style={{ width: '100%', height: mediaHeight }}>
-              {isVideo ? (
-                <VideoPlayer url={mediaUrl} h={mediaHeight} />
+          {/* Media - Carousel or Single */}
+          {mediaUrls.length > 0 && (
+            <View style={{ width: '100%', height: mediaHeight, position: 'relative' }}>
+              {isCarousel ? (
+                <ScrollView
+                  horizontal pagingEnabled showsHorizontalScrollIndicator={false}
+                  onScroll={(e) => setCarouselIdx(Math.round(e.nativeEvent.contentOffset.x / width))}
+                  scrollEventThrottle={16} decelerationRate="fast"
+                >
+                  {mediaUrls.map((url, idx) => {
+                    const fullUrl = getMediaUrl(url) || '';
+                    return (
+                      <View key={idx} style={{ width, height: mediaHeight }}>
+                        {isVideoPath(url) ? (
+                          <VideoPlayer url={fullUrl} h={mediaHeight} />
+                        ) : (
+                          <Image source={{ uri: fullUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                        )}
+                      </View>
+                    );
+                  })}
+                </ScrollView>
               ) : (
-                <Image source={{ uri: mediaUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                isVideoPath(mediaUrls[0]) ? (
+                  <VideoPlayer url={getMediaUrl(mediaUrls[0]) || ''} h={mediaHeight} />
+                ) : (
+                  <Image source={{ uri: getMediaUrl(mediaUrls[0]) || '' }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                )
+              )}
+              {isCarousel && (
+                <View style={styles.dotsRow}>
+                  {mediaUrls.map((_, idx) => (
+                    <View key={idx} style={[styles.dot, idx === carouselIdx && styles.dotActive]} />
+                  ))}
+                </View>
               )}
             </View>
           )}
@@ -272,4 +325,7 @@ const styles = StyleSheet.create({
   inputAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#1C1C1E', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   input: { flex: 1, color: '#FFF', fontSize: 14, maxHeight: 80, paddingVertical: 6 },
   sendBtn: { color: Colors.primary, fontSize: 14, fontWeight: '700' },
+  dotsRow: { position: 'absolute', bottom: 12, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 4 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.4)' },
+  dotActive: { backgroundColor: '#FFF', width: 8, height: 8, borderRadius: 4 },
 });
