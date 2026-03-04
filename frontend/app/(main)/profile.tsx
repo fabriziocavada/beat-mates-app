@@ -570,7 +570,11 @@ export default function ProfileScreen() {
             ) : (
               videoLessons.map((lesson) => (
                 <View key={lesson.id} style={styles.lessonCard} data-testid={`lesson-card-${lesson.id}`}>
-                  <View style={styles.lessonThumbContainer}>
+                  <TouchableOpacity 
+                    style={styles.lessonThumbContainer} 
+                    activeOpacity={0.8}
+                    onPress={() => router.push(`/(main)/lesson-player/${lesson.id}`)}
+                  >
                     {lesson.thumbnail_url ? (
                       <Image source={{ uri: getMediaUrl(lesson.thumbnail_url) || '' }} style={styles.lessonThumb} />
                     ) : (
@@ -583,16 +587,16 @@ export default function ProfileScreen() {
                         <Ionicons name="play" size={28} color="#FFF" />
                       </View>
                     </View>
-                    {/* Reviews button */}
-                    <TouchableOpacity 
-                      style={styles.reviewsBadge} 
-                      onPress={() => handleShowReviews(lesson.id)}
-                      data-testid={`reviews-btn-${lesson.id}`}
-                    >
-                      <Ionicons name="chatbubble-ellipses" size={14} color="#FFF" />
-                      <Text style={styles.reviewsBadgeText}>Recensioni</Text>
-                    </TouchableOpacity>
-                  </View>
+                  </TouchableOpacity>
+                  {/* Reviews button */}
+                  <TouchableOpacity 
+                    style={styles.reviewsBadgeRow} 
+                    onPress={() => handleShowReviews(lesson.id)}
+                    data-testid={`reviews-btn-${lesson.id}`}
+                  >
+                    <Ionicons name="chatbubble-ellipses" size={14} color={Colors.primary} />
+                    <Text style={styles.reviewsBadgeText}>Recensioni</Text>
+                  </TouchableOpacity>
                   
                   <View style={styles.lessonInfoRow}>
                     <View style={styles.lessonInfoLeft}>
@@ -1131,6 +1135,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
+  },
+  reviewsBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   reviewsBadgeText: {
     color: '#FFF',
