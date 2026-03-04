@@ -1,68 +1,57 @@
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
-  Alert,
-  ActivityIndicator,
-  Dimensions,
+  View, Text, StyleSheet, TouchableOpacity, Image, Alert,
+  ActivityIndicator, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { WebView } from 'react-native-webview';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import api, { uploadFile } from '../../src/services/api';
 
 const { width } = Dimensions.get('window');
 
+function NativeVideoPreview({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = true;
+    p.play();
+  });
+  return (
+    <VideoView
+      player={player}
+      style={styles.preview}
+      contentFit="cover"
+      nativeControls={true}
+      allowsPictureInPicture={false}
+    />
+  );
+}
+
 export default function CreateStoryScreen() {
   const router = useRouter();
-  
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'photo' | 'video'>('photo');
   const [isLoading, setIsLoading] = useState(false);
 
-  function VideoPreview({ uri }: { uri: string }) {
-    const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100%;height:100%;object-fit:cover}</style></head><body><video src="${uri}" autoplay loop muted playsinline controls></video></body></html>`;
-    return (
-      <WebView source={{ html }} style={styles.preview} scrollEnabled={false} allowsInlineMediaPlayback={true} mediaPlaybackRequiresUserAction={false} javaScriptEnabled={true} />
-    );
-  }
-  
   const pickMedia = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Permesso richiesto', 'Consenti accesso alla galleria');
-      return;
-    }
-    
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Permesso richiesto', 'Consenti accesso alla galleria'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images', 'videos'],
       quality: 0.7,
       videoMaxDuration: 10,
     });
-    
     if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      setMediaType(asset.type === 'video' ? 'video' : 'photo');
-      setMediaUri(asset.uri);
+      setMediaType(result.assets[0].type === 'video' ? 'video' : 'photo');
+      setMediaUri(result.assets[0].uri);
     }
   };
-  
+
   const takePhoto = async () => {
-    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Permesso richiesto', 'Consenti accesso alla fotocamera');
-      return;
-    }
-    
-    const result = await ImagePicker.launchCameraAsync({
-      quality: 0.7,
-    });
-    
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Permesso richiesto', 'Consenti accesso alla fotocamera'); return; }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
     if (!result.canceled && result.assets[0]) {
       setMediaType('photo');
       setMediaUri(result.assets[0].uri);
@@ -70,36 +59,24 @@ export default function CreateStoryScreen() {
   };
 
   const takeVideo = async () => {
-    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Permesso richiesto', 'Consenti accesso alla fotocamera');
-      return;
-    }
-    
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Permesso richiesto', 'Consenti accesso alla fotocamera'); return; }
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['videos'],
       videoMaxDuration: 10,
     });
-    
     if (!result.canceled && result.assets[0]) {
       setMediaType('video');
       setMediaUri(result.assets[0].uri);
     }
   };
-  
+
   const handlePublish = async () => {
-    if (!mediaUri) {
-      Alert.alert('Nessun media', 'Scegli una foto o registra un video');
-      return;
-    }
-    
+    if (!mediaUri) { Alert.alert('Nessun media', 'Scegli una foto o registra un video'); return; }
     setIsLoading(true);
     try {
       const serverUrl = await uploadFile(mediaUri);
-      await api.post('/stories', {
-        media: serverUrl,
-        type: mediaType,
-      });
+      await api.post('/stories', { media: serverUrl, type: mediaType });
       router.replace('/(main)/home');
     } catch (error: any) {
       console.error('Story error:', error.response?.data || error.message);
@@ -108,43 +85,38 @@ export default function CreateStoryScreen() {
       setIsLoading(false);
     }
   };
-  
+
   return (
     <SafeAreaView style={styles.container}>
+      {isLoading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#FF6978" />
+          <Text style={styles.loadingText}>Pubblicazione in corso...</Text>
+        </View>
+      )}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="close" size={28} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Nuova Storia</Text>
-        <TouchableOpacity
-          onPress={handlePublish}
-          disabled={isLoading || !mediaUri}
-        >
+        <TouchableOpacity onPress={handlePublish} disabled={isLoading || !mediaUri}>
           {isLoading ? (
             <ActivityIndicator color="#FF6978" />
           ) : (
-            <Text style={[
-              styles.publishButton,
-              !mediaUri && styles.publishButtonDisabled
-            ]}>
-              Pubblica
-            </Text>
+            <Text style={[styles.publishButton, !mediaUri && styles.publishButtonDisabled]}>Pubblica</Text>
           )}
         </TouchableOpacity>
       </View>
-      
+
       <View style={styles.content}>
         {mediaUri ? (
           <View style={styles.previewContainer}>
             {mediaType === 'video' ? (
-              <VideoPreview uri={mediaUri} />
+              <NativeVideoPreview uri={mediaUri} />
             ) : (
               <Image source={{ uri: mediaUri }} style={styles.preview} resizeMode="cover" />
             )}
-            <TouchableOpacity
-              style={styles.removeButton}
-              onPress={() => setMediaUri(null)}
-            >
+            <TouchableOpacity style={styles.removeButton} onPress={() => setMediaUri(null)}>
               <Ionicons name="close-circle" size={36} color="#FF6978" />
             </TouchableOpacity>
             {mediaType === 'video' && (
@@ -162,7 +134,6 @@ export default function CreateStoryScreen() {
               </View>
               <Text style={styles.optionText}>Foto</Text>
             </TouchableOpacity>
-            
             <TouchableOpacity style={styles.optionButton} onPress={takeVideo}>
               <View style={styles.optionIcon}>
                 <Ionicons name="videocam" size={40} color="#FF6978" />
@@ -170,7 +141,6 @@ export default function CreateStoryScreen() {
               <Text style={styles.optionText}>Video</Text>
               <Text style={styles.optionHint}>max 10s</Text>
             </TouchableOpacity>
-            
             <TouchableOpacity style={styles.optionButton} onPress={pickMedia}>
               <View style={styles.optionIcon}>
                 <Ionicons name="images" size={40} color="#FF6978" />
@@ -185,92 +155,22 @@ export default function CreateStoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000000',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#3A3A3C',
-  },
-  headerTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  publishButton: {
-    color: '#FF6978',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  publishButtonDisabled: {
-    opacity: 0.5,
-  },
-  content: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  previewContainer: {
-    flex: 1,
-    width: '100%',
-    position: 'relative',
-  },
-  preview: {
-    flex: 1,
-    width: '100%',
-  },
-  removeButton: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
-  },
-  videoBadge: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    gap: 4,
-  },
-  videoBadgeText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  optionsContainer: {
-    flexDirection: 'row',
-    gap: 24,
-  },
-  optionButton: {
-    alignItems: 'center',
-  },
-  optionIcon: {
-    width: 90,
-    height: 90,
-    borderRadius: 20,
-    backgroundColor: '#1C1C1E',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  optionText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  optionHint: {
-    color: '#8E8E93',
-    fontSize: 11,
-    marginTop: 2,
-  },
+  container: { flex: 1, backgroundColor: '#000000' },
+  loadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 100, alignItems: 'center', justifyContent: 'center' },
+  loadingText: { color: '#FFFFFF', fontSize: 16, marginTop: 12 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: '#3A3A3C' },
+  headerTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '600' },
+  publishButton: { color: '#FF6978', fontSize: 16, fontWeight: '600' },
+  publishButtonDisabled: { opacity: 0.5 },
+  content: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  previewContainer: { flex: 1, width: '100%', position: 'relative' },
+  preview: { flex: 1, width: '100%' },
+  removeButton: { position: 'absolute', top: 20, right: 20 },
+  videoBadge: { position: 'absolute', top: 20, left: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, gap: 4 },
+  videoBadgeText: { color: '#FFF', fontSize: 12, fontWeight: '600' },
+  optionsContainer: { flexDirection: 'row', gap: 24 },
+  optionButton: { alignItems: 'center' },
+  optionIcon: { width: 90, height: 90, borderRadius: 20, backgroundColor: '#1C1C1E', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  optionText: { color: '#FFFFFF', fontSize: 15, fontWeight: '500' },
+  optionHint: { color: '#8E8E93', fontSize: 11, marginTop: 2 },
 });

@@ -12,13 +12,12 @@ import {
   Platform,
   ScrollView,
   Dimensions,
-  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { WebView } from 'react-native-webview';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import api, { uploadFile } from '../../src/services/api';
 import { useAuthStore } from '../../src/store/authStore';
 
@@ -27,6 +26,22 @@ const { width } = Dimensions.get('window');
 interface MediaItem {
   uri: string;
   type: 'photo' | 'video';
+}
+
+function NativeVideoPreview({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = true;
+    p.play();
+  });
+  return (
+    <VideoView
+      player={player}
+      style={styles.previewMedia}
+      contentFit="cover"
+      nativeControls={true}
+      allowsPictureInPicture={false}
+    />
+  );
 }
 
 export default function CreatePostScreen() {
@@ -38,13 +53,6 @@ export default function CreatePostScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
 
-  function VideoPreview({ uri }: { uri: string }) {
-    const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100%;height:100%;object-fit:cover}</style></head><body><video src="${uri}" autoplay loop muted playsinline controls></video></body></html>`;
-    return (
-      <WebView source={{ html }} style={styles.previewMedia} scrollEnabled={false} allowsInlineMediaPlayback={true} mediaPlaybackRequiresUserAction={false} javaScriptEnabled={true} />
-    );
-  }
-  
   const pickMedia = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
@@ -195,7 +203,7 @@ export default function CreatePostScreen() {
                 {mediaItems.map((item, idx) => (
                   <View key={idx} style={styles.previewContainer}>
                     {item.type === 'video' ? (
-                      <VideoPreview uri={item.uri} />
+                      <NativeVideoPreview uri={item.uri} />
                     ) : (
                       <Image source={{ uri: item.uri }} style={styles.previewMedia} resizeMode="cover" />
                     )}
