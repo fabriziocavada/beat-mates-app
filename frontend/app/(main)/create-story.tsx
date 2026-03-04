@@ -41,9 +41,7 @@ export default function CreateStoryScreen() {
     
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images', 'videos'],
-      allowsEditing: true,
-      aspect: [9, 16],
-      quality: 0.5,
+      quality: 0.7,
       videoMaxDuration: 10,
     });
     
@@ -62,9 +60,7 @@ export default function CreateStoryScreen() {
     }
     
     const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [9, 16],
-      quality: 0.5,
+      quality: 0.7,
     });
     
     if (!result.canceled && result.assets[0]) {
@@ -83,8 +79,6 @@ export default function CreateStoryScreen() {
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['videos'],
       videoMaxDuration: 10,
-      allowsEditing: true,
-      aspect: [9, 16],
     });
     
     if (!result.canceled && result.assets[0]) {

@@ -221,7 +221,7 @@ export default function UserProfileScreen() {
               
               <TouchableOpacity style={styles.messageButton} onPress={async () => {
                 try {
-                  const res = await api.post('/conversations', { user_id: userId });
+                  const res = await api.post('/conversations', { user_id: id });
                   router.push(`/(main)/chat/${res.data.id}`);
                 } catch (e) { Alert.alert('Errore', 'Impossibile avviare la chat'); }
               }}>
