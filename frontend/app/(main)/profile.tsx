@@ -23,7 +23,6 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
-import LessonNotificationBanner from '../../src/components/LessonNotificationBanner';
 import { useAuthStore } from '../../src/store/authStore';
 import api, { uploadFile, getMediaUrl, getThumbnailUrl } from '../../src/services/api';
 
@@ -718,7 +717,6 @@ export default function ProfileScreen() {
         </Modal>
       </ScrollView>
       
-      <LessonNotificationBanner />
       <TabBar activeTab="profile" onTabPress={handleTabPress} />
     </SafeAreaView>
   );
