@@ -1,71 +1,94 @@
-# BEAT MATES - PRD
+# BEAT MATES - PRD (Product Requirements Document)
 
 ## Original Problem Statement
-Social media mobile app for dancers "BEAT MATES". Expo (React Native) + FastAPI + MongoDB.
+Social media mobile app called "BEAT MATES" for dancers, built with React Native (Expo) + FastAPI + MongoDB.
 
-## What's Implemented (as of March 2026)
+## Core Requirements
+- **User System:** Registration/login with email/password. Google social login (future).
+- **Dance Disciplines:** Filter feed by dance categories.
+- **Social Feed:** Instagram-like feed with photos, videos (autoplay), text posts. Carousel (multi-image) support.
+- **Likes & Comments:** Standard like/comment. Double-tap to like.
+- **Stories:** Instagram-like stories (vertical, 24h expiry).
+- **Profile:** User profile with grid posts, stories, shop tab, hamburger menu (Saved, Archive, Activity).
+- **E-commerce:** Shop tab for selling video dance lessons. Set price, edit details, reviews.
+- **Live Lessons:** Book/pay for live video lessons with teachers (Daily.co).
+- **Music Page:** Upload music, playlists, player with speed controls.
+- **Chat:** Direct messaging between users.
+- **Notifications:** Lesson request notifications.
+- **Design:** Dark theme, coral accent (#FF6978).
 
-### Core Social
-- User auth (JWT), registration, login
-- Post/Story creation with photo/video
-- Feed with likes, comments, carousels, save post
-- Reels page with video playback (WebView)
-- Stories in **rectangular vertical format** (68x88, borderRadius:10)
+## Tech Stack
+- **Frontend:** React Native (Expo), TypeScript, Zustand, Expo Router
+- **Backend:** Python, FastAPI, Motor (async MongoDB)
+- **Database:** MongoDB
+- **Key Libs:** react-native-webview, @react-native-community/slider, expo-av, expo-image-picker, ffmpeg
 
-### Profile
-- Profile page with post grid, hamburger menu (Messaggi, Attivita, Salvati, Archivio, Notifiche, Calendario, Edit Profile, Logout)
-- Edit profile (name, username, bio, photo)
-- **E-commerce tab** (cart icon) with video lesson cards
+## User Personas
+- **Dancer/Student:** Browses feed, watches lessons, buys content, chats
+- **Teacher/Creator:** Posts content, sells video lessons, goes live, manages availability
 
-### Video Lessons E-commerce
-- Upload video lessons with **ffmpeg compression** (libx264, crf:28, 720p max)
-- Auto thumbnail generation + duration detection
-- Edit/Delete lessons (owner only)
-- Price display in EUR
-- **Reviews system** (1-5 stars + text, no self-review, no duplicates)
-- Loading indicator during upload
+## Test Accounts
+- Teacher: tutor@test.com / password123
+- Student: mario@test.com / password123
+
+---
+
+## What's Been Implemented
+
+### Authentication & Users
+- [x] JWT auth (login/register)
+- [x] Profile management (edit bio, picture, categories)
+- [x] Follow/Unfollow
+- [x] User search (by username/name)
+
+### Social Feed
+- [x] Create posts (photo, video, text)
+- [x] Carousel posts (multi-image with swipe, up to 10 images)
+- [x] Like/Unlike posts
+- [x] Double-tap to like (heart animation)
+- [x] Comments
+- [x] Save/Bookmark posts
+- [x] Delete own posts (long-press on profile grid, trash icon in detail)
+- [x] Stories (create, view, 24h expiry)
+- [x] Reels (vertical scroll)
+
+### E-commerce
+- [x] Upload video lessons with compression
+- [x] Set price (EUR), edit details
+- [x] Video lesson player
+- [x] Reviews system (CRUD)
+- [x] Thumbnail generation (ffmpeg)
 
 ### Music
-- Upload songs, create/manage playlists
-- Player page with **cover image**, **touch-based sliders** (onResponder* API), TabBar
-- Progress bar seek + speed control (-5 to +5 = 0.5x to 1.5x)
-- Waveform visualization
+- [x] Music page with player
+- [x] Speed controls
+- [x] Native slider (iOS compatible)
 
-### Chat/Messaging
-- Create conversations, send/receive messages
-- Messages list with **3-second polling**
-- "Messaggio" button on user profiles creates/opens conversation
+### Messaging & Social
+- [x] Chat system (conversations list, individual chats)
+- [x] DM from header (messages button wired)
+- [x] Search page (search users from header)
 
-### Other
-- Video calls via Daily.co
-- Teacher availability calendar with close button
-- Lesson request notifications (blocking modal with sound)
-- Thumbnail generation (ffmpeg)
-- Post detail page (from profile grid click)
-- **Saved posts** page with grid layout
-- **Activity** page (likes/comments on your posts)
-- **Notifications** page (lesson requests)
-- Media serving with proper content-types (mp3/audio/mpeg for iOS)
+### Camera
+- [x] Full-screen camera (removed square constraint)
+- [x] Photo and video capture
+- [x] Gallery picker with multi-select
 
-## Key API Endpoints
-- Auth: POST /api/auth/register, /api/auth/login
-- Users: GET/PUT /api/users/me
-- Posts: GET /api/posts, GET /api/posts/{id}, POST /api/posts
-- Likes/Comments/Save: POST /api/posts/{id}/like|comments|save
-- Stories: GET/POST /api/stories
-- Music: GET/POST /api/music/songs|playlists
-- Video Lessons: POST/GET /api/video-lessons, PUT/DELETE /api/video-lessons/{id}
-- Reviews: POST/GET /api/video-lessons/{id}/reviews
-- Chat: GET/POST /api/conversations, GET/POST /api/conversations/{id}/messages
-- Rooms: POST /api/rooms
+---
 
-## Backlog
-### P1
-- Buy button + payment flow for video lessons (buyer side)
-- Video lesson playback page for buyers
-- Follow/Unfollow system
+## Prioritized Backlog
 
-### P2
-- Payment integration (Stripe/PayPal)
-- Google social login
-- Refactoring server.py into APIRouter modules
+### P0 (Critical)
+- [ ] Stripe payment integration (buy video lessons)
+
+### P1 (Important)
+- [ ] Complete Saved/Archive/Activity pages with real data
+- [ ] Refactor backend/server.py into APIRouter modules
+
+### P2 (Future)
+- [ ] Production deployment strategy (App Store, Play Store, AWS)
+- [ ] Google social login
+- [ ] Push notifications
+- [ ] Report/Block users
+- [ ] Share posts externally
+- [ ] Explore/Discover page
