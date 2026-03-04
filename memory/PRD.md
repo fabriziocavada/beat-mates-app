@@ -6,9 +6,9 @@ Social media mobile app called "BEAT MATES" for dancers, built with React Native
 ## Core Requirements
 - **User System:** Registration/login with email/password. Google social login (future).
 - **Dance Disciplines:** Filter feed by dance categories.
-- **Social Feed:** Instagram-like feed with photos, videos (autoplay), text posts. Carousel (multi-image) support.
-- **Likes & Comments:** Standard like/comment. Double-tap to like.
-- **Stories:** Instagram-like stories (vertical, 24h expiry).
+- **Social Feed:** Instagram-like feed with photos, videos, text posts. Carousel (multi-image) support.
+- **Likes & Comments:** Standard like/comment. Double-tap to like with heart animation.
+- **Stories:** Instagram-like stories (vertical, 24h expiry) with video support via expo-video.
 - **Profile:** User profile with grid posts, stories, shop tab, hamburger menu (Saved, Archive, Activity).
 - **E-commerce:** Shop tab for selling video dance lessons. Set price, edit details, reviews.
 - **Live Lessons:** Book/pay for live video lessons with teachers (Daily.co).
@@ -21,11 +21,7 @@ Social media mobile app called "BEAT MATES" for dancers, built with React Native
 - **Frontend:** React Native (Expo), TypeScript, Zustand, Expo Router
 - **Backend:** Python, FastAPI, Motor (async MongoDB)
 - **Database:** MongoDB
-- **Key Libs:** react-native-webview, @react-native-community/slider, expo-av, expo-image-picker, ffmpeg
-
-## User Personas
-- **Dancer/Student:** Browses feed, watches lessons, buys content, chats
-- **Teacher/Creator:** Posts content, sells video lessons, goes live, manages availability
+- **Key Libs:** expo-video (native video), @react-native-community/slider, expo-image-picker (multi-select), ffmpeg
 
 ## Test Accounts
 - Teacher: tutor@test.com / password123
@@ -39,18 +35,25 @@ Social media mobile app called "BEAT MATES" for dancers, built with React Native
 - [x] JWT auth (login/register)
 - [x] Profile management (edit bio, picture, categories)
 - [x] Follow/Unfollow
-- [x] User search (by username/name)
+- [x] User search (by username/name) with dedicated search page
 
 ### Social Feed
 - [x] Create posts (photo, video, text)
-- [x] Carousel posts (multi-image with swipe, up to 10 images)
-- [x] Like/Unlike posts
-- [x] Double-tap to like (heart animation)
+- [x] Carousel posts (multi-image with swipe, up to 10 images, dots indicator)
+- [x] Like/Unlike posts (optimistic UI)
+- [x] Double-tap to like with heart animation
 - [x] Comments
 - [x] Save/Bookmark posts
-- [x] Delete own posts (long-press on profile grid, trash icon in detail)
-- [x] Stories (create, view, 24h expiry)
+- [x] Delete own posts (trash icon in feed + long-press on profile grid + trash in detail view)
+- [x] Stories (create, view, 24h expiry) - uses expo-video for native video playback
+- [x] Story thumbnails for video stories (generated via ffmpeg)
 - [x] Reels (vertical scroll)
+
+### Navigation
+- [x] Search button in header -> search page
+- [x] Messages button in header -> chat list
+- [x] Music tab working from ALL pages (home, reels, profile, available, music)
+- [x] TabBar navigation complete across all screens
 
 ### E-commerce
 - [x] Upload video lessons with compression
@@ -66,13 +69,13 @@ Social media mobile app called "BEAT MATES" for dancers, built with React Native
 
 ### Messaging & Social
 - [x] Chat system (conversations list, individual chats)
-- [x] DM from header (messages button wired)
-- [x] Search page (search users from header)
+- [x] DM from header and user profiles
 
-### Camera
-- [x] Full-screen camera (removed square constraint)
-- [x] Photo and video capture
-- [x] Gallery picker with multi-select
+### Performance Improvements
+- [x] Removed WebView from PostCard (uses Image thumbnails instead) - massive perf gain
+- [x] Removed WebView from story viewer (uses expo-video VideoView) - faster, no black screen
+- [x] Optimistic UI updates for likes
+- [x] Camera: full-screen (removed square constraint)
 
 ---
 
