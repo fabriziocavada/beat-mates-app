@@ -1,6 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form, Header, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -1434,7 +1434,6 @@ async def stream_media(filename: str, request: Request):
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="File not found")
     
-    # Determine content type
     ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
     content_types = {
         'mp4': 'video/mp4', 'mov': 'video/quicktime', 'webm': 'video/webm',
@@ -1444,14 +1443,63 @@ async def stream_media(filename: str, request: Request):
         'm4a': 'audio/mp4', 'ogg': 'audio/ogg',
     }
     media_type = content_types.get(ext, 'application/octet-stream')
+    file_size = filepath.stat().st_size
     
-    # Serve all files directly as FileResponse (works for both web and native)
+    # Handle Range requests (required for iOS audio/video streaming)
+    range_header = request.headers.get('range')
+    if range_header and request.method == "GET":
+        try:
+            range_spec = range_header.replace('bytes=', '')
+            parts = range_spec.split('-')
+            start = int(parts[0]) if parts[0] else 0
+            end = int(parts[1]) if parts[1] else file_size - 1
+            end = min(end, file_size - 1)
+            content_length = end - start + 1
+            
+            def iter_file():
+                with open(filepath, 'rb') as f:
+                    f.seek(start)
+                    remaining = content_length
+                    while remaining > 0:
+                        chunk = f.read(min(8192, remaining))
+                        if not chunk:
+                            break
+                        remaining -= len(chunk)
+                        yield chunk
+            
+            return StreamingResponse(
+                iter_file(),
+                status_code=206,
+                media_type=media_type,
+                headers={
+                    'Content-Range': f'bytes {start}-{end}/{file_size}',
+                    'Content-Length': str(content_length),
+                    'Accept-Ranges': 'bytes',
+                    'Cache-Control': 'public, max-age=3600',
+                }
+            )
+        except Exception:
+            pass  # Fall through to normal response
+    
+    # HEAD request or normal GET
+    if request.method == "HEAD":
+        return Response(
+            content=b'',
+            media_type=media_type,
+            headers={
+                'Content-Length': str(file_size),
+                'Accept-Ranges': 'bytes',
+                'Cache-Control': 'public, max-age=3600',
+            }
+        )
+    
     return FileResponse(
         path=str(filepath),
         media_type=media_type,
         headers={
             'Accept-Ranges': 'bytes',
             'Cache-Control': 'public, max-age=3600',
+            'Content-Length': str(file_size),
         }
     )
 

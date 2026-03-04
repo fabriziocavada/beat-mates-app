@@ -1,15 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, ScrollView, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, Image, Dimensions, ScrollView, Animated, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { WebView } from 'react-native-webview';
 import api, { getMediaUrl, getThumbnailUrl } from '../services/api';
 
 const { width } = Dimensions.get('window');
-
-interface Liker {
-  id: string;
-  username: string;
-  profile_image: string | null;
-}
 
 interface Post {
   id: string;
@@ -27,7 +22,6 @@ interface Post {
   likes_count: number;
   comments_count: number;
   is_liked: boolean;
-  recent_likers?: Liker[];
   created_at: string;
 }
 
@@ -43,6 +37,22 @@ function isVideoPath(path: string | null | undefined): boolean {
   if (!path) return false;
   const lower = path.toLowerCase();
   return lower.includes('.mp4') || lower.includes('.mov') || lower.includes('.webm') || lower.includes('video');
+}
+
+// Video player using WebView - same approach as Reels (proven to work on iOS)
+function FeedVideoPlayer({ url, height }: { url: string; height: number }) {
+  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100%;height:100%;object-fit:cover}</style></head><body><video src="${url}" autoplay loop muted playsinline webkit-playsinline></video></body></html>`;
+  return (
+    <WebView
+      source={{ html }}
+      style={{ width: '100%', height }}
+      scrollEnabled={false}
+      bounces={false}
+      allowsInlineMediaPlayback={true}
+      mediaPlaybackRequiresUserAction={false}
+      javaScriptEnabled={true}
+    />
+  );
 }
 
 export default function PostCard({ post, onUserPress, onCommentPress, onDeletePress, currentUserId }: PostCardProps) {
@@ -61,6 +71,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
     : (post.media ? [post.media] : []);
   const isCarousel = mediaUrls.length > 1;
   const mediaHeight = Math.min(width * 1.25, 500);
+  const isOwner = currentUserId === post.user_id;
 
   const handleDoubleTap = () => {
     const now = Date.now();
@@ -72,7 +83,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
         Animated.spring(heartScale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 8 }),
         Animated.timing(heartOpacity, { toValue: 0, duration: 300, delay: 300, useNativeDriver: true }),
       ]).start();
-      lastTap.current = 0; // Reset to prevent triple-tap
+      lastTap.current = 0;
     } else {
       lastTap.current = now;
     }
@@ -96,7 +107,10 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
   };
 
   const handleDelete = () => {
-    if (onDeletePress) onDeletePress(post.id);
+    Alert.alert('Elimina post', 'Sei sicuro di voler eliminare questo post?', [
+      { text: 'Annulla', style: 'cancel' },
+      { text: 'Elimina', style: 'destructive', onPress: () => onDeletePress?.(post.id) },
+    ]);
   };
 
   const formatDate = (dateString: string) => {
@@ -111,20 +125,24 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
     return date.toLocaleDateString('it-IT');
   };
 
-  const onScroll = (e: any) => {
+  const onCarouselScroll = (e: any) => {
     const idx = Math.round(e.nativeEvent.contentOffset.x / width);
-    setCarouselIndex(idx);
+    if (idx !== carouselIndex) setCarouselIndex(idx);
   };
 
-  // Use thumbnail for videos in feed (performance: no WebView!)
-  const getDisplayUrl = (url: string) => {
-    if (isVideoPath(url)) {
-      return getThumbnailUrl(url) || getMediaUrl(url);
-    }
-    return getMediaUrl(url);
+  const renderMediaItem = (url: string, idx: number) => {
+    const fullUrl = getMediaUrl(url) || '';
+    const isVid = isVideoPath(url);
+    return (
+      <View key={idx} style={{ width, height: mediaHeight }}>
+        {isVid ? (
+          <FeedVideoPlayer url={fullUrl} height={mediaHeight} />
+        ) : (
+          <Image source={{ uri: fullUrl }} style={styles.media} resizeMode="cover" />
+        )}
+      </View>
+    );
   };
-
-  const isOwner = currentUserId === post.user_id;
   
   return (
     <View style={styles.container}>
@@ -152,61 +170,45 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
         )}
       </View>
 
-      {/* Media - use Image only (no WebView for performance) */}
+      {/* Media */}
       {mediaUrls.length > 0 && (
-        <TouchableOpacity activeOpacity={0.95} onPress={handleDoubleTap} style={[styles.mediaContainer, { height: mediaHeight }]}>
-          {isCarousel ? (
-            <ScrollView
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onScroll={onScroll}
-              scrollEventThrottle={16}
-              decelerationRate="fast"
-            >
-              {mediaUrls.map((url, idx) => (
-                <View key={idx} style={{ width, height: mediaHeight }}>
-                  <Image source={{ uri: getDisplayUrl(url) || '' }} style={styles.media} resizeMode="cover" />
-                  {isVideoPath(url) && (
-                    <View style={styles.playOverlay}>
-                      <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.8)" />
-                    </View>
-                  )}
-                </View>
-              ))}
-            </ScrollView>
-          ) : (
-            <View style={{ width: '100%', height: mediaHeight }}>
-              <Image source={{ uri: getDisplayUrl(mediaUrls[0]) || '' }} style={styles.media} resizeMode="cover" />
-              {isVideoPath(mediaUrls[0]) && (
-                <View style={styles.playOverlay}>
-                  <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.8)" />
-                </View>
-              )}
-            </View>
-          )}
-          
-          {/* Carousel dots */}
-          {isCarousel && (
-            <View style={styles.dotsContainer}>
-              {mediaUrls.map((_, idx) => (
-                <View key={idx} style={[styles.dot, idx === carouselIndex && styles.dotActive]} />
-              ))}
-            </View>
-          )}
-          
-          {/* Carousel counter */}
-          {isCarousel && (
-            <View style={styles.counterBadge}>
-              <Text style={styles.counterText}>{carouselIndex + 1}/{mediaUrls.length}</Text>
-            </View>
-          )}
+        <TouchableWithoutFeedback onPress={handleDoubleTap}>
+          <View style={[styles.mediaContainer, { height: mediaHeight }]}>
+            {isCarousel ? (
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={onCarouselScroll}
+                decelerationRate="fast"
+                style={{ width }}
+              >
+                {mediaUrls.map((url, idx) => renderMediaItem(url, idx))}
+              </ScrollView>
+            ) : (
+              renderMediaItem(mediaUrls[0], 0)
+            )}
+            
+            {isCarousel && (
+              <View style={styles.dotsContainer}>
+                {mediaUrls.map((_, idx) => (
+                  <View key={idx} style={[styles.dot, idx === carouselIndex && styles.dotActive]} />
+                ))}
+              </View>
+            )}
+            
+            {isCarousel && (
+              <View style={styles.counterBadge}>
+                <Text style={styles.counterText}>{carouselIndex + 1}/{mediaUrls.length}</Text>
+              </View>
+            )}
 
-          {/* Double-tap heart animation */}
-          <Animated.View style={[styles.heartOverlay, { opacity: heartOpacity, transform: [{ scale: heartScale }] }]} pointerEvents="none">
-            <Ionicons name="heart" size={80} color="#FF6978" />
-          </Animated.View>
-        </TouchableOpacity>
+            {/* Double-tap heart animation */}
+            <Animated.View style={[styles.heartOverlay, { opacity: heartOpacity, transform: [{ scale: heartScale }] }]} pointerEvents="none">
+              <Ionicons name="heart" size={80} color="#FF6978" />
+            </Animated.View>
+          </View>
+        </TouchableWithoutFeedback>
       )}
 
       {/* Actions */}
@@ -227,10 +229,10 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
         </TouchableOpacity>
       </View>
 
-      {/* Likes */}
+      {/* Footer */}
       <View style={styles.footer}>
         {likesCount > 0 && (
-          <Text style={styles.likes}>{likesCount} like{likesCount !== 1 ? '' : ''}</Text>
+          <Text style={styles.likes}>{likesCount} like</Text>
         )}
         {post.caption ? (
           <Text style={styles.caption}>
@@ -262,7 +264,6 @@ const styles = StyleSheet.create({
   deleteBtn: { padding: 8 },
   mediaContainer: { width: '100%', position: 'relative', overflow: 'hidden' },
   media: { width: '100%', height: '100%' },
-  playOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   dotsContainer: { position: 'absolute', bottom: 12, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 4 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.4)' },
   dotActive: { backgroundColor: '#FFF', width: 8, height: 8, borderRadius: 4 },
