@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import re
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
@@ -127,6 +128,7 @@ class PostCreate(BaseModel):
     media: Optional[str] = None
     media_urls: Optional[List[str]] = None  # carousel: multiple media URLs
     caption: Optional[str] = ""
+    thumbnail_url: Optional[str] = None  # custom thumbnail for video posts
 
 class PostResponse(BaseModel):
     id: str
@@ -387,12 +389,59 @@ async def update_me(data: UserUpdate, current_user: dict = Depends(get_current_u
 async def search_users(q: str = "", current_user: dict = Depends(get_current_user)):
     if not q or len(q) < 1:
         return []
-    regex = {"$regex": q, "$options": "i"}
-    users = await db.users.find(
-        {"$or": [{"username": regex}, {"name": regex}], "id": {"$ne": current_user["id"]}},
+    
+    # Build a fuzzy regex pattern that handles common typos
+    # Allow each character to be optional or have one character difference
+    def build_fuzzy_pattern(query: str) -> str:
+        """Build a regex pattern that tolerates typos:
+        - Missing characters
+        - Extra characters  
+        - Transposed characters
+        - Wrong characters
+        """
+        pattern_parts = []
+        for i, char in enumerate(query.lower()):
+            if char.isalnum():
+                # Allow this char to be missing or different
+                # Also allow an extra char before this one
+                pattern_parts.append(f".?{re.escape(char)}?")
+            else:
+                pattern_parts.append(re.escape(char))
+        
+        # Join and make it a partial match
+        return ".*" + "".join(pattern_parts) + ".*"
+    
+    fuzzy_pattern = build_fuzzy_pattern(q)
+    
+    # First try exact/partial match (higher priority)
+    exact_regex = {"$regex": q, "$options": "i"}
+    exact_users = await db.users.find(
+        {"$or": [{"username": exact_regex}, {"name": exact_regex}], "id": {"$ne": current_user["id"]}},
         {"_id": 0, "password_hash": 0, "password": 0}
     ).to_list(20)
-    return users
+    
+    # If we have enough exact results, return them
+    if len(exact_users) >= 5:
+        return exact_users
+    
+    # Otherwise, also search with fuzzy pattern
+    fuzzy_regex = {"$regex": fuzzy_pattern, "$options": "i"}
+    fuzzy_users = await db.users.find(
+        {"$or": [{"username": fuzzy_regex}, {"name": fuzzy_regex}], "id": {"$ne": current_user["id"]}},
+        {"_id": 0, "password_hash": 0, "password": 0}
+    ).to_list(20)
+    
+    # Combine results, prioritizing exact matches
+    seen_ids = {u["id"] for u in exact_users}
+    combined = exact_users[:]
+    for u in fuzzy_users:
+        if u["id"] not in seen_ids:
+            combined.append(u)
+            seen_ids.add(u["id"])
+        if len(combined) >= 20:
+            break
+    
+    return combined
 
 @api_router.get("/users/{user_id}", response_model=UserResponse)
 async def get_user(user_id: str, current_user: dict = Depends(get_current_user)):
@@ -510,6 +559,7 @@ async def create_post(data: PostCreate, current_user: dict = Depends(get_current
         "type": data.type,
         "media": media_url,
         "media_urls": media_urls,
+        "thumbnail": data.thumbnail_url,  # custom thumbnail if provided
         "caption": data.caption or "",
         "likes_count": 0,
         "comments_count": 0,

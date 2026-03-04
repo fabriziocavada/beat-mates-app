@@ -28,6 +28,16 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
     );
   }
 
+  // Only render WebView when active - HUGE performance improvement
+  if (!isActive) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name="videocam" size={64} color="#333" />
+        <Text style={{ color: '#444', marginTop: 8, fontSize: 12 }}>Scorri per guardare</Text>
+      </View>
+    );
+  }
+
   const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100vw;height:100vh;object-fit:cover}</style></head><body><video src="${mediaUrl}" autoplay loop muted playsinline webkit-playsinline></video><script>var v=document.querySelector('video');document.addEventListener('click',function(){v.paused?v.play():v.pause()});</script></body></html>`;
 
   return (
@@ -78,8 +88,30 @@ export default function ReelsScreen() {
   const loadReels = async () => {
     try {
       const response = await api.get('/posts');
-      // Show ONLY video posts
-      const videoPosts = response.data.filter((p: ReelPost) => p.type === 'video' && p.media);
+      // Show video posts - handle both single videos (media) and carousel videos (media_urls)
+      const videoPosts = response.data.filter((p: any) => {
+        // Single video post
+        if (p.type === 'video' && p.media) return true;
+        // Carousel post with at least one video
+        if (p.media_urls && p.media_urls.length > 0) {
+          const hasVideo = p.media_urls.some((url: string) => {
+            const l = url.toLowerCase();
+            return l.includes('.mp4') || l.includes('.mov') || l.includes('.webm') || l.includes('video');
+          });
+          return hasVideo;
+        }
+        return false;
+      }).map((p: any) => {
+        // For carousel posts, extract the first video URL
+        if (p.media_urls && p.media_urls.length > 0 && !p.media) {
+          const videoUrl = p.media_urls.find((url: string) => {
+            const l = url.toLowerCase();
+            return l.includes('.mp4') || l.includes('.mov') || l.includes('.webm') || l.includes('video');
+          });
+          return { ...p, media: videoUrl || p.media_urls[0] };
+        }
+        return p;
+      });
       setReels(videoPosts);
     } catch (error) {
       console.error('Failed to load reels', error);

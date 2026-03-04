@@ -43,6 +43,19 @@ interface Post {
   media: string | null;
 }
 
+interface VideoLesson {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string;
+  price: number;
+  currency: string;
+  duration_minutes: number;
+  video_url: string | null;
+  thumbnail_url: string | null;
+  created_at: string;
+}
+
 export default function UserProfileScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -50,6 +63,7 @@ export default function UserProfileScreen() {
   
   const [user, setUser] = useState<UserProfile | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [videoLessons, setVideoLessons] = useState<VideoLesson[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'posts' | 'shop'>('posts');
@@ -58,6 +72,7 @@ export default function UserProfileScreen() {
     if (id) {
       loadUser();
       loadPosts();
+      loadVideoLessons();
       checkFollowing();
     }
   }, [id]);
@@ -79,6 +94,15 @@ export default function UserProfileScreen() {
       setPosts(response.data);
     } catch (error) {
       console.error('Failed to load posts', error);
+    }
+  };
+  
+  const loadVideoLessons = async () => {
+    try {
+      const response = await api.get(`/users/${id}/video-lessons`);
+      setVideoLessons(response.data);
+    } catch (error) {
+      console.error('Failed to load video lessons', error);
     }
   };
   
@@ -169,7 +193,11 @@ export default function UserProfileScreen() {
       <ScrollView>
         {/* Profile Info */}
         <View style={styles.profileSection}>
-          <View style={styles.avatarContainer}>
+          <TouchableOpacity 
+            style={styles.avatarContainer}
+            onPress={() => router.push(`/(main)/story/${id}`)}
+            data-testid="user-profile-avatar"
+          >
             <View style={[
               styles.avatarBorder,
               user.is_available && styles.avatarBorderAvailable
@@ -182,7 +210,7 @@ export default function UserProfileScreen() {
                 </View>
               )}
             </View>
-          </View>
+          </TouchableOpacity>
           
           <Text style={styles.name}>{user.name}</Text>
           <Text style={styles.bio}>{user.bio || 'Dance Teacher'}</Text>
@@ -281,14 +309,56 @@ export default function UserProfileScreen() {
           </TouchableOpacity>
         </View>
         
-        {/* Posts Grid */}
-        <FlatList
-          data={posts}
-          renderItem={renderPost}
-          keyExtractor={(item) => item.id}
-          numColumns={3}
-          scrollEnabled={false}
-        />
+        {/* Posts Grid or Shop */}
+        {activeTab === 'posts' ? (
+          <FlatList
+            data={posts}
+            renderItem={renderPost}
+            keyExtractor={(item) => item.id}
+            numColumns={3}
+            scrollEnabled={false}
+          />
+        ) : (
+          <View style={styles.shopContainer}>
+            {videoLessons.length === 0 ? (
+              <View style={styles.emptyShop}>
+                <Ionicons name="videocam-outline" size={40} color={Colors.textMuted} />
+                <Text style={styles.emptyShopText}>Nessuna lezione in vendita</Text>
+              </View>
+            ) : (
+              videoLessons.map((lesson) => (
+                <TouchableOpacity 
+                  key={lesson.id} 
+                  style={styles.lessonCard}
+                  onPress={() => router.push(`/(main)/lesson-player/${lesson.id}`)}
+                  data-testid={`user-lesson-${lesson.id}`}
+                >
+                  <View style={styles.lessonThumbContainer}>
+                    {lesson.thumbnail_url ? (
+                      <Image source={{ uri: getMediaUrl(lesson.thumbnail_url) || '' }} style={styles.lessonThumb} />
+                    ) : (
+                      <View style={[styles.lessonThumb, styles.lessonThumbPlaceholder]}>
+                        <Ionicons name="videocam" size={36} color="#555" />
+                      </View>
+                    )}
+                    <View style={styles.lessonPlayOverlay}>
+                      <View style={styles.lessonPlayCircle}>
+                        <Ionicons name="play" size={24} color="#FFF" />
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.lessonInfo}>
+                    <Text style={styles.lessonTitle}>{lesson.title}</Text>
+                    <Text style={styles.lessonDuration}>
+                      {String(Math.floor(lesson.duration_minutes / 60)).padStart(2, '0')}:{String(lesson.duration_minutes % 60).padStart(2, '0')} min
+                    </Text>
+                    <Text style={styles.lessonPrice}>{lesson.price.toFixed(2)} {lesson.currency}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
+        )}
       </ScrollView>
       
       <TabBar activeTab="" onTabPress={handleTabPress} />
@@ -477,5 +547,74 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  shopContainer: {
+    paddingHorizontal: 12,
+    paddingBottom: 24,
+  },
+  emptyShop: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyShopText: {
+    color: Colors.textMuted,
+    fontSize: 14,
+    marginTop: 12,
+  },
+  lessonCard: {
+    marginBottom: 16,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: '#0A0A0A',
+  },
+  lessonThumbContainer: {
+    width: '100%',
+    height: 180,
+    position: 'relative',
+  },
+  lessonThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  lessonThumbPlaceholder: {
+    backgroundColor: '#1C1C1E',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lessonPlayOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  lessonPlayCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: '#FFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: 3,
+  },
+  lessonInfo: {
+    padding: 12,
+  },
+  lessonTitle: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  lessonDuration: {
+    color: '#888',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  lessonPrice: {
+    color: '#4CD964',
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 4,
   },
 });

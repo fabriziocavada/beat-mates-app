@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, Image, Dimensions, FlatList, Animated, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
@@ -35,10 +35,23 @@ function isVideoPath(path: string | null | undefined): boolean {
 }
 
 // Video player with tap to play/pause/unmute
-function FeedVideoPlayer({ url, height }: { url: string; height: number }) {
+function FeedVideoPlayer({ url, height, isVisible }: { url: string; height: number; isVisible: boolean }) {
   const [muted, setMuted] = useState(true);
   const [paused, setPaused] = useState(false);
   const webRef = useRef<WebView>(null);
+
+  // Pause video when not visible
+  useEffect(() => {
+    if (!isVisible && webRef.current) {
+      webRef.current.injectJavaScript(`
+        var v = document.querySelector('video');
+        if(v) { v.pause(); v.muted = true; }
+        true;
+      `);
+      setPaused(true);
+      setMuted(true);
+    }
+  }, [isVisible]);
 
   const togglePlayPause = () => {
     const newPaused = !paused;
@@ -59,6 +72,15 @@ function FeedVideoPlayer({ url, height }: { url: string; height: number }) {
       true;
     `);
   };
+
+  // Only render WebView when visible
+  if (!isVisible) {
+    return (
+      <View style={{ width: '100%', height, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name="videocam" size={48} color="#444" />
+      </View>
+    );
+  }
 
   const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100%;height:100%;object-fit:cover}</style></head><body><video src="${url}" autoplay loop muted playsinline webkit-playsinline></video></body></html>`;
 
@@ -171,11 +193,12 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
   const renderCarouselItem = ({ item: url, index }: { item: string; index: number }) => {
     const fullUrl = getMediaUrl(url) || '';
     const isVid = isVideoPath(url);
+    const isCurrentSlide = index === carouselIndex;
     return (
       <TouchableWithoutFeedback onPress={handleDoubleTap}>
         <View style={{ width: SCREEN_WIDTH, height: mediaHeight }}>
           {isVid ? (
-            <FeedVideoPlayer url={fullUrl} height={mediaHeight} />
+            <FeedVideoPlayer url={fullUrl} height={mediaHeight} isVisible={isCurrentSlide} />
           ) : (
             <Image source={{ uri: fullUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
           )}
@@ -229,7 +252,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
             <TouchableWithoutFeedback onPress={handleDoubleTap}>
               <View style={{ width: '100%', height: mediaHeight }}>
                 {isVideoPath(mediaUrls[0]) ? (
-                  <FeedVideoPlayer url={getMediaUrl(mediaUrls[0]) || ''} height={mediaHeight} />
+                  <FeedVideoPlayer url={getMediaUrl(mediaUrls[0]) || ''} height={mediaHeight} isVisible={true} />
                 ) : (
                   <Image source={{ uri: getMediaUrl(mediaUrls[0]) || '' }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                 )}

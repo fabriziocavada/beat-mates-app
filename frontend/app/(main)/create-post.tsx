@@ -26,6 +26,7 @@ const { width } = Dimensions.get('window');
 interface MediaItem {
   uri: string;
   type: 'photo' | 'video';
+  customThumbnail?: string;
 }
 
 export default function CreatePostScreen() {
@@ -100,6 +101,27 @@ export default function CreatePostScreen() {
       setPreviewIndex(previewIndex - 1);
     }
   };
+
+  const pickThumbnail = async (index: number) => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert('Permesso richiesto', 'Consenti accesso alla galleria');
+      return;
+    }
+    
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.5,
+    });
+    
+    if (!result.canceled && result.assets[0]) {
+      setMediaItems(prev => prev.map((item, i) => 
+        i === index ? { ...item, customThumbnail: result.assets[0].uri } : item
+      ));
+    }
+  };
   
   const handlePost = async () => {
     if (mediaItems.length === 0 && !caption) {
@@ -111,9 +133,16 @@ export default function CreatePostScreen() {
     try {
       // Upload all media files
       const uploadedUrls: string[] = [];
+      let customThumbnailUrl: string | null = null;
+      
       for (const item of mediaItems) {
         const serverUrl = await uploadFile(item.uri);
         if (serverUrl) uploadedUrls.push(serverUrl);
+        
+        // Upload custom thumbnail for video if specified
+        if (item.type === 'video' && item.customThumbnail && !customThumbnailUrl) {
+          customThumbnailUrl = await uploadFile(item.customThumbnail);
+        }
       }
       
       const hasVideo = mediaItems.some(m => m.type === 'video');
@@ -124,6 +153,7 @@ export default function CreatePostScreen() {
         media: uploadedUrls[0] || null,
         media_urls: uploadedUrls,
         caption,
+        thumbnail_url: customThumbnailUrl,
       });
       
       refreshUser();
@@ -202,10 +232,28 @@ export default function CreatePostScreen() {
                       <Ionicons name="close-circle" size={32} color="#FF6978" />
                     </TouchableOpacity>
                     {item.type === 'video' && (
-                      <View style={styles.videoBadge}>
-                        <Ionicons name="videocam" size={14} color="#FFF" />
-                        <Text style={styles.videoBadgeText}>Video</Text>
-                      </View>
+                      <>
+                        <View style={styles.videoBadge}>
+                          <Ionicons name="videocam" size={14} color="#FFF" />
+                          <Text style={styles.videoBadgeText}>Video</Text>
+                        </View>
+                        <TouchableOpacity 
+                          style={styles.thumbnailButton} 
+                          onPress={() => pickThumbnail(idx)}
+                          data-testid={`pick-thumbnail-${idx}`}
+                        >
+                          <Ionicons name="image-outline" size={16} color="#FFF" />
+                          <Text style={styles.thumbnailButtonText}>
+                            {item.customThumbnail ? 'Modifica thumbnail' : 'Scegli thumbnail'}
+                          </Text>
+                        </TouchableOpacity>
+                        {item.customThumbnail && (
+                          <View style={styles.customThumbPreview}>
+                            <Image source={{ uri: item.customThumbnail }} style={styles.customThumbImg} />
+                            <Text style={styles.customThumbLabel}>Thumbnail</Text>
+                          </View>
+                        )}
+                      </>
                     )}
                   </View>
                 ))}
@@ -299,4 +347,9 @@ const styles = StyleSheet.create({
   mediaButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '500', marginTop: 8 },
   mediaButtonHint: { color: '#8E8E93', fontSize: 11, marginTop: 2 },
   captionInput: { color: '#FFFFFF', fontSize: 16, padding: 16, minHeight: 80, textAlignVertical: 'top' },
+  thumbnailButton: { position: 'absolute', bottom: 12, left: 12, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.8)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, gap: 6, borderWidth: 1, borderColor: '#FF6978' },
+  thumbnailButtonText: { color: '#FFF', fontSize: 12, fontWeight: '600' },
+  customThumbPreview: { position: 'absolute', bottom: 12, right: 12, alignItems: 'center' },
+  customThumbImg: { width: 50, height: 50, borderRadius: 6, borderWidth: 2, borderColor: '#4CD964' },
+  customThumbLabel: { color: '#4CD964', fontSize: 10, fontWeight: '600', marginTop: 2 },
 });

@@ -412,7 +412,19 @@ export default function ProfileScreen() {
       >
         {/* Profile Info */}
         <View style={styles.profileSection}>
-          <TouchableOpacity style={styles.avatarContainer} onPress={handleChangeProfilePicture}>
+          <TouchableOpacity 
+            style={styles.avatarContainer} 
+            onPress={() => {
+              if (userStories.length > 0) {
+                // If user has stories, open story viewer
+                router.push(`/(main)/story/${user?.id}`);
+              } else {
+                // If no stories, change profile picture
+                handleChangeProfilePicture();
+              }
+            }}
+            onLongPress={handleChangeProfilePicture}
+          >
             <View style={[
               styles.avatarBorder,
               user?.is_available && styles.avatarBorderAvailable
