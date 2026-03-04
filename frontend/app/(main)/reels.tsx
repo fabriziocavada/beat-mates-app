@@ -122,6 +122,7 @@ export default function ReelsScreen() {
       case 'create': router.push('/(main)/create-post'); break;
       case 'available': router.push('/(main)/available'); break;
       case 'reels': break;
+      case 'music': router.push('/(main)/music'); break;
       case 'profile': router.push('/(main)/profile'); break;
     }
   };

@@ -6,6 +6,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Text,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
@@ -103,11 +104,25 @@ export default function HomeScreen() {
     }
   };
   
+  const handleDeletePost = async (postId: string) => {
+    Alert.alert('Elimina post', 'Sei sicuro di voler eliminare questo post?', [
+      { text: 'Annulla', style: 'cancel' },
+      { text: 'Elimina', style: 'destructive', onPress: async () => {
+        try {
+          await api.delete(`/posts/${postId}`);
+          setPosts(prev => prev.filter(p => p.id !== postId));
+        } catch { Alert.alert('Errore', 'Impossibile eliminare il post'); }
+      }},
+    ]);
+  };
+
   const renderItem = ({ item }: { item: Post }) => (
     <PostCard
       post={item}
+      currentUserId={user?.id}
       onUserPress={(userId) => router.push(`/(main)/user/${userId}`)}
-      onCommentPress={(postId) => router.push(`/(main)/comments/${postId}`)}
+      onCommentPress={(postId) => router.push(`/(main)/post/${postId}`)}
+      onDeletePress={handleDeletePost}
     />
   );
   

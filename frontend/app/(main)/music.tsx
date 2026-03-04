@@ -181,6 +181,7 @@ export default function MusicScreen() {
       case 'create': router.push('/(main)/create-post'); break;
       case 'available': router.push('/(main)/available'); break;
       case 'reels': router.push('/(main)/reels'); break;
+      case 'music': break;
       case 'profile': router.push('/(main)/profile'); break;
     }
   };

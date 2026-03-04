@@ -1,8 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, ScrollView, Animated, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, ScrollView, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { WebView } from 'react-native-webview';
-import api, { getMediaUrl } from '../services/api';
+import api, { getMediaUrl, getThumbnailUrl } from '../services/api';
 
 const { width } = Dimensions.get('window');
 
@@ -37,13 +36,7 @@ interface PostCardProps {
   onUserPress?: (userId: string) => void;
   onCommentPress?: (postId: string) => void;
   onDeletePress?: (postId: string) => void;
-}
-
-function NativeVideoPlayer({ url, height }: { url: string; height: number }) {
-  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100%;height:100%;object-fit:cover}</style></head><body><video src="${url}" autoplay loop muted playsinline webkit-playsinline></video></body></html>`;
-  return (
-    <WebView source={{ html }} style={{ width: '100%', height }} scrollEnabled={false} bounces={false} allowsInlineMediaPlayback={true} mediaPlaybackRequiresUserAction={false} javaScriptEnabled={true} />
-  );
+  currentUserId?: string;
 }
 
 function isVideoPath(path: string | null | undefined): boolean {
@@ -52,10 +45,9 @@ function isVideoPath(path: string | null | undefined): boolean {
   return lower.includes('.mp4') || lower.includes('.mov') || lower.includes('.webm') || lower.includes('video');
 }
 
-export default function PostCard({ post, onUserPress, onCommentPress, onDeletePress }: PostCardProps) {
+export default function PostCard({ post, onUserPress, onCommentPress, onDeletePress, currentUserId }: PostCardProps) {
   const [isLiked, setIsLiked] = useState(post.is_liked);
   const [likesCount, setLikesCount] = useState(post.likes_count);
-  const [recentLikers, setRecentLikers] = useState<Liker[]>(post.recent_likers || []);
   const [isSaved, setIsSaved] = useState(false);
   const [carouselIndex, setCarouselIndex] = useState(0);
   
@@ -72,37 +64,39 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
 
   const handleDoubleTap = () => {
     const now = Date.now();
-    if (now - lastTap.current < 300) {
+    if (now - lastTap.current < 350) {
       if (!isLiked) handleLike();
-      // Show heart animation
-      heartScale.setValue(0);
+      heartScale.setValue(0.3);
       heartOpacity.setValue(1);
       Animated.sequence([
-        Animated.spring(heartScale, { toValue: 1, useNativeDriver: true, speed: 15, bounciness: 10 }),
-        Animated.timing(heartOpacity, { toValue: 0, duration: 400, delay: 200, useNativeDriver: true }),
+        Animated.spring(heartScale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 8 }),
+        Animated.timing(heartOpacity, { toValue: 0, duration: 300, delay: 300, useNativeDriver: true }),
       ]).start();
+      lastTap.current = 0; // Reset to prevent triple-tap
+    } else {
+      lastTap.current = now;
     }
-    lastTap.current = now;
   };
   
   const handleLike = async () => {
+    const wasLiked = isLiked;
+    setIsLiked(!wasLiked);
+    setLikesCount(prev => wasLiked ? prev - 1 : prev + 1);
     try {
-      const response = await api.post(`/posts/${post.id}/like`);
-      setIsLiked(response.data.liked);
-      setLikesCount((prev) => response.data.liked ? prev + 1 : prev - 1);
-      if (response.data.liked) {
-        try { const likersRes = await api.get(`/posts/${post.id}/likers`); setRecentLikers(likersRes.data); } catch {}
-      }
-    } catch (error) {
-      console.error('Failed to like post', error);
+      await api.post(`/posts/${post.id}/like`);
+    } catch {
+      setIsLiked(wasLiked);
+      setLikesCount(prev => wasLiked ? prev + 1 : prev - 1);
     }
   };
   
   const handleSave = async () => {
-    try {
-      const res = await api.post(`/posts/${post.id}/save`);
-      setIsSaved(res.data.saved);
-    } catch {}
+    setIsSaved(!isSaved);
+    try { await api.post(`/posts/${post.id}/save`); } catch { setIsSaved(!isSaved); }
+  };
+
+  const handleDelete = () => {
+    if (onDeletePress) onDeletePress(post.id);
   };
 
   const formatDate = (dateString: string) => {
@@ -121,29 +115,46 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
     const idx = Math.round(e.nativeEvent.contentOffset.x / width);
     setCarouselIndex(idx);
   };
+
+  // Use thumbnail for videos in feed (performance: no WebView!)
+  const getDisplayUrl = (url: string) => {
+    if (isVideoPath(url)) {
+      return getThumbnailUrl(url) || getMediaUrl(url);
+    }
+    return getMediaUrl(url);
+  };
+
+  const isOwner = currentUserId === post.user_id;
   
   return (
     <View style={styles.container}>
       {/* Header */}
-      <TouchableOpacity style={styles.header} onPress={() => onUserPress?.(post.user_id)}>
-        <View style={styles.avatarContainer}>
-          {post.user?.profile_image ? (
-            <Image source={{ uri: getMediaUrl(post.user.profile_image) || '' }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Ionicons name="person" size={16} color="#666" />
-            </View>
-          )}
-        </View>
-        <View style={styles.headerInfo}>
-          <Text style={styles.username}>{post.user?.username || 'Unknown'}</Text>
-          <Text style={styles.date}>{formatDate(post.created_at)}</Text>
-        </View>
-      </TouchableOpacity>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.headerLeft} onPress={() => onUserPress?.(post.user_id)}>
+          <View style={styles.avatarContainer}>
+            {post.user?.profile_image ? (
+              <Image source={{ uri: getMediaUrl(post.user.profile_image) || '' }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Ionicons name="person" size={16} color="#666" />
+              </View>
+            )}
+          </View>
+          <View>
+            <Text style={styles.username}>{post.user?.username || 'Unknown'}</Text>
+            <Text style={styles.date}>{formatDate(post.created_at)}</Text>
+          </View>
+        </TouchableOpacity>
+        {isOwner && (
+          <TouchableOpacity onPress={handleDelete} style={styles.deleteBtn} data-testid={`delete-post-${post.id}`}>
+            <Ionicons name="trash-outline" size={20} color="#FF6978" />
+          </TouchableOpacity>
+        )}
+      </View>
 
-      {/* Media - Carousel or Single */}
+      {/* Media - use Image only (no WebView for performance) */}
       {mediaUrls.length > 0 && (
-        <TouchableOpacity activeOpacity={1} onPress={handleDoubleTap} style={[styles.mediaContainer, { height: mediaHeight }]}>
+        <TouchableOpacity activeOpacity={0.95} onPress={handleDoubleTap} style={[styles.mediaContainer, { height: mediaHeight }]}>
           {isCarousel ? (
             <ScrollView
               horizontal
@@ -153,26 +164,26 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
               scrollEventThrottle={16}
               decelerationRate="fast"
             >
-              {mediaUrls.map((url, idx) => {
-                const fullUrl = getMediaUrl(url) || '';
-                const isVid = isVideoPath(url);
-                return (
-                  <View key={idx} style={{ width, height: mediaHeight }}>
-                    {isVid ? (
-                      <NativeVideoPlayer url={fullUrl} height={mediaHeight} />
-                    ) : (
-                      <Image source={{ uri: fullUrl }} style={styles.media} resizeMode="cover" />
-                    )}
-                  </View>
-                );
-              })}
+              {mediaUrls.map((url, idx) => (
+                <View key={idx} style={{ width, height: mediaHeight }}>
+                  <Image source={{ uri: getDisplayUrl(url) || '' }} style={styles.media} resizeMode="cover" />
+                  {isVideoPath(url) && (
+                    <View style={styles.playOverlay}>
+                      <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.8)" />
+                    </View>
+                  )}
+                </View>
+              ))}
             </ScrollView>
           ) : (
-            isVideoPath(mediaUrls[0]) ? (
-              <NativeVideoPlayer url={getMediaUrl(mediaUrls[0]) || ''} height={mediaHeight} />
-            ) : (
-              <Image source={{ uri: getMediaUrl(mediaUrls[0]) || '' }} style={styles.media} resizeMode="cover" />
-            )
+            <View style={{ width: '100%', height: mediaHeight }}>
+              <Image source={{ uri: getDisplayUrl(mediaUrls[0]) || '' }} style={styles.media} resizeMode="cover" />
+              {isVideoPath(mediaUrls[0]) && (
+                <View style={styles.playOverlay}>
+                  <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.8)" />
+                </View>
+              )}
+            </View>
           )}
           
           {/* Carousel dots */}
@@ -191,13 +202,6 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
             </View>
           )}
 
-          {/* Video indicator */}
-          {!isCarousel && isVideoPath(mediaUrls[0]) && (
-            <View style={styles.videoIndicator}>
-              <Ionicons name="videocam" size={14} color="#FFF" />
-            </View>
-          )}
-          
           {/* Double-tap heart animation */}
           <Animated.View style={[styles.heartOverlay, { opacity: heartOpacity, transform: [{ scale: heartScale }] }]} pointerEvents="none">
             <Ionicons name="heart" size={80} color="#FF6978" />
@@ -219,36 +223,14 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
           </TouchableOpacity>
         </View>
         <TouchableOpacity onPress={handleSave}>
-          <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={22} color={isSaved ? '#FFF' : '#FFF'} />
+          <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={22} color="#FFF" />
         </TouchableOpacity>
       </View>
 
-      {/* Likes with profile thumbs */}
+      {/* Likes */}
       <View style={styles.footer}>
         {likesCount > 0 && (
-          <View style={styles.likesRow}>
-            {recentLikers.length > 0 && (
-              <View style={styles.likerThumbs}>
-                {recentLikers.slice(0, 4).map((liker, idx) => (
-                  <View key={liker.id} style={[styles.likerThumb, { marginLeft: idx > 0 ? -8 : 0, zIndex: 10 - idx }]}>
-                    {liker.profile_image ? (
-                      <Image source={{ uri: getMediaUrl(liker.profile_image) || '' }} style={styles.likerImg} />
-                    ) : (
-                      <View style={[styles.likerImg, styles.likerImgPlaceholder]}>
-                        <Ionicons name="person" size={10} color="#999" />
-                      </View>
-                    )}
-                  </View>
-                ))}
-              </View>
-            )}
-            <Text style={styles.likes}>
-              {recentLikers.length > 0 && likesCount > recentLikers.length
-                ? `Piace a ${recentLikers[0]?.username} e altri ${likesCount - 1}`
-                : `${likesCount} like${likesCount !== 1 ? '' : ''}`
-              }
-            </Text>
-          </View>
+          <Text style={styles.likes}>{likesCount} like{likesCount !== 1 ? '' : ''}</Text>
         )}
         {post.caption ? (
           <Text style={styles.caption}>
@@ -270,16 +252,17 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
 
 const styles = StyleSheet.create({
   container: { backgroundColor: '#0a0a1a', marginBottom: 8 },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 12 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12 },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   avatarContainer: { marginRight: 10 },
   avatar: { width: 32, height: 32, borderRadius: 16 },
   avatarPlaceholder: { backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center' },
-  headerInfo: { flex: 1 },
   username: { color: '#FFF', fontWeight: '600', fontSize: 14 },
   date: { color: '#888', fontSize: 11, marginTop: 1 },
+  deleteBtn: { padding: 8 },
   mediaContainer: { width: '100%', position: 'relative', overflow: 'hidden' },
   media: { width: '100%', height: '100%' },
-  videoIndicator: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, padding: 4 },
+  playOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   dotsContainer: { position: 'absolute', bottom: 12, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 4 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.4)' },
   dotActive: { backgroundColor: '#FFF', width: 8, height: 8, borderRadius: 4 },
@@ -290,12 +273,7 @@ const styles = StyleSheet.create({
   leftActions: { flexDirection: 'row', alignItems: 'center' },
   actionBtn: { marginRight: 16 },
   footer: { paddingHorizontal: 12, marginBottom: 8 },
-  likesRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  likerThumbs: { flexDirection: 'row', marginRight: 8 },
-  likerThumb: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#0a0a1a', overflow: 'hidden' },
-  likerImg: { width: '100%', height: '100%', borderRadius: 11 },
-  likerImgPlaceholder: { backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center' },
-  likes: { color: '#FFF', fontWeight: '600', fontSize: 13 },
+  likes: { color: '#FFF', fontWeight: '600', fontSize: 13, marginBottom: 4 },
   caption: { color: '#FFF', fontSize: 13, lineHeight: 18 },
   captionUsername: { fontWeight: '600' },
   viewComments: { color: '#888', fontSize: 13, marginTop: 4 },

@@ -780,6 +780,7 @@ class StoryResponse(BaseModel):
     user_id: str
     user: Optional[dict] = None
     media: str
+    thumbnail: Optional[str] = None
     type: str
     views_count: int = 0
     created_at: datetime
@@ -813,11 +814,29 @@ async def create_story(data: StoryCreate, current_user: dict = Depends(get_curre
         "id": story_id,
         "user_id": current_user["id"],
         "media": media_value,
+        "thumbnail": None,
         "type": data.type,
         "views_count": 0,
         "created_at": now,
         "expires_at": now + timedelta(hours=24)
     }
+    
+    # Generate thumbnail for video stories
+    if data.type == "video" and media_value and media_value.startswith("/api/uploads/"):
+        try:
+            video_filename = media_value.replace("/api/uploads/", "")
+            video_path = UPLOADS_DIR / video_filename
+            thumb_filename = f"thumb_{story_id}.jpg"
+            thumb_path = UPLOADS_DIR / thumb_filename
+            import subprocess
+            subprocess.run([
+                "ffmpeg", "-i", str(video_path), "-ss", "0.5", "-vframes", "1",
+                "-vf", "scale=480:-1", str(thumb_path)
+            ], capture_output=True, timeout=10)
+            if thumb_path.exists():
+                story["thumbnail"] = f"/api/uploads/{thumb_filename}"
+        except Exception as e:
+            logger.error(f"Story thumbnail generation failed: {e}")
     
     await db.stories.insert_one(story)
     
@@ -854,6 +873,7 @@ async def get_stories(current_user: dict = Depends(get_current_user)):
         user_stories[user_id]["stories"].append({
             "id": story["id"],
             "media": story["media"],
+            "thumbnail": story.get("thumbnail"),
             "type": story["type"],
             "created_at": story["created_at"].isoformat()
         })
