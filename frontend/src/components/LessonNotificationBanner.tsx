@@ -177,21 +177,33 @@ export default function LessonNotificationBanner() {
   const handleAccept = async () => {
     stopAlerts();
     setShowModal(false);
+    setPendingRequest(null);
+    lastCountRef.current = 0;
+    
     if (pendingRequest?.id) {
-      router.push('/(main)/lesson-requests');
+      try {
+        // Actually accept the session via API
+        const res = await api.post(`/live-sessions/${pendingRequest.id}/accept`);
+        // Navigate directly to video call
+        router.push(`/(main)/video-call/${pendingRequest.id}`);
+      } catch (e) {
+        // If accept fails, navigate to lesson-requests as fallback
+        router.push('/(main)/lesson-requests');
+      }
     }
   };
 
   const handleReject = async () => {
     stopAlerts();
     setShowModal(false);
+    setPendingRequest(null);
+    lastCountRef.current = 0;
+    
     if (pendingRequest?.id) {
       try {
         await api.post(`/live-sessions/${pendingRequest.id}/reject`);
       } catch {}
     }
-    setPendingRequest(null);
-    lastCountRef.current = 0;
   };
 
   if (!user?.is_available) return null;
