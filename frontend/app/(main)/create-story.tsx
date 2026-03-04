@@ -7,26 +7,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { Video, ResizeMode } from 'expo-av';
 import api, { uploadFile } from '../../src/services/api';
 
 const { width } = Dimensions.get('window');
-
-function NativeVideoPreview({ uri }: { uri: string }) {
-  const player = useVideoPlayer(uri, (p) => {
-    p.loop = true;
-    p.play();
-  });
-  return (
-    <VideoView
-      player={player}
-      style={styles.preview}
-      contentFit="cover"
-      nativeControls={true}
-      allowsPictureInPicture={false}
-    />
-  );
-}
 
 export default function CreateStoryScreen() {
   const router = useRouter();
@@ -40,7 +24,7 @@ export default function CreateStoryScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images', 'videos'],
       quality: 0.7,
-      videoMaxDuration: 10,
+      videoMaxDuration: 15,
     });
     if (!result.canceled && result.assets[0]) {
       setMediaType(result.assets[0].type === 'video' ? 'video' : 'photo');
@@ -63,7 +47,8 @@ export default function CreateStoryScreen() {
     if (!perm.granted) { Alert.alert('Permesso richiesto', 'Consenti accesso alla fotocamera'); return; }
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['videos'],
-      videoMaxDuration: 10,
+      videoMaxDuration: 15,
+      videoQuality: 1,
     });
     if (!result.canceled && result.assets[0]) {
       setMediaType('video');
@@ -112,7 +97,14 @@ export default function CreateStoryScreen() {
         {mediaUri ? (
           <View style={styles.previewContainer}>
             {mediaType === 'video' ? (
-              <NativeVideoPreview uri={mediaUri} />
+              <Video
+                source={{ uri: mediaUri }}
+                style={styles.preview}
+                resizeMode={ResizeMode.COVER}
+                shouldPlay
+                isLooping
+                isMuted={false}
+              />
             ) : (
               <Image source={{ uri: mediaUri }} style={styles.preview} resizeMode="cover" />
             )}
@@ -139,7 +131,7 @@ export default function CreateStoryScreen() {
                 <Ionicons name="videocam" size={40} color="#FF6978" />
               </View>
               <Text style={styles.optionText}>Video</Text>
-              <Text style={styles.optionHint}>max 10s</Text>
+              <Text style={styles.optionHint}>max 15s</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.optionButton} onPress={pickMedia}>
               <View style={styles.optionIcon}>
@@ -165,7 +157,7 @@ const styles = StyleSheet.create({
   content: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   previewContainer: { flex: 1, width: '100%', position: 'relative' },
   preview: { flex: 1, width: '100%' },
-  removeButton: { position: 'absolute', top: 20, right: 20 },
+  removeButton: { position: 'absolute', top: 20, right: 20, zIndex: 10 },
   videoBadge: { position: 'absolute', top: 20, left: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, gap: 4 },
   videoBadgeText: { color: '#FFF', fontSize: 12, fontWeight: '600' },
   optionsContainer: { flexDirection: 'row', gap: 24 },

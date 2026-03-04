@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, Image, TouchableOpacity,
   Dimensions, ActivityIndicator, StatusBar,
@@ -6,11 +6,27 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { WebView } from 'react-native-webview';
 import api, { getMediaUrl } from '../../../src/services/api';
 import Colors from '../../../src/constants/colors';
 
 const { width, height } = Dimensions.get('window');
+
+// Same WebView approach as Reels - proven to work on iOS
+function StoryVideoPlayer({ url }: { url: string }) {
+  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100vw;height:100vh;object-fit:cover}</style></head><body><video src="${url}" autoplay playsinline webkit-playsinline></video></body></html>`;
+  return (
+    <WebView
+      source={{ html }}
+      style={StyleSheet.absoluteFill}
+      scrollEnabled={false}
+      bounces={false}
+      allowsInlineMediaPlayback={true}
+      mediaPlaybackRequiresUserAction={false}
+      javaScriptEnabled={true}
+    />
+  );
+}
 
 interface StoryData {
   id: string;
@@ -36,7 +52,7 @@ export default function StoryViewerScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const STORY_DURATION = 6000; // 6 seconds per story
+  const STORY_DURATION = 6000;
 
   useEffect(() => {
     loadStories();
@@ -51,14 +67,13 @@ export default function StoryViewerScreen() {
       const userIdx = data.findIndex(u => u.user_id === id);
       if (userIdx >= 0) setCurrentUserIdx(userIdx);
       setIsLoading(false);
-      startTimer();
     } catch { router.back(); }
   };
 
-  const startTimer = useCallback(() => {
+  const startTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     setProgress(0);
-    const interval = 50; // update every 50ms
+    const interval = 50;
     let elapsed = 0;
     timerRef.current = setInterval(() => {
       elapsed += interval;
@@ -67,13 +82,15 @@ export default function StoryViewerScreen() {
         goNext();
       }
     }, interval);
-  }, [currentUserIdx, currentStoryIdx, allUserStories]);
+  };
 
   useEffect(() => {
     if (!isLoading && allUserStories.length > 0) startTimer();
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [currentUserIdx, currentStoryIdx, isLoading]);
 
   const goNext = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
     const userStories = allUserStories[currentUserIdx];
     if (!userStories) { router.back(); return; }
     if (currentStoryIdx < userStories.stories.length - 1) {
@@ -87,6 +104,7 @@ export default function StoryViewerScreen() {
   };
 
   const goPrev = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
     if (currentStoryIdx > 0) {
       setCurrentStoryIdx(prev => prev - 1);
     } else if (currentUserIdx > 0) {
@@ -98,11 +116,8 @@ export default function StoryViewerScreen() {
 
   const handleTap = (e: any) => {
     const tapX = e.nativeEvent.locationX;
-    if (tapX < width / 3) {
-      goPrev();
-    } else {
-      goNext();
-    }
+    if (tapX < width / 3) goPrev();
+    else goNext();
   };
 
   if (isLoading) {
@@ -126,16 +141,18 @@ export default function StoryViewerScreen() {
   return (
     <View style={styles.container}>
       <StatusBar hidden />
+      
+      {/* Media content */}
       <TouchableOpacity activeOpacity={1} onPress={handleTap} style={StyleSheet.absoluteFill}>
         {isVideo ? (
-          <StoryVideo url={mediaUrl} />
+          <StoryVideoPlayer url={mediaUrl} />
         ) : (
           <Image source={{ uri: mediaUrl }} style={styles.fullMedia} resizeMode="cover" />
         )}
       </TouchableOpacity>
 
-      {/* Progress bars */}
-      <SafeAreaView edges={['top']} style={styles.topOverlay}>
+      {/* Top overlay with progress and user info */}
+      <SafeAreaView edges={['top']} style={styles.topOverlay} pointerEvents="box-none">
         <View style={styles.progressRow}>
           {userStories.stories.map((_, idx) => (
             <View key={idx} style={styles.progressTrack}>
@@ -143,7 +160,7 @@ export default function StoryViewerScreen() {
                 styles.progressFill,
                 {
                   width: idx < currentStoryIdx ? '100%'
-                    : idx === currentStoryIdx ? `${progress * 100}%`
+                    : idx === currentStoryIdx ? `${Math.min(progress * 100, 100)}%`
                     : '0%'
                 }
               ]} />
@@ -160,32 +177,13 @@ export default function StoryViewerScreen() {
             )}
           </View>
           <Text style={styles.username}>{userStories.username}</Text>
-          <Text style={styles.timeText}>
-            {formatTimeAgo(story.created_at)}
-          </Text>
+          <Text style={styles.timeText}>{formatTimeAgo(story.created_at)}</Text>
           <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
             <Ionicons name="close" size={28} color="#FFF" />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     </View>
-  );
-}
-
-function StoryVideo({ url }: { url: string }) {
-  const player = useVideoPlayer(url, (p) => {
-    p.loop = false;
-    p.play();
-  });
-
-  return (
-    <VideoView
-      player={player}
-      style={styles.fullMedia}
-      contentFit="cover"
-      nativeControls={false}
-      allowsPictureInPicture={false}
-    />
   );
 }
 

@@ -17,7 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { Video, ResizeMode } from 'expo-av';
 import api, { uploadFile } from '../../src/services/api';
 import { useAuthStore } from '../../src/store/authStore';
 
@@ -26,22 +26,6 @@ const { width } = Dimensions.get('window');
 interface MediaItem {
   uri: string;
   type: 'photo' | 'video';
-}
-
-function NativeVideoPreview({ uri }: { uri: string }) {
-  const player = useVideoPlayer(uri, (p) => {
-    p.loop = true;
-    p.play();
-  });
-  return (
-    <VideoView
-      player={player}
-      style={styles.previewMedia}
-      contentFit="cover"
-      nativeControls={true}
-      allowsPictureInPicture={false}
-    />
-  );
 }
 
 export default function CreatePostScreen() {
@@ -203,7 +187,14 @@ export default function CreatePostScreen() {
                 {mediaItems.map((item, idx) => (
                   <View key={idx} style={styles.previewContainer}>
                     {item.type === 'video' ? (
-                      <NativeVideoPreview uri={item.uri} />
+                      <Video
+                        source={{ uri: item.uri }}
+                        style={styles.previewMedia}
+                        resizeMode={ResizeMode.COVER}
+                        shouldPlay
+                        isLooping
+                        isMuted={false}
+                      />
                     ) : (
                       <Image source={{ uri: item.uri }} style={styles.previewMedia} resizeMode="cover" />
                     )}
