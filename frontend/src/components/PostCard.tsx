@@ -176,7 +176,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
 
-  const hasVideo = mediaUrls.some(u => isVideoPath(u));
+  const isSingleVideo = !isCarousel && mediaUrls.length === 1 && isVideoPath(mediaUrls[0]);
 
   const renderCarouselItem = ({ item: url, index }: { item: string; index: number }) => {
     const fullUrl = getMediaUrl(url) || '';
@@ -221,6 +221,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
       {mediaUrls.length > 0 && (
         <View style={{ height: mediaHeight, position: 'relative' }}>
           {isCarousel ? (
+            /* Carousel: no overlay, free to swipe */
             <FlatList
               data={mediaUrls}
               renderItem={renderCarouselItem}
@@ -234,33 +235,27 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
               decelerationRate="fast"
               bounces={false}
             />
-          ) : (
+          ) : isSingleVideo ? (
+            /* Single video: tap overlay → opens in Reels */
             <View style={{ width: '100%', height: mediaHeight }}>
-              {isVideoPath(mediaUrls[0]) ? (
-                <FeedVideoPlayer url={getMediaUrl(mediaUrls[0]) || ''} height={mediaHeight} isVisible={true} muted={videoMuted} />
-              ) : (
-                <Image source={{ uri: getMediaUrl(mediaUrls[0]) || '' }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-              )}
+              <FeedVideoPlayer url={getMediaUrl(mediaUrls[0]) || ''} height={mediaHeight} isVisible={true} muted={videoMuted} />
+              <TouchableOpacity
+                style={StyleSheet.absoluteFill}
+                activeOpacity={1}
+                onPress={handleDoubleTap}
+                data-testid={`video-tap-${post.id}`}
+              />
+              <TouchableOpacity
+                onPress={() => setVideoMuted(!videoMuted)}
+                style={[styles.controlBtn, { position: 'absolute', bottom: 10, right: 10, zIndex: 10 }]}
+                data-testid={`mute-btn-${post.id}`}
+              >
+                <Ionicons name={videoMuted ? 'volume-mute' : 'volume-high'} size={20} color="#FFF" />
+              </TouchableOpacity>
             </View>
-          )}
-
-          {/* Touch overlay ON TOP of everything - handles tap to open post & double tap to like */}
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={handleDoubleTap}
-            data-testid={`media-tap-${post.id}`}
-          />
-
-          {/* Mute button for videos - on top of touch overlay */}
-          {hasVideo && (
-            <TouchableOpacity
-              onPress={() => setVideoMuted(!videoMuted)}
-              style={[styles.controlBtn, { position: 'absolute', bottom: 10, right: 10, zIndex: 10 }]}
-              data-testid={`mute-btn-${post.id}`}
-            >
-              <Ionicons name={videoMuted ? 'volume-mute' : 'volume-high'} size={20} color="#FFF" />
-            </TouchableOpacity>
+          ) : (
+            /* Single photo: no overlay, stays in feed */
+            <Image source={{ uri: getMediaUrl(mediaUrls[0]) || '' }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
           )}
 
           {isCarousel && (
