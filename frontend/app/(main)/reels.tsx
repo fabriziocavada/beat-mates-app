@@ -18,10 +18,12 @@ import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
 import api, { getMediaUrl, getVideoPlayerUrl } from '../../src/services/api';
 
-// WebView video player with loading indicator
+// WebView video player with loading indicator and play/pause
 function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: boolean }) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const webRef = useRef<WebView>(null);
 
   if (!mediaUrl) {
     return (
@@ -41,9 +43,16 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
 
   const playerUrl = getVideoPlayerUrl(mediaUrl, { muted: false });
 
+  const togglePlayPause = () => {
+    const newPaused = !isPaused;
+    setIsPaused(newPaused);
+    webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v){${newPaused ? 'v.pause()' : 'v.play()'}}true;`);
+  };
+
   return (
     <View style={{ flex: 1 }}>
       <WebView
+        ref={webRef}
         source={{ uri: playerUrl }}
         style={{ flex: 1, opacity: isLoading ? 0 : 1 }}
         scrollEnabled={false}
@@ -52,6 +61,7 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
         mediaPlaybackRequiresUserAction={false}
         javaScriptEnabled={true}
         originWhitelist={['*']}
+        pointerEvents="none"
         onMessage={(e) => {
           const msg = e.nativeEvent.data;
           if (msg === 'ready' || msg === 'playing') setIsLoading(false);
@@ -59,14 +69,26 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
         }}
         onError={() => setHasError(true)}
       />
+      {/* Tap overlay for play/pause */}
+      <TouchableOpacity
+        style={StyleSheet.absoluteFill}
+        activeOpacity={1}
+        onPress={togglePlayPause}
+      >
+        {isPaused && (
+          <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)' }]}>
+            <Ionicons name="play" size={60} color="rgba(255,255,255,0.85)" />
+          </View>
+        )}
+      </TouchableOpacity>
       {isLoading && !hasError && (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]} pointerEvents="none">
           <ActivityIndicator size="large" color="#FF6978" />
           <Text style={{ color: '#666', marginTop: 10, fontSize: 12 }}>Caricamento...</Text>
         </View>
       )}
       {hasError && (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]} pointerEvents="none">
           <Ionicons name="videocam-off-outline" size={48} color="#666" />
           <Text style={{ color: '#888', fontSize: 12, marginTop: 8 }}>Video non disponibile</Text>
         </View>
@@ -277,10 +299,18 @@ export default function ReelsScreen() {
     <SafeAreaView style={styles.container} edges={[]}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Reels</Text>
-        <TouchableOpacity onPress={() => router.push('/(main)/create-post')}>
-          <Ionicons name="videocam" size={24} color="#FFF" />
-        </TouchableOpacity>
+        {postId ? (
+          <TouchableOpacity onPress={() => router.back()} style={{ padding: 4 }} data-testid="reels-back-btn">
+            <Ionicons name="chevron-back" size={28} color="#FFF" />
+          </TouchableOpacity>
+        ) : (
+          <Text style={styles.headerTitle}>Reels</Text>
+        )}
+        {!postId && (
+          <TouchableOpacity onPress={() => router.push('/(main)/create-post')}>
+            <Ionicons name="videocam" size={24} color="#FFF" />
+          </TouchableOpacity>
+        )}
       </View>
 
       {reels.length === 0 ? (
