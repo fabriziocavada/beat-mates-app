@@ -88,7 +88,10 @@ export default function StoryViewerScreen() {
       const userIdx = data.findIndex(u => u.user_id === id);
       if (userIdx >= 0) setCurrentUserIdx(userIdx);
       setIsLoading(false);
-    } catch { router.back(); }
+    } catch { 
+      // Safe navigation - don't use router.back() as it may not have history
+      router.replace('/(main)/home');
+    }
   };
 
   const startTimer = () => {
@@ -113,14 +116,14 @@ export default function StoryViewerScreen() {
   const goNext = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     const userStories = allUserStories[currentUserIdx];
-    if (!userStories) { router.back(); return; }
+    if (!userStories) { router.replace('/(main)/home'); return; }
     if (currentStoryIdx < userStories.stories.length - 1) {
       setCurrentStoryIdx(prev => prev + 1);
     } else if (currentUserIdx < allUserStories.length - 1) {
       setCurrentUserIdx(prev => prev + 1);
       setCurrentStoryIdx(0);
     } else {
-      router.back();
+      router.replace('/(main)/home');
     }
   };
 
@@ -151,7 +154,7 @@ export default function StoryViewerScreen() {
 
   const userStories = allUserStories[currentUserIdx];
   if (!userStories || !userStories.stories[currentStoryIdx]) {
-    router.back();
+    router.replace('/(main)/home');
     return null;
   }
 

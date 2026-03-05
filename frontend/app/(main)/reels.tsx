@@ -88,27 +88,29 @@ export default function ReelsScreen() {
   const loadReels = async () => {
     try {
       const response = await api.get('/posts');
-      // Show video posts - handle both single videos (media) and carousel videos (media_urls)
+      // Show video posts - handle both single videos and carousel videos
       const videoPosts = response.data.filter((p: any) => {
-        // Single video post
+        // Check if has video in media
         if (p.type === 'video' && p.media) return true;
-        // Carousel post with at least one video
+        // Check if has video in media_urls array
         if (p.media_urls && p.media_urls.length > 0) {
-          const hasVideo = p.media_urls.some((url: string) => {
+          return p.media_urls.some((url: string) => {
             const l = url.toLowerCase();
             return l.includes('.mp4') || l.includes('.mov') || l.includes('.webm') || l.includes('video');
           });
-          return hasVideo;
         }
         return false;
       }).map((p: any) => {
-        // For carousel posts, extract the first video URL
-        if (p.media_urls && p.media_urls.length > 0 && !p.media) {
+        // Make sure we have a video URL in media field
+        // First check media_urls for a video
+        if (p.media_urls && p.media_urls.length > 0) {
           const videoUrl = p.media_urls.find((url: string) => {
             const l = url.toLowerCase();
             return l.includes('.mp4') || l.includes('.mov') || l.includes('.webm') || l.includes('video');
           });
-          return { ...p, media: videoUrl || p.media_urls[0] };
+          if (videoUrl) {
+            return { ...p, media: videoUrl };
+          }
         }
         return p;
       });
