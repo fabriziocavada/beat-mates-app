@@ -6,46 +6,32 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { WebView } from 'react-native-webview';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import api, { getMediaUrl } from '../../../src/services/api';
 import Colors from '../../../src/constants/colors';
 
 const { width, height } = Dimensions.get('window');
 
-// Same WebView approach as Reels - proven to work on iOS
-// With loading state to show thumbnail while video loads
-function StoryVideoPlayer({ url, thumbnailUrl }: { url: string; thumbnailUrl?: string | null }) {
-  const [isLoading, setIsLoading] = useState(true);
-  
-  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100vw;height:100vh;object-fit:cover}</style></head><body><video src="${url}" autoplay playsinline webkit-playsinline onloadeddata="window.ReactNativeWebView.postMessage('loaded')" oncanplay="window.ReactNativeWebView.postMessage('loaded')"></video></body></html>`;
-  
+// Native video player - FAST!
+function StoryVideoPlayer({ url }: { url: string }) {
+  const player = useVideoPlayer(url, player => {
+    player.loop = false;
+    player.muted = false;
+  });
+
+  useEffect(() => {
+    if (player) {
+      player.play();
+    }
+  }, [player]);
+
   return (
-    <View style={StyleSheet.absoluteFill}>
-      <WebView
-        source={{ html }}
-        style={StyleSheet.absoluteFill}
-        scrollEnabled={false}
-        bounces={false}
-        allowsInlineMediaPlayback={true}
-        mediaPlaybackRequiresUserAction={false}
-        javaScriptEnabled={true}
-        onMessage={(e) => {
-          if (e.nativeEvent.data === 'loaded') setIsLoading(false);
-        }}
-      />
-      {/* Show thumbnail/loading while video loads */}
-      {isLoading && (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
-          {thumbnailUrl ? (
-            <Image source={{ uri: thumbnailUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-          ) : null}
-          <View style={{ position: 'absolute', alignItems: 'center' }}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={{ color: '#888', marginTop: 8, fontSize: 12 }}>Caricamento video...</Text>
-          </View>
-        </View>
-      )}
-    </View>
+    <VideoView
+      player={player}
+      style={StyleSheet.absoluteFill}
+      contentFit="cover"
+      nativeControls={false}
+    />
   );
 }
 
@@ -160,7 +146,6 @@ export default function StoryViewerScreen() {
 
   const story = userStories.stories[currentStoryIdx];
   const mediaUrl = getMediaUrl(story.media) || '';
-  const thumbnailUrl = story.thumbnail ? getMediaUrl(story.thumbnail) : null;
   const isVideo = story.type === 'video';
 
   return (
@@ -170,7 +155,7 @@ export default function StoryViewerScreen() {
       {/* Media content */}
       <TouchableOpacity activeOpacity={1} onPress={handleTap} style={StyleSheet.absoluteFill}>
         {isVideo ? (
-          <StoryVideoPlayer url={mediaUrl} thumbnailUrl={thumbnailUrl} />
+          <StoryVideoPlayer url={mediaUrl} />
         ) : (
           <Image source={{ uri: mediaUrl }} style={styles.fullMedia} resizeMode="cover" />
         )}
