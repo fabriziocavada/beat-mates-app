@@ -21,7 +21,7 @@ Social media mobile app called "BEAT MATES" for dancers, built with React Native
 - **Frontend:** React Native (Expo), TypeScript, Zustand, Expo Router
 - **Backend:** Python, FastAPI, Motor (async MongoDB)
 - **Database:** MongoDB
-- **Key Libs:** expo-video (native video), @react-native-community/slider, expo-image-picker (multi-select), ffmpeg
+- **Key Libs:** expo-video, @react-native-community/slider, expo-image-picker, react-native-webview
 
 ## Test Accounts
 - Teacher: tutor@test.com / password123
@@ -39,7 +39,7 @@ Social media mobile app called "BEAT MATES" for dancers, built with React Native
 
 ### Social Feed
 - [x] Create posts (photo, video, text)
-- [x] Carousel posts (multi-image with swipe, up to 10 images, dots indicator)
+- [x] Carousel posts (multi-image with swipe)
 - [x] **Custom thumbnail selection for video posts**
 - [x] Like/Unlike posts (optimistic UI)
 - [x] Double-tap to like with heart animation
@@ -57,16 +57,11 @@ Social media mobile app called "BEAT MATES" for dancers, built with React Native
 - [x] **Click profile picture opens stories** (if present)
 - [x] **Shop tab works on OTHER users' profiles** (video lessons visible)
 
-### Navigation
-- [x] Search button in header -> search page
-- [x] Messages button in header -> chat list
-- [x] Music tab working from ALL pages
-- [x] TabBar navigation complete
-
 ### E-commerce
 - [x] Upload video lessons with compression
 - [x] Set price (EUR), edit details
 - [x] Video lesson player
+- [x] **MOCKUP: Payment screen for purchasing lessons** (Stripe not integrated)
 - [x] Reviews system (CRUD)
 - [x] Thumbnail generation (ffmpeg)
 
@@ -74,12 +69,15 @@ Social media mobile app called "BEAT MATES" for dancers, built with React Native
 - [x] Music page with player
 - [x] Speed controls
 - [x] Native slider (iOS compatible)
+- [x] **Playlist Premium with subscription ($10/month)** - MOCKUP
+- [x] **Demo songs preview (3-4 tracks)**
 
 ### Live Lessons (Daily.co)
 - [x] Request live lesson
 - [x] Accept/reject lesson requests
 - [x] Video call via Daily.co iframe
-- [x] Fixed infinite ringing bug
+- [x] **Post-call review system (1-5 stars, WhatsApp style)**
+- [x] Average rating displayed on teacher profile
 
 ### Messaging & Social
 - [x] Chat system (conversations list, individual chats)
@@ -87,43 +85,63 @@ Social media mobile app called "BEAT MATES" for dancers, built with React Native
 
 ---
 
+## Latest Changes (December 2025)
+
+### Session 2 - New Features
+1. **Recensioni Post-Videochiamata (stile WhatsApp)**
+   - Modal grande con 5 stelle dopo chiusura chiamata
+   - Commento opzionale
+   - Calcolo automatico media voti sul profilo insegnante
+
+2. **Mockup Pagamento E-commerce**
+   - Quando visiti profilo altro utente e clicchi su una lezione
+   - Schermata "Acquista" con preview, prezzo, mockup carta
+   - Simula pagamento (2 sec) → sblocca video
+
+3. **Playlist Premium a Pagamento**
+   - Nuova pagina "Playlist Premium"
+   - 3 playlist demo (Latin, Hip Hop, Tango)
+   - 3-4 tracce demo visibili
+   - Abbonamento mensile $10 (MOCKUP)
+   - Bottone dorato nella pagina Music
+
+4. **Selezione Thumbnail Personalizzata** (implementata sessione precedente)
+   - Bottone per scegliere thumbnail dalla galleria
+   - Preview thumbnail selezionata
+
+### Bug Fix (Sessione 1)
+- Video carousel nei Reels
+- Tab Shop profili altri utenti
+- Audio leak nel carousel
+- Click foto profilo → storie
+- Performance Reels
+
+### Test Results
+- Backend: 19/19 tests passed (100%)
+- Tutte le feature verificate a livello API
+
+---
+
 ## Prioritized Backlog
 
 ### P0 (Critical)
-- [ ] Stripe payment integration (buy video lessons)
+- [ ] Stripe payment integration (REAL payments)
 
 ### P1 (Important)
-- [ ] Post-video-call review system (1-5 stars)
 - [ ] Complete Saved/Archive/Activity pages with real data
 - [ ] Refactor backend/server.py into APIRouter modules
+- [ ] Push notifications for lesson requests
 
 ### P2 (Future)
-- [ ] Paid audio playlists (monthly subscription)
-- [ ] Shareable playlists
 - [ ] Production deployment strategy (App Store, Play Store, AWS)
 - [ ] Google social login
-- [ ] Push notifications
 - [ ] Report/Block users
 - [ ] Share posts externally
 - [ ] Explore/Discover page
 
 ---
 
-## Latest Changes (December 2025)
-
-### Bug Fixes Completed
-1. **P0: Video carousel in Reels** - Videos from carousel posts now appear correctly (not black screen)
-2. **P0: Shop tab on other users' profiles** - Now shows video lessons when visiting another user's profile
-3. **P0: Audio leak in carousel** - Video audio stops when scrolling to images in carousel
-4. **P1: Profile picture click** - Opens stories if user has active stories
-5. **P1: Reels performance** - Only the currently visible video is rendered (WebView optimization)
-
-### New Features Completed
-1. **Fuzzy search** - User search now handles typos (e.g., "tutro" finds "tutor")
-2. **Custom video thumbnail** - When creating a video post, users can select a custom thumbnail from gallery
-3. **Single image deletion from carousel** - Already implemented (removeMedia function)
-
-### Test Results
-- Backend: 17/17 tests passed (100%)
-- All features verified at API level
-- Frontend is React Native Expo - test on mobile device via Expo Go
+## MOCKED APIs (Stripe integration pending)
+- `POST /api/purchases/mock` - Simula acquisto lezione
+- `POST /api/music/playlists/{id}/subscribe` - Simula abbonamento playlist
+- Nessun pagamento reale viene processato
