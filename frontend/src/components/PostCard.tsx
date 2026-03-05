@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, Image, Dimensions, FlatList, Animated, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { WebView } from 'react-native-webview';
 import api, { getMediaUrl, getThumbnailUrl } from '../services/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -34,46 +34,31 @@ function isVideoPath(path: string | null | undefined): boolean {
   return l.includes('.mp4') || l.includes('.mov') || l.includes('.webm') || l.includes('video');
 }
 
-// Native video player - FAST!
+// WebView video player - simple and stable
 function FeedVideoPlayer({ url, height, isVisible }: { url: string; height: number; isVisible: boolean }) {
   const [muted, setMuted] = useState(true);
-  const player = useVideoPlayer(url, player => {
-    player.loop = true;
-    player.muted = true;
-  });
+  const webRef = useRef<WebView>(null);
 
-  useEffect(() => {
-    if (isVisible && player) {
-      player.play();
-    } else if (player) {
-      player.pause();
-    }
-  }, [isVisible, player]);
-
-  useEffect(() => {
-    if (player) {
-      player.muted = muted;
-    }
-  }, [muted, player]);
-
-  if (!isVisible) {
-    return (
-      <View style={{ width: '100%', height, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
-        <Ionicons name="videocam" size={48} color="#444" />
-      </View>
-    );
-  }
+  // Always render WebView but control playback
+  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100%;height:100%;object-fit:cover}</style></head><body><video id="v" src="${url}" autoplay loop muted playsinline webkit-playsinline></video><script>var v=document.getElementById('v');v.play();</script></body></html>`;
 
   return (
     <View style={{ width: '100%', height }}>
-      <VideoView
-        player={player}
+      <WebView
+        ref={webRef}
+        source={{ html }}
         style={{ width: '100%', height }}
-        contentFit="cover"
-        nativeControls={false}
+        scrollEnabled={false}
+        bounces={false}
+        allowsInlineMediaPlayback={true}
+        mediaPlaybackRequiresUserAction={false}
+        javaScriptEnabled={true}
       />
-      {/* Mute/Unmute button */}
-      <TouchableOpacity style={styles.muteButton} onPress={() => setMuted(!muted)}>
+      <TouchableOpacity style={styles.muteButton} onPress={() => {
+        const newMuted = !muted;
+        setMuted(newMuted);
+        webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v)v.muted=${newMuted};true;`);
+      }}>
         <Ionicons name={muted ? 'volume-mute' : 'volume-high'} size={16} color="#FFF" />
       </TouchableOpacity>
     </View>

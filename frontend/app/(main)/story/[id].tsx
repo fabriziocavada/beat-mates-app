@@ -6,46 +6,33 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { WebView } from 'react-native-webview';
 import api, { getMediaUrl } from '../../../src/services/api';
 import Colors from '../../../src/constants/colors';
 
 const { width, height } = Dimensions.get('window');
 
-// Native video player with loading state
+// WebView video player - more stable, doesn't conflict with other players
 function StoryVideoPlayer({ url }: { url: string }) {
-  const [isReady, setIsReady] = useState(false);
-  const player = useVideoPlayer(url, player => {
-    player.loop = false;
-    player.muted = false;
-  });
-
-  useEffect(() => {
-    if (player) {
-      // Listen for ready state
-      const sub = player.addListener('statusChange', (status) => {
-        if (status.status === 'readyToPlay') {
-          setIsReady(true);
-          player.play();
-        }
-      });
-      return () => sub.remove();
-    }
-  }, [player]);
-
+  const [isLoading, setIsLoading] = useState(true);
+  
+  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100vw;height:100vh;object-fit:cover}</style></head><body><video src="${url}" autoplay playsinline webkit-playsinline oncanplay="this.play()"></video></body></html>`;
+  
   return (
     <View style={StyleSheet.absoluteFill}>
-      <VideoView
-        player={player}
+      <WebView
+        source={{ html }}
         style={StyleSheet.absoluteFill}
-        contentFit="cover"
-        nativeControls={false}
+        scrollEnabled={false}
+        bounces={false}
+        allowsInlineMediaPlayback={true}
+        mediaPlaybackRequiresUserAction={false}
+        javaScriptEnabled={true}
+        onLoadEnd={() => setIsLoading(false)}
       />
-      {/* Loading overlay */}
-      {!isReady && (
+      {isLoading && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
           <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={{ color: '#666', marginTop: 12, fontSize: 13 }}>Caricamento...</Text>
         </View>
       )}
     </View>

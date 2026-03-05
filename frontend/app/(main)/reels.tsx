@@ -13,26 +13,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { WebView } from 'react-native-webview';
 import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
 import api, { getMediaUrl } from '../../src/services/api';
 
-// Native video player - MUCH faster than WebView!
+// WebView video player - stable, no conflicts
 function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: boolean }) {
-  const player = useVideoPlayer(mediaUrl, player => {
-    player.loop = true;
-    player.muted = true;
-  });
-
-  useEffect(() => {
-    if (isActive && player) {
-      player.play();
-    } else if (player) {
-      player.pause();
-    }
-  }, [isActive, player]);
-
   if (!mediaUrl) {
     return (
       <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
@@ -49,12 +36,17 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
     );
   }
 
+  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100vw;height:100vh;object-fit:cover}</style></head><body><video src="${mediaUrl}" autoplay loop muted playsinline webkit-playsinline></video><script>var v=document.querySelector('video');document.addEventListener('click',function(){v.paused?v.play():v.pause()});</script></body></html>`;
+
   return (
-    <VideoView
-      player={player}
+    <WebView
+      source={{ html }}
       style={{ flex: 1 }}
-      contentFit="cover"
-      nativeControls={false}
+      scrollEnabled={false}
+      bounces={false}
+      allowsInlineMediaPlayback={true}
+      mediaPlaybackRequiresUserAction={false}
+      javaScriptEnabled={true}
     />
   );
 }
