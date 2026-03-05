@@ -1449,21 +1449,61 @@ def generate_video_thumbnail(video_path: str, thumb_path: str) -> bool:
         return False
 
 def convert_video_to_mp4(input_path: str, output_path: str) -> bool:
-    """Convert any video to H.264 MP4 format for browser compatibility."""
+    """Convert and COMPRESS any video to H.264 MP4 format for fast loading."""
     try:
         cmd = [
             'ffmpeg', '-y', '-i', input_path,
             '-c:v', 'libx264', '-preset', 'fast',
-            '-crf', '28', '-c:a', 'aac',
+            '-crf', '28',  # Quality: 18-28 is good, higher = smaller file
+            '-c:a', 'aac', '-b:a', '64k',  # Compress audio too
             '-movflags', '+faststart',
-            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+            # Scale to max 720p height while maintaining aspect ratio
+            '-vf', 'scale=-2:min(720\\,ih)',
             output_path
         ]
-        result = subprocess.run(cmd, capture_output=True, timeout=60)
+        result = subprocess.run(cmd, capture_output=True, timeout=120)
         return result.returncode == 0
     except Exception as e:
         logger.error(f"Video conversion failed: {e}")
         return False
+
+def compress_video(input_path: str) -> str:
+    """Compress video in-place and return the new filename."""
+    try:
+        # Get file size
+        file_size = os.path.getsize(input_path)
+        # Only compress if > 3MB
+        if file_size < 3 * 1024 * 1024:
+            return os.path.basename(input_path)
+        
+        # Create compressed version
+        base = os.path.splitext(input_path)[0]
+        output_path = f"{base}_compressed.mp4"
+        
+        cmd = [
+            'ffmpeg', '-y', '-i', input_path,
+            '-c:v', 'libx264', '-preset', 'fast',
+            '-crf', '30',  # Slightly more compression for large files
+            '-c:a', 'aac', '-b:a', '48k',
+            '-movflags', '+faststart',
+            '-vf', 'scale=-2:min(720\\,ih)',  # Max 720p
+            output_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, timeout=180)
+        
+        if result.returncode == 0 and os.path.exists(output_path):
+            # Replace original with compressed
+            os.remove(input_path)
+            # Rename to original filename
+            new_name = os.path.basename(input_path)
+            new_path = os.path.join(os.path.dirname(output_path), new_name)
+            os.rename(output_path, new_path)
+            logger.info(f"Compressed video from {file_size//1024}KB to {os.path.getsize(new_path)//1024}KB")
+            return new_name
+        return os.path.basename(input_path)
+    except Exception as e:
+        logger.error(f"Video compression failed: {e}")
+        return os.path.basename(input_path)
 
 @api_router.post("/upload")
 async def upload_file(
@@ -1507,20 +1547,10 @@ async def upload_file(
             filename = mp4_filename
             filepath = mp4_path
     elif is_video:
-        # Even if ext is mp4, check if it's actually QuickTime and needs re-encoding
-        with open(filepath, 'rb') as f:
-            f.seek(4)
-            box_type = f.read(4)
-            if box_type == b'ftyp':
-                f.read(0)  # skip
-                brand = f.read(4)
-                # QuickTime brand: 'qt  '
-                if brand in [b'qt  ', b'M4V ']:
-                    mp4_filename = f"{file_id}_h264.mp4"
-                    mp4_path = UPLOADS_DIR / mp4_filename
-                    if convert_video_to_mp4(str(filepath), str(mp4_path)):
-                        os.remove(filepath)
-                        filename = mp4_filename
+        # ALWAYS compress MP4 videos for fast loading
+        compressed_filename = compress_video(str(filepath))
+        filename = compressed_filename
+        filepath = UPLOADS_DIR / filename
 
     url = f"/api/uploads/{filename}"
     media_type = "video" if is_video else "image"
