@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Alert, Platform,
+  ActivityIndicator, Alert, Platform, Modal, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -9,7 +9,90 @@ import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import Colors from '../../../src/constants/colors';
 import api from '../../../src/services/api';
-import CallRatingModal from '../../../src/components/CallRatingModal';
+
+// Inline CallRatingModal to avoid import issues
+function CallRatingModal({ visible, teacherName, sessionId, onSubmit, onSkip }: {
+  visible: boolean;
+  teacherName: string;
+  sessionId: string;
+  onSubmit: (rating: number, comment: string) => void;
+  onSkip: () => void;
+}) {
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState('');
+
+  const getRatingText = (r: number) => {
+    switch (r) {
+      case 1: return 'Scarsa';
+      case 2: return 'Sufficiente';
+      case 3: return 'Buona';
+      case 4: return 'Ottima';
+      case 5: return 'Eccellente!';
+      default: return 'Tocca per valutare';
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
+      <View style={ratingStyles.overlay}>
+        <View style={ratingStyles.container}>
+          <View style={ratingStyles.iconContainer}>
+            <Ionicons name="videocam" size={40} color="#FFF" />
+          </View>
+          <Text style={ratingStyles.title}>Com'è andata la lezione?</Text>
+          <Text style={ratingStyles.subtitle}>Valuta la tua esperienza con {teacherName}</Text>
+          <View style={ratingStyles.starsContainer}>
+            {[1, 2, 3, 4, 5].map((star) => (
+              <TouchableOpacity key={star} onPress={() => setRating(star)} style={ratingStyles.starButton}>
+                <Ionicons name={star <= rating ? 'star' : 'star-outline'} size={48} color={star <= rating ? '#FFD700' : '#444'} />
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={[ratingStyles.ratingText, rating > 0 && { color: '#FFD700' }]}>{getRatingText(rating)}</Text>
+          {rating > 0 && (
+            <TextInput
+              style={ratingStyles.commentInput}
+              placeholder="Aggiungi un commento (opzionale)"
+              placeholderTextColor="#666"
+              value={comment}
+              onChangeText={setComment}
+              multiline
+            />
+          )}
+          <View style={ratingStyles.buttonsContainer}>
+            <TouchableOpacity style={ratingStyles.skipButton} onPress={onSkip}>
+              <Text style={ratingStyles.skipButtonText}>Salta</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[ratingStyles.submitButton, rating === 0 && { backgroundColor: '#333' }]}
+              onPress={() => rating > 0 && onSubmit(rating, comment)}
+              disabled={rating === 0}
+            >
+              <Text style={ratingStyles.submitButtonText}>Invia valutazione</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const ratingStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  container: { width: '100%', maxWidth: 400, backgroundColor: Colors.surface, borderRadius: 24, padding: 32, alignItems: 'center' },
+  iconContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
+  title: { color: '#FFF', fontSize: 24, fontWeight: '700', textAlign: 'center', marginBottom: 8 },
+  subtitle: { color: '#888', fontSize: 15, textAlign: 'center', marginBottom: 32 },
+  starsContainer: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 16 },
+  starButton: { padding: 4 },
+  ratingText: { color: '#666', fontSize: 18, fontWeight: '600', marginBottom: 24 },
+  commentInput: { width: '100%', backgroundColor: '#1C1C1E', borderRadius: 12, padding: 16, color: '#FFF', fontSize: 15, minHeight: 80, textAlignVertical: 'top', marginBottom: 24, borderWidth: 1, borderColor: '#333' },
+  buttonsContainer: { flexDirection: 'row', gap: 12, width: '100%' },
+  skipButton: { flex: 1, paddingVertical: 16, borderRadius: 12, backgroundColor: '#2C2C2E', alignItems: 'center' },
+  skipButtonText: { color: '#888', fontSize: 16, fontWeight: '600' },
+  submitButton: { flex: 2, paddingVertical: 16, borderRadius: 12, backgroundColor: Colors.primary, alignItems: 'center' },
+  submitButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+});
 
 export default function VideoCallScreen() {
   const router = useRouter();
