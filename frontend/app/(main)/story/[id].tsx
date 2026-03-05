@@ -12,8 +12,9 @@ import Colors from '../../../src/constants/colors';
 
 const { width, height } = Dimensions.get('window');
 
-// Native video player - FAST!
+// Native video player with loading state
 function StoryVideoPlayer({ url }: { url: string }) {
+  const [isReady, setIsReady] = useState(false);
   const player = useVideoPlayer(url, player => {
     player.loop = false;
     player.muted = false;
@@ -21,17 +22,33 @@ function StoryVideoPlayer({ url }: { url: string }) {
 
   useEffect(() => {
     if (player) {
-      player.play();
+      // Listen for ready state
+      const sub = player.addListener('statusChange', (status) => {
+        if (status.status === 'readyToPlay') {
+          setIsReady(true);
+          player.play();
+        }
+      });
+      return () => sub.remove();
     }
   }, [player]);
 
   return (
-    <VideoView
-      player={player}
-      style={StyleSheet.absoluteFill}
-      contentFit="cover"
-      nativeControls={false}
-    />
+    <View style={StyleSheet.absoluteFill}>
+      <VideoView
+        player={player}
+        style={StyleSheet.absoluteFill}
+        contentFit="cover"
+        nativeControls={false}
+      />
+      {/* Loading overlay */}
+      {!isReady && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={{ color: '#666', marginTop: 12, fontSize: 13 }}>Caricamento...</Text>
+        </View>
+      )}
+    </View>
   );
 }
 
