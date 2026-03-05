@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, Image, Dimensions, FlatList, Animated, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { WebView } from 'react-native-webview';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import api, { getMediaUrl, getThumbnailUrl } from '../services/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -34,46 +34,28 @@ function isVideoPath(path: string | null | undefined): boolean {
   return l.includes('.mp4') || l.includes('.mov') || l.includes('.webm') || l.includes('video');
 }
 
-// Video player with tap to play/pause/unmute
+// Native video player - FAST!
 function FeedVideoPlayer({ url, height, isVisible }: { url: string; height: number; isVisible: boolean }) {
   const [muted, setMuted] = useState(true);
-  const [paused, setPaused] = useState(false);
-  const webRef = useRef<WebView>(null);
+  const player = useVideoPlayer(url, player => {
+    player.loop = true;
+    player.muted = true;
+  });
 
-  // Pause video when not visible
   useEffect(() => {
-    if (!isVisible && webRef.current) {
-      webRef.current.injectJavaScript(`
-        var v = document.querySelector('video');
-        if(v) { v.pause(); v.muted = true; }
-        true;
-      `);
-      setPaused(true);
-      setMuted(true);
+    if (isVisible && player) {
+      player.play();
+    } else if (player) {
+      player.pause();
     }
-  }, [isVisible]);
+  }, [isVisible, player]);
 
-  const togglePlayPause = () => {
-    const newPaused = !paused;
-    setPaused(newPaused);
-    webRef.current?.injectJavaScript(`
-      var v = document.querySelector('video');
-      if(v) { ${newPaused ? 'v.pause()' : 'v.play()'} }
-      true;
-    `);
-  };
+  useEffect(() => {
+    if (player) {
+      player.muted = muted;
+    }
+  }, [muted, player]);
 
-  const toggleMute = () => {
-    const newMuted = !muted;
-    setMuted(newMuted);
-    webRef.current?.injectJavaScript(`
-      var v = document.querySelector('video');
-      if(v) { v.muted = ${newMuted}; }
-      true;
-    `);
-  };
-
-  // Only render WebView when visible
   if (!isVisible) {
     return (
       <View style={{ width: '100%', height, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
@@ -82,34 +64,16 @@ function FeedVideoPlayer({ url, height, isVisible }: { url: string; height: numb
     );
   }
 
-  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100%;height:100%;object-fit:cover}</style></head><body><video src="${url}" autoplay loop muted playsinline webkit-playsinline></video></body></html>`;
-
   return (
     <View style={{ width: '100%', height }}>
-      <WebView
-        ref={webRef}
-        source={{ html }}
+      <VideoView
+        player={player}
         style={{ width: '100%', height }}
-        scrollEnabled={false}
-        bounces={false}
-        allowsInlineMediaPlayback={true}
-        mediaPlaybackRequiresUserAction={false}
-        javaScriptEnabled={true}
+        contentFit="cover"
+        nativeControls={false}
       />
-      {/* Tap overlay for play/pause */}
-      <TouchableOpacity
-        activeOpacity={1}
-        style={StyleSheet.absoluteFill}
-        onPress={togglePlayPause}
-      >
-        {paused && (
-          <View style={styles.pauseOverlay}>
-            <Ionicons name="play" size={48} color="rgba(255,255,255,0.8)" />
-          </View>
-        )}
-      </TouchableOpacity>
       {/* Mute/Unmute button */}
-      <TouchableOpacity style={styles.muteButton} onPress={toggleMute}>
+      <TouchableOpacity style={styles.muteButton} onPress={() => setMuted(!muted)}>
         <Ionicons name={muted ? 'volume-mute' : 'volume-high'} size={16} color="#FFF" />
       </TouchableOpacity>
     </View>

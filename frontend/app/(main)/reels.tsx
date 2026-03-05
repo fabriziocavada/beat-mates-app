@@ -13,14 +13,25 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { WebView } from 'react-native-webview';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
 import api, { getMediaUrl } from '../../src/services/api';
 
-// Each reel video: WebView approach for guaranteed iOS playback
+// Native video player - MUCH faster than WebView!
 function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: boolean }) {
-  const [isLoading, setIsLoading] = useState(true);
+  const player = useVideoPlayer(mediaUrl, player => {
+    player.loop = true;
+    player.muted = true;
+  });
+
+  useEffect(() => {
+    if (isActive && player) {
+      player.play();
+    } else if (player) {
+      player.pause();
+    }
+  }, [isActive, player]);
 
   if (!mediaUrl) {
     return (
@@ -30,28 +41,20 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
     );
   }
 
-  // Only render WebView when active - HUGE performance improvement
   if (!isActive) {
     return (
       <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
         <Ionicons name="videocam" size={64} color="#333" />
-        <Text style={{ color: '#444', marginTop: 8, fontSize: 12 }}>Scorri per guardare</Text>
       </View>
     );
   }
 
-  // Using preload="auto" for progressive loading, and showing loading state
-  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100vw;height:100vh;object-fit:cover}.loader{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);color:#FF6978;font-size:14px;text-align:center}.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#FF6978;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 10px}@keyframes spin{to{transform:rotate(360deg)}}</style></head><body><div class="loader" id="loader"><div class="spinner"></div>Caricamento...</div><video src="${mediaUrl}" autoplay loop muted playsinline webkit-playsinline preload="auto" oncanplay="document.getElementById('loader').style.display='none'" onwaiting="document.getElementById('loader').style.display='block'"></video><script>var v=document.querySelector('video');document.addEventListener('click',function(){v.paused?v.play():v.pause()});</script></body></html>`;
-
   return (
-    <WebView
-      source={{ html }}
+    <VideoView
+      player={player}
       style={{ flex: 1 }}
-      scrollEnabled={false}
-      bounces={false}
-      allowsInlineMediaPlayback={true}
-      mediaPlaybackRequiresUserAction={false}
-      javaScriptEnabled={true}
+      contentFit="cover"
+      nativeControls={false}
     />
   );
 }
