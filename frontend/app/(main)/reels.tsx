@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import Colors from '../../src/constants/colors';
@@ -24,19 +24,34 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
   const [hasError, setHasError] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const webRef = useRef<WebView>(null);
+  const wasActive = useRef(false);
+
+  // Pause/resume when isActive changes
+  useEffect(() => {
+    if (!mediaUrl) return;
+    if (isActive && !wasActive.current) {
+      // Becoming active - play
+      wasActive.current = true;
+      setIsPaused(false);
+      webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v){v.play();v.muted=false}true;`);
+    } else if (!isActive && wasActive.current) {
+      // Becoming inactive - pause and mute
+      wasActive.current = false;
+      webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v){v.pause();v.muted=true}true;`);
+    }
+  }, [isActive, mediaUrl]);
+
+  // Cleanup on unmount - stop audio
+  useEffect(() => {
+    return () => {
+      webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v){v.pause();v.muted=true;v.src=''}true;`);
+    };
+  }, []);
 
   if (!mediaUrl) {
     return (
       <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
         <Ionicons name="videocam-off-outline" size={48} color="#666" />
-      </View>
-    );
-  }
-
-  if (!isActive) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
-        <Ionicons name="videocam" size={64} color="#333" />
       </View>
     );
   }
@@ -53,8 +68,8 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
     <View style={{ flex: 1 }}>
       <WebView
         ref={webRef}
-        source={{ uri: playerUrl }}
-        style={{ flex: 1, opacity: isLoading ? 0 : 1 }}
+        source={isActive ? { uri: playerUrl } : { html: '<html><body style="background:#000"></body></html>' }}
+        style={{ flex: 1, opacity: isLoading && isActive ? 0 : 1 }}
         scrollEnabled={false}
         bounces={false}
         allowsInlineMediaPlayback={true}
@@ -69,25 +84,30 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
         }}
         onError={() => setHasError(true)}
       />
-      {/* Tap overlay for play/pause */}
-      <TouchableOpacity
-        style={StyleSheet.absoluteFill}
-        activeOpacity={1}
-        onPress={togglePlayPause}
-      >
-        {isPaused && (
-          <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)' }]}>
-            <Ionicons name="play" size={60} color="rgba(255,255,255,0.85)" />
-          </View>
-        )}
-      </TouchableOpacity>
-      {isLoading && !hasError && (
+      {/* Tap overlay for play/pause - only when active */}
+      {isActive && (
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={togglePlayPause}
+        >
+          {isPaused && (
+            <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)' }]}>
+              <Ionicons name="play" size={60} color="rgba(255,255,255,0.85)" />
+            </View>
+          )}
+        </TouchableOpacity>
+      )}
+      {isLoading && isActive && !hasError && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]} pointerEvents="none">
           <ActivityIndicator size="large" color="#FF6978" />
           <Text style={{ color: '#666', marginTop: 10, fontSize: 12 }}>Caricamento...</Text>
         </View>
       )}
-      {hasError && (
+      {!isActive && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]} />
+      )}
+      {hasError && isActive && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]} pointerEvents="none">
           <Ionicons name="videocam-off-outline" size={48} color="#666" />
           <Text style={{ color: '#888', fontSize: 12, marginTop: 8 }}>Video non disponibile</Text>
@@ -125,11 +145,22 @@ export default function ReelsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [isScreenFocused, setIsScreenFocused] = useState(true);
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
     loadReels();
   }, []);
+
+  // Pause videos when navigating away, resume when coming back
+  useFocusEffect(
+    useCallback(() => {
+      setIsScreenFocused(true);
+      return () => {
+        setIsScreenFocused(false);
+      };
+    }, [])
+  );
 
   const loadReels = async () => {
     try {
@@ -219,7 +250,7 @@ export default function ReelsScreen() {
     return (
       <View style={[styles.reelContainer, { height: ITEM_HEIGHT }]}>
         {mediaUrl ? (
-          <ReelVideoPlayer mediaUrl={mediaUrl} isActive={isActive} />
+          <ReelVideoPlayer mediaUrl={mediaUrl} isActive={isActive && isScreenFocused} />
         ) : (
           <View style={[styles.media, styles.placeholder]}>
             <Ionicons name="videocam-outline" size={48} color={Colors.textSecondary} />
