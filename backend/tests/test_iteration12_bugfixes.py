@@ -9,7 +9,7 @@ import requests
 import os
 import time
 
-BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://dancer-connect-app.preview.emergentagent.com')
+BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://dance-feed-test.preview.emergentagent.com')
 
 class TestHealthAndAuth:
     """Health check and authentication tests"""

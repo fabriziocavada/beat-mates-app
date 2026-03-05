@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
-import api, { getMediaUrl } from '../../../src/services/api';
+import api, { getMediaUrl, getVideoPlayerUrl } from '../../../src/services/api';
 import Colors from '../../../src/constants/colors';
 
 const { width, height } = Dimensions.get('window');
@@ -15,19 +15,23 @@ const { width, height } = Dimensions.get('window');
 // WebView video player - more stable, doesn't conflict with other players
 function StoryVideoPlayer({ url }: { url: string }) {
   const [isLoading, setIsLoading] = useState(true);
-  
-  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100vw;height:100vh;object-fit:cover}</style></head><body><video src="${url}" autoplay playsinline webkit-playsinline oncanplay="this.play()"></video></body></html>`;
+  const playerUrl = getVideoPlayerUrl(url, { muted: false, autoplay: true });
   
   return (
     <View style={StyleSheet.absoluteFill}>
       <WebView
-        source={{ html }}
-        style={StyleSheet.absoluteFill}
+        source={{ uri: playerUrl }}
+        style={[StyleSheet.absoluteFill, { opacity: isLoading ? 0 : 1 }]}
         scrollEnabled={false}
         bounces={false}
         allowsInlineMediaPlayback={true}
         mediaPlaybackRequiresUserAction={false}
         javaScriptEnabled={true}
+        originWhitelist={['*']}
+        onMessage={(e) => {
+          const msg = e.nativeEvent.data;
+          if (msg === 'ready' || msg === 'playing') setIsLoading(false);
+        }}
         onLoadEnd={() => setIsLoading(false)}
       />
       {isLoading && (

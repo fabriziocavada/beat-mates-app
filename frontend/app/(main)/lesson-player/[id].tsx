@@ -8,7 +8,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import Colors from '../../../src/constants/colors';
-import api, { getMediaUrl } from '../../../src/services/api';
+import api, { getMediaUrl, getVideoPlayerUrl } from '../../../src/services/api';
 import { useAuthStore } from '../../../src/store/authStore';
 
 const { width, height } = Dimensions.get('window');
@@ -227,20 +227,7 @@ export default function LessonPlayerScreen() {
   }
 
   // Purchased - show video
-  const html = videoUrl ? `<!DOCTYPE html>
-<html><head>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<style>
-*{margin:0;padding:0;background:#000}
-video{width:100vw;height:100vh;object-fit:contain}
-</style>
-</head><body>
-<video src="${videoUrl}" autoplay playsinline webkit-playsinline controls></video>
-<script>
-var v=document.querySelector('video');
-v.play();
-</script>
-</body></html>` : '';
+  const lessonPlayerUrl = videoUrl ? getVideoPlayerUrl(videoUrl, { controls: true, muted: false, autoplay: true }) : '';
 
   return (
     <View style={styles.container}>
@@ -261,15 +248,16 @@ v.play();
         </View>
 
         {/* Video player */}
-        {videoUrl ? (
+        {lessonPlayerUrl ? (
           <WebView
-            source={{ html }}
+            source={{ uri: lessonPlayerUrl }}
             style={styles.video}
             scrollEnabled={false}
             bounces={false}
             allowsInlineMediaPlayback={true}
             mediaPlaybackRequiresUserAction={false}
             javaScriptEnabled={true}
+            originWhitelist={['*']}
           />
         ) : (
           <View style={styles.noVideo}>

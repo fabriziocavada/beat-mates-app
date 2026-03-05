@@ -12,7 +12,7 @@ import requests
 import os
 import time
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://dancer-connect-app.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://dance-feed-test.preview.emergentagent.com')
 
 # Test credentials
 TEST_STUDENT = {"email": "mario@test.com", "password": "password123"}

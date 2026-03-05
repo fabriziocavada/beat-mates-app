@@ -12,7 +12,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://dancer-connect-app.preview.emergentagent.com')
+BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://dance-feed-test.preview.emergentagent.com')
 
 # Test credentials
 STUDENT_CREDS = {"email": "mario@test.com", "password": "password123"}

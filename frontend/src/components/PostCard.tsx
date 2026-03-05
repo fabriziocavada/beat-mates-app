@@ -1,8 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, Image, Dimensions, FlatList, Animated, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, Image, Dimensions, FlatList, Animated, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
-import api, { getMediaUrl, getThumbnailUrl } from '../services/api';
+import api, { getMediaUrl, getThumbnailUrl, getVideoPlayerUrl } from '../services/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -34,14 +34,16 @@ function isVideoPath(path: string | null | undefined): boolean {
   return l.includes('.mp4') || l.includes('.mov') || l.includes('.webm') || l.includes('video');
 }
 
-// WebView video player with loading indicator and play/pause
-function FeedVideoPlayer({ url, height, isVisible }: { url: string; height: number; isVisible: boolean }) {
+// WebView video player using server-side HTML page (loads from same origin as video)
+function FeedVideoPlayer({ url, height, isVisible, onFullscreen }: { url: string; height: number; isVisible: boolean; onFullscreen?: () => void }) {
   const [muted, setMuted] = useState(true);
   const [paused, setPaused] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
   const webRef = useRef<WebView>(null);
 
-  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100%;height:100%;object-fit:cover}</style></head><body><video id="v" src="${url}" autoplay loop muted playsinline webkit-playsinline oncanplay="window.ReactNativeWebView.postMessage('ready')"></video></body></html>`;
+  // Extract filename from full URL to build the player URL
+  const playerUrl = getVideoPlayerUrl(url);
 
   const togglePlay = () => {
     const newPaused = !paused;
@@ -49,38 +51,69 @@ function FeedVideoPlayer({ url, height, isVisible }: { url: string; height: numb
     webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v){${newPaused ? 'v.pause()' : 'v.play()'}}true;`);
   };
 
+  const toggleMute = () => {
+    const newMuted = !muted;
+    setMuted(newMuted);
+    webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v)v.muted=${newMuted};true;`);
+  };
+
   return (
-    <View style={{ width: '100%', height }}>
+    <View style={{ width: '100%', height }} data-testid="feed-video-player">
       <WebView
         ref={webRef}
-        source={{ html }}
-        style={{ width: '100%', height }}
+        source={{ uri: playerUrl }}
+        style={{ width: '100%', height, opacity: isLoading ? 0 : 1 }}
         scrollEnabled={false}
         bounces={false}
         allowsInlineMediaPlayback={true}
         mediaPlaybackRequiresUserAction={false}
         javaScriptEnabled={true}
+        originWhitelist={['*']}
+        pointerEvents="none"
         onMessage={(e) => {
-          if (e.nativeEvent.data === 'ready') setIsLoading(false);
+          const msg = e.nativeEvent.data;
+          if (msg === 'ready' || msg === 'playing') setIsLoading(false);
+          if (msg.startsWith('error')) setHasError(true);
         }}
+        onError={() => setHasError(true)}
       />
-      {isLoading && (
+      {/* Loading overlay */}
+      {isLoading && !hasError && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
-          <Ionicons name="play-circle-outline" size={50} color="#FF6978" />
+          <ActivityIndicator size="large" color="#FF6978" />
+          <Text style={{ color: '#888', fontSize: 12, marginTop: 8 }}>Caricamento video...</Text>
         </View>
       )}
-      {/* Play/Pause overlay */}
-      <TouchableOpacity style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]} activeOpacity={1} onPress={togglePlay}>
-        {paused && <Ionicons name="play" size={60} color="rgba(255,255,255,0.8)" />}
+      {/* Error overlay */}
+      {hasError && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
+          <Ionicons name="videocam-off-outline" size={40} color="#666" />
+          <Text style={{ color: '#888', fontSize: 12, marginTop: 8 }}>Video non disponibile</Text>
+        </View>
+      )}
+      {/* Touch overlay for play/pause */}
+      <TouchableOpacity
+        style={StyleSheet.absoluteFill}
+        activeOpacity={1}
+        onPress={togglePlay}
+      >
+        {paused && (
+          <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.3)' }]}>
+            <Ionicons name="play" size={50} color="#FFF" />
+          </View>
+        )}
       </TouchableOpacity>
-      {/* Mute button */}
-      <TouchableOpacity style={styles.muteButton} onPress={() => {
-        const newMuted = !muted;
-        setMuted(newMuted);
-        webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v)v.muted=${newMuted};true;`);
-      }}>
-        <Ionicons name={muted ? 'volume-mute' : 'volume-high'} size={16} color="#FFF" />
-      </TouchableOpacity>
+      {/* Bottom controls */}
+      <View style={styles.videoControls} pointerEvents="box-none">
+        <TouchableOpacity onPress={toggleMute} style={styles.controlBtn}>
+          <Ionicons name={muted ? 'volume-mute' : 'volume-high'} size={20} color="#FFF" />
+        </TouchableOpacity>
+        {onFullscreen && (
+          <TouchableOpacity onPress={onFullscreen} style={styles.controlBtn}>
+            <Ionicons name="expand" size={20} color="#FFF" />
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 }
@@ -167,7 +200,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
       <TouchableWithoutFeedback onPress={handleDoubleTap}>
         <View style={{ width: SCREEN_WIDTH, height: mediaHeight }}>
           {isVid ? (
-            <FeedVideoPlayer url={fullUrl} height={mediaHeight} isVisible={isCurrentSlide} />
+            <FeedVideoPlayer url={fullUrl} height={mediaHeight} isVisible={isCurrentSlide} onFullscreen={() => onCommentPress?.(post.id)} />
           ) : (
             <Image source={{ uri: fullUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
           )}
@@ -221,7 +254,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
             <TouchableWithoutFeedback onPress={handleDoubleTap}>
               <View style={{ width: '100%', height: mediaHeight }}>
                 {isVideoPath(mediaUrls[0]) ? (
-                  <FeedVideoPlayer url={getMediaUrl(mediaUrls[0]) || ''} height={mediaHeight} isVisible={true} />
+                  <FeedVideoPlayer url={getMediaUrl(mediaUrls[0]) || ''} height={mediaHeight} isVisible={true} onFullscreen={() => onCommentPress?.(post.id)} />
                 ) : (
                   <Image source={{ uri: getMediaUrl(mediaUrls[0]) || '' }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                 )}
@@ -291,8 +324,8 @@ const styles = StyleSheet.create({
   username: { color: '#FFF', fontWeight: '600', fontSize: 14 },
   date: { color: '#888', fontSize: 11, marginTop: 1 },
   deleteBtn: { padding: 8 },
-  pauseOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.2)' },
-  muteButton: { position: 'absolute', bottom: 14, right: 14, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 14, width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  videoControls: { position: 'absolute', bottom: 10, left: 10, right: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  controlBtn: { backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   dotsRow: { position: 'absolute', bottom: 12, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 4 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.4)' },
   dotActive: { backgroundColor: '#FFF', width: 8, height: 8, borderRadius: 4 },

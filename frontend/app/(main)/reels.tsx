@@ -16,11 +16,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
-import api, { getMediaUrl } from '../../src/services/api';
+import api, { getMediaUrl, getVideoPlayerUrl } from '../../src/services/api';
 
 // WebView video player with loading indicator
 function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: boolean }) {
   const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
 
   if (!mediaUrl) {
     return (
@@ -38,26 +39,36 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
     );
   }
 
-  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100vw;height:100vh;object-fit:cover}</style></head><body><video src="${mediaUrl}" autoplay loop muted playsinline webkit-playsinline oncanplay="window.ReactNativeWebView.postMessage('ready')"></video><script>var v=document.querySelector('video');document.addEventListener('click',function(){v.paused?v.play():v.pause()});</script></body></html>`;
+  const playerUrl = getVideoPlayerUrl(mediaUrl);
 
   return (
     <View style={{ flex: 1 }}>
       <WebView
-        source={{ html }}
-        style={{ flex: 1 }}
+        source={{ uri: playerUrl }}
+        style={{ flex: 1, opacity: isLoading ? 0 : 1 }}
         scrollEnabled={false}
         bounces={false}
         allowsInlineMediaPlayback={true}
         mediaPlaybackRequiresUserAction={false}
         javaScriptEnabled={true}
+        originWhitelist={['*']}
         onMessage={(e) => {
-          if (e.nativeEvent.data === 'ready') setIsLoading(false);
+          const msg = e.nativeEvent.data;
+          if (msg === 'ready' || msg === 'playing') setIsLoading(false);
+          if (msg.startsWith('error')) setHasError(true);
         }}
+        onError={() => setHasError(true)}
       />
-      {isLoading && (
+      {isLoading && !hasError && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
-          <Ionicons name="play-circle-outline" size={60} color="#FF6978" />
+          <ActivityIndicator size="large" color="#FF6978" />
           <Text style={{ color: '#666', marginTop: 10, fontSize: 12 }}>Caricamento...</Text>
+        </View>
+      )}
+      {hasError && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
+          <Ionicons name="videocam-off-outline" size={48} color="#666" />
+          <Text style={{ color: '#888', fontSize: 12, marginTop: 8 }}>Video non disponibile</Text>
         </View>
       )}
     </View>

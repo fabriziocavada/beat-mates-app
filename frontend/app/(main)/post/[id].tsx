@@ -9,7 +9,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import Colors from '../../../src/constants/colors';
-import api, { getMediaUrl } from '../../../src/services/api';
+import api, { getMediaUrl, getVideoPlayerUrl } from '../../../src/services/api';
 import { useAuthStore } from '../../../src/store/authStore';
 
 const { width } = Dimensions.get('window');
@@ -29,8 +29,40 @@ interface Comment {
 }
 
 function VideoPlayer({ url, h }: { url: string; h: number }) {
-  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100%;height:100%;object-fit:cover}</style></head><body><video src="${url}" autoplay loop playsinline webkit-playsinline controls></video></body></html>`;
-  return <WebView source={{ html }} style={{ width: '100%', height: h }} scrollEnabled={false} bounces={false} allowsInlineMediaPlayback={true} mediaPlaybackRequiresUserAction={false} javaScriptEnabled={true} />;
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  const playerUrl = getVideoPlayerUrl(url, { controls: true, muted: false, autoplay: true });
+  return (
+    <View style={{ width: '100%', height: h }}>
+      <WebView
+        source={{ uri: playerUrl }}
+        style={{ width: '100%', height: h, opacity: isLoading ? 0 : 1 }}
+        scrollEnabled={false}
+        bounces={false}
+        allowsInlineMediaPlayback={true}
+        mediaPlaybackRequiresUserAction={false}
+        javaScriptEnabled={true}
+        originWhitelist={['*']}
+        onMessage={(e) => {
+          const msg = e.nativeEvent.data;
+          if (msg === 'ready' || msg === 'playing') setIsLoading(false);
+          if (msg.startsWith('error')) setHasError(true);
+        }}
+        onError={() => setHasError(true)}
+      />
+      {isLoading && !hasError && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      )}
+      {hasError && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
+          <Ionicons name="videocam-off-outline" size={40} color="#666" />
+          <Text style={{ color: '#888', fontSize: 12, marginTop: 8 }}>Video non disponibile</Text>
+        </View>
+      )}
+    </View>
+  );
 }
 
 const isVideoPath = (p: string) => {

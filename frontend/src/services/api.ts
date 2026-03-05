@@ -95,4 +95,24 @@ export function getThumbnailUrl(mediaPath: string | null | undefined): string | 
   return `${baseURL}/api/thumbnail/${filename}`;
 }
 
+// Get server-side video player URL (WebView loads this as a real page, same origin as video)
+export function getVideoPlayerUrl(mediaUrlOrPath: string, options?: { controls?: boolean; muted?: boolean; autoplay?: boolean }): string {
+  let filename = mediaUrlOrPath;
+  // Extract filename from various path formats
+  if (filename.includes('/api/media/')) {
+    filename = filename.split('/api/media/').pop() || '';
+  } else if (filename.includes('/api/uploads/')) {
+    filename = filename.replace('/api/uploads/', '');
+  } else if (filename.startsWith('http')) {
+    // Full URL - extract filename from end
+    const parts = filename.split('/');
+    filename = parts[parts.length - 1] || '';
+  }
+  if (!filename) return mediaUrlOrPath;
+  const ctrl = options?.controls ? '1' : '0';
+  const mt = options?.muted !== false ? '1' : '0';
+  const ap = options?.autoplay !== false ? '1' : '0';
+  return `${baseURL}/api/video-player/${filename}?controls=${ctrl}&muted=${mt}&autoplay=${ap}`;
+}
+
 export default api;

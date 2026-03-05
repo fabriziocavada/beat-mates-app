@@ -21,7 +21,7 @@ import uuid
 
 BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
-    BASE_URL = "https://dancer-connect-app.preview.emergentagent.com"
+    BASE_URL = "https://dance-feed-test.preview.emergentagent.com"
 
 # ----- FIXTURES -----
 

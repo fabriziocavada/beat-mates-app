@@ -1,6 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form, Header, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import JSONResponse, FileResponse, StreamingResponse, Response
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse, Response, HTMLResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -1449,57 +1449,56 @@ def generate_video_thumbnail(video_path: str, thumb_path: str) -> bool:
         return False
 
 def convert_video_to_mp4(input_path: str, output_path: str) -> bool:
-    """Convert and COMPRESS any video to H.264 MP4 format for fast loading."""
+    """Convert any video to web-compatible H.264 8-bit MP4 format."""
     try:
         cmd = [
             'ffmpeg', '-y', '-i', input_path,
-            '-c:v', 'libx264', '-preset', 'fast',
-            '-crf', '28',  # Quality: 18-28 is good, higher = smaller file
-            '-c:a', 'aac', '-b:a', '64k',  # Compress audio too
+            '-c:v', 'libx264', '-profile:v', 'main', '-level', '4.0',
+            '-pix_fmt', 'yuv420p',  # Force 8-bit for web compatibility
+            '-preset', 'fast', '-crf', '23',
+            '-c:a', 'aac', '-b:a', '64k',
             '-movflags', '+faststart',
-            # Scale to max 720p height while maintaining aspect ratio
-            '-vf', 'scale=-2:min(720\\,ih)',
+            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
             output_path
         ]
         result = subprocess.run(cmd, capture_output=True, timeout=120)
+        if result.returncode != 0:
+            logger.warning(f"Video conversion failed: {result.stderr[:500] if result.stderr else 'unknown'}")
         return result.returncode == 0
     except Exception as e:
         logger.error(f"Video conversion failed: {e}")
         return False
 
 def compress_video(input_path: str) -> str:
-    """Compress video in-place and return the new filename."""
+    """ALWAYS re-encode video to web-compatible H.264 8-bit Main profile."""
     try:
-        # Get file size
         file_size = os.path.getsize(input_path)
-        # Only compress if > 3MB
-        if file_size < 3 * 1024 * 1024:
-            return os.path.basename(input_path)
-        
-        # Create compressed version
         base = os.path.splitext(input_path)[0]
-        output_path = f"{base}_compressed.mp4"
+        output_path = f"{base}_web.mp4"
+        
+        # Use CRF based on file size for quality/size balance
+        crf = '28' if file_size > 3 * 1024 * 1024 else '23'
         
         cmd = [
             'ffmpeg', '-y', '-i', input_path,
-            '-c:v', 'libx264', '-preset', 'fast',
-            '-crf', '30',  # Slightly more compression for large files
-            '-c:a', 'aac', '-b:a', '48k',
+            '-c:v', 'libx264', '-profile:v', 'main', '-level', '4.0',
+            '-pix_fmt', 'yuv420p',  # Force 8-bit for web compatibility
+            '-preset', 'fast', '-crf', crf,
+            '-c:a', 'aac', '-b:a', '64k',
             '-movflags', '+faststart',
-            '-vf', 'scale=-2:min(720\\,ih)',  # Max 720p
+            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',  # Ensure even dimensions
             output_path
         ]
         result = subprocess.run(cmd, capture_output=True, timeout=180)
         
         if result.returncode == 0 and os.path.exists(output_path):
-            # Replace original with compressed
             os.remove(input_path)
-            # Rename to original filename
             new_name = os.path.basename(input_path)
             new_path = os.path.join(os.path.dirname(output_path), new_name)
             os.rename(output_path, new_path)
-            logger.info(f"Compressed video from {file_size//1024}KB to {os.path.getsize(new_path)//1024}KB")
+            logger.info(f"Re-encoded video from {file_size//1024}KB to {os.path.getsize(new_path)//1024}KB (web-compatible H.264 8-bit)")
             return new_name
+        logger.warning(f"Video re-encode failed (returncode={result.returncode}), keeping original. stderr: {result.stderr[:500] if result.stderr else 'none'}")
         return os.path.basename(input_path)
     except Exception as e:
         logger.error(f"Video compression failed: {e}")
@@ -1663,6 +1662,29 @@ async def get_video_thumbnail(filename: str):
         return FileResponse(path=str(thumb_path), media_type='image/jpeg')
     
     raise HTTPException(status_code=500, detail="Failed to generate thumbnail")
+
+@api_router.get("/video-player/{filename}")
+async def video_player_page(filename: str, controls: str = "0", muted: str = "1", autoplay: str = "1"):
+    """Serve an HTML page with a video player for the given filename."""
+    filepath = UPLOADS_DIR / filename
+    if not filepath.exists():
+        raise HTTPException(status_code=404, detail="Video not found")
+    ctrl = "controls" if controls == "1" else ""
+    mt = "muted" if muted == "1" else ""
+    ap = "autoplay" if autoplay == "1" else ""
+    html = f"""<!DOCTYPE html><html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>*{{margin:0;padding:0;overflow:hidden}}body{{background:#000;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center}}
+video{{width:100%;height:100%;object-fit:contain}}</style></head>
+<body><video id="v" src="/api/media/{filename}" {ap} loop {mt} playsinline webkit-playsinline {ctrl}
+oncanplay="window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('ready')"
+onerror="window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('error')"></video>
+<script>var v=document.getElementById('v');
+v.addEventListener('playing',function(){{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('playing')}});
+v.addEventListener('pause',function(){{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('paused')}});
+v.addEventListener('error',function(){{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('error:'+JSON.stringify(v.error))}});
+</script></body></html>"""
+    return HTMLResponse(content=html, media_type="text/html")
 
 # ==================== HEALTH CHECK ====================
 
