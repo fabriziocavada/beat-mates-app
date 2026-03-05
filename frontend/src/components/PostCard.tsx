@@ -34,13 +34,20 @@ function isVideoPath(path: string | null | undefined): boolean {
   return l.includes('.mp4') || l.includes('.mov') || l.includes('.webm') || l.includes('video');
 }
 
-// WebView video player with loading indicator
+// WebView video player with loading indicator and play/pause
 function FeedVideoPlayer({ url, height, isVisible }: { url: string; height: number; isVisible: boolean }) {
   const [muted, setMuted] = useState(true);
+  const [paused, setPaused] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const webRef = useRef<WebView>(null);
 
   const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100%;height:100%;object-fit:cover}</style></head><body><video id="v" src="${url}" autoplay loop muted playsinline webkit-playsinline oncanplay="window.ReactNativeWebView.postMessage('ready')"></video></body></html>`;
+
+  const togglePlay = () => {
+    const newPaused = !paused;
+    setPaused(newPaused);
+    webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v){${newPaused ? 'v.pause()' : 'v.play()'}}true;`);
+  };
 
   return (
     <View style={{ width: '100%', height }}>
@@ -60,9 +67,13 @@ function FeedVideoPlayer({ url, height, isVisible }: { url: string; height: numb
       {isLoading && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
           <Ionicons name="play-circle-outline" size={50} color="#FF6978" />
-          <Text style={{ color: '#666', marginTop: 8, fontSize: 11 }}>Caricamento...</Text>
         </View>
       )}
+      {/* Play/Pause overlay */}
+      <TouchableOpacity style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]} activeOpacity={1} onPress={togglePlay}>
+        {paused && <Ionicons name="play" size={60} color="rgba(255,255,255,0.8)" />}
+      </TouchableOpacity>
+      {/* Mute button */}
       <TouchableOpacity style={styles.muteButton} onPress={() => {
         const newMuted = !muted;
         setMuted(newMuted);
