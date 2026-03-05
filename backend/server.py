@@ -1273,6 +1273,65 @@ async def get_live_session(session_id: str, current_user: dict = Depends(get_cur
     
     return LiveSessionResponse(**clean_doc(session))
 
+# Quick review endpoint for live sessions (after call ends)
+class LiveSessionReview(BaseModel):
+    rating: int
+    text: str = ""
+
+@api_router.post("/live-sessions/{session_id}/review")
+async def review_live_session(session_id: str, data: LiveSessionReview, current_user: dict = Depends(get_current_user)):
+    session = await db.live_sessions.find_one({"id": session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Check if user was part of this session
+    if session["student_id"] != current_user["id"] and session["teacher_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You were not part of this session")
+    
+    # Determine who is being reviewed
+    if session["student_id"] == current_user["id"]:
+        reviewee_id = session["teacher_id"]
+    else:
+        reviewee_id = session["student_id"]
+    
+    # Check for existing review
+    existing = await db.reviews.find_one({
+        "session_id": session_id,
+        "reviewer_id": current_user["id"]
+    })
+    
+    if existing:
+        # Update existing review
+        await db.reviews.update_one(
+            {"id": existing["id"]},
+            {"$set": {"rating": data.rating, "text": data.text}}
+        )
+        return {"message": "Review updated", "id": existing["id"]}
+    
+    # Create new review
+    review = {
+        "id": str(uuid.uuid4()),
+        "session_id": session_id,
+        "reviewer_id": current_user["id"],
+        "reviewee_id": reviewee_id,
+        "rating": data.rating,
+        "text": data.text,
+        "created_at": datetime.utcnow()
+    }
+    
+    await db.reviews.insert_one(review)
+    
+    # Update teacher's average rating
+    teacher_reviews = await db.reviews.find({"reviewee_id": reviewee_id}).to_list(1000)
+    if teacher_reviews:
+        avg_rating = sum(r["rating"] for r in teacher_reviews) / len(teacher_reviews)
+        await db.users.update_one(
+            {"id": reviewee_id},
+            {"$set": {"average_rating": round(avg_rating, 1), "reviews_count": len(teacher_reviews)}}
+        )
+    
+    return {"message": "Review created", "id": review["id"]}
+
 # ==================== REVIEWS ====================
 
 @api_router.post("/reviews")
@@ -1642,6 +1701,8 @@ async def end_video_call(room_name: str, current_user: dict = Depends(get_curren
 class PlaylistCreate(BaseModel):
     name: str
     genre: Optional[str] = "ALL"
+    is_premium: bool = False
+    price_monthly: float = 0.0  # Monthly subscription price in USD
 
 class PlaylistResponse(BaseModel):
     id: str
@@ -1649,6 +1710,8 @@ class PlaylistResponse(BaseModel):
     name: str
     genre: str
     song_count: int = 0
+    is_premium: bool = False
+    price_monthly: float = 0.0
     created_at: datetime
 
 class SongResponse(BaseModel):
@@ -1678,6 +1741,8 @@ async def create_playlist(data: PlaylistCreate, current_user: dict = Depends(get
         "user_id": current_user["id"],
         "name": data.name,
         "genre": data.genre,
+        "is_premium": data.is_premium,
+        "price_monthly": data.price_monthly if data.is_premium else 0.0,
         "created_at": datetime.utcnow(),
     }
     await db.playlists.insert_one(playlist)
@@ -1692,8 +1757,60 @@ async def get_playlists(current_user: dict = Depends(get_current_user)):
     for p in playlists:
         count = await db.songs.count_documents({"playlist_id": p["id"]})
         p["song_count"] = count
+        p.setdefault("is_premium", False)
+        p.setdefault("price_monthly", 0.0)
         result.append(PlaylistResponse(**p))
     return result
+
+# Get all premium playlists (from all users)
+@api_router.get("/music/playlists/premium")
+async def get_premium_playlists(current_user: dict = Depends(get_current_user)):
+    playlists = await db.playlists.find({"is_premium": True}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    result = []
+    for p in playlists:
+        count = await db.songs.count_documents({"playlist_id": p["id"]})
+        p["song_count"] = count
+        # Get owner info
+        owner = await db.users.find_one({"id": p["user_id"]}, {"_id": 0, "password_hash": 0})
+        p["owner"] = {"username": owner.get("username", ""), "name": owner.get("name", "")} if owner else None
+        # Check if user is subscribed
+        sub = await db.playlist_subscriptions.find_one({"user_id": current_user["id"], "playlist_id": p["id"]})
+        p["is_subscribed"] = sub is not None
+        result.append(p)
+    return result
+
+# Subscribe to premium playlist (mock)
+@api_router.post("/music/playlists/{playlist_id}/subscribe")
+async def subscribe_to_playlist(playlist_id: str, current_user: dict = Depends(get_current_user)):
+    playlist = await db.playlists.find_one({"id": playlist_id})
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+    
+    existing = await db.playlist_subscriptions.find_one({
+        "user_id": current_user["id"],
+        "playlist_id": playlist_id
+    })
+    if existing:
+        return {"message": "Already subscribed", "id": existing["id"]}
+    
+    subscription = {
+        "id": str(uuid.uuid4()),
+        "user_id": current_user["id"],
+        "playlist_id": playlist_id,
+        "status": "active",
+        "created_at": datetime.utcnow()
+    }
+    await db.playlist_subscriptions.insert_one(subscription)
+    return {"message": "Subscribed", "id": subscription["id"]}
+
+# Check subscription status
+@api_router.get("/music/playlists/{playlist_id}/subscription")
+async def check_subscription(playlist_id: str, current_user: dict = Depends(get_current_user)):
+    sub = await db.playlist_subscriptions.find_one({
+        "user_id": current_user["id"],
+        "playlist_id": playlist_id
+    })
+    return {"subscribed": sub is not None}
 
 @api_router.delete("/music/playlists/{playlist_id}")
 async def delete_playlist(playlist_id: str, current_user: dict = Depends(get_current_user)):
@@ -2068,6 +2185,43 @@ async def send_message(convo_id: str, data: dict, current_user: dict = Depends(g
     
     msg["sender"] = {"id": current_user["id"], "username": current_user["username"], "profile_image": current_user.get("profile_image")}
     return msg
+
+# ==================== PURCHASES (MOCK) ====================
+
+class MockPurchase(BaseModel):
+    lesson_id: str
+
+@api_router.get("/purchases/check/{lesson_id}")
+async def check_purchase(lesson_id: str, current_user: dict = Depends(get_current_user)):
+    purchase = await db.purchases.find_one({
+        "user_id": current_user["id"],
+        "lesson_id": lesson_id
+    })
+    return {"purchased": purchase is not None}
+
+@api_router.post("/purchases/mock")
+async def mock_purchase(data: MockPurchase, current_user: dict = Depends(get_current_user)):
+    # Check if already purchased
+    existing = await db.purchases.find_one({
+        "user_id": current_user["id"],
+        "lesson_id": data.lesson_id
+    })
+    if existing:
+        return {"message": "Already purchased", "id": existing["id"]}
+    
+    # Create mock purchase
+    purchase = {
+        "id": str(uuid.uuid4()),
+        "user_id": current_user["id"],
+        "lesson_id": data.lesson_id,
+        "amount": 0,  # Mock
+        "status": "completed",
+        "created_at": datetime.utcnow()
+    }
+    await db.purchases.insert_one(purchase)
+    return {"message": "Purchase recorded", "id": purchase["id"]}
+
+
 
 # Include the router in the main app
 app.include_router(api_router)

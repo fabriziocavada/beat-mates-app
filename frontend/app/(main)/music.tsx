@@ -276,6 +276,20 @@ export default function MusicScreen() {
               </View>
               <Text style={styles.actionBtnText}>Your Liked Songs</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.actionBtn, styles.premiumBtn]} 
+              onPress={() => router.push('/(main)/premium-playlists')}
+              data-testid="premium-playlists-btn"
+            >
+              <View style={[styles.actionBtnIcon, styles.premiumBtnIcon]}>
+                <Ionicons name="star" size={20} color="#FFD700" />
+              </View>
+              <Text style={[styles.actionBtnText, styles.premiumBtnText]}>Playlist Premium</Text>
+              <View style={styles.premiumBadge}>
+                <Text style={styles.premiumBadgeText}>$10/mese</Text>
+              </View>
+            </TouchableOpacity>
           </View>
 
           {/* Playlists */}
@@ -430,4 +444,9 @@ const styles = StyleSheet.create({
   pickerTitle: { color: '#FFF', fontSize: 17, fontWeight: '700', paddingHorizontal: 24, marginBottom: 12 },
   pickerItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 24, paddingVertical: 14 },
   pickerItemText: { color: '#FFF', fontSize: 16 },
+  premiumBtn: { borderWidth: 1, borderColor: '#FFD700' },
+  premiumBtnIcon: { backgroundColor: 'rgba(255, 215, 0, 0.2)' },
+  premiumBtnText: { color: '#FFD700' },
+  premiumBadge: { marginLeft: 'auto', backgroundColor: '#FFD700', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  premiumBadgeText: { color: '#000', fontSize: 11, fontWeight: '700' },
 });

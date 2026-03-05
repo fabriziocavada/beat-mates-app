@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import Colors from '../../../src/constants/colors';
 import api from '../../../src/services/api';
+import CallRatingModal from '../../../src/components/CallRatingModal';
 
 export default function VideoCallScreen() {
   const router = useRouter();
@@ -17,6 +18,9 @@ export default function VideoCallScreen() {
   const [loading, setLoading] = useState(true);
   const [webViewLoading, setWebViewLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showRating, setShowRating] = useState(false);
+  const [teacherName, setTeacherName] = useState('');
+  const [teacherId, setTeacherId] = useState('');
 
   useEffect(() => {
     console.log('VideoCall: Loading session', sessionId);
@@ -28,6 +32,12 @@ export default function VideoCallScreen() {
       const res = await api.get(`/live-sessions/${sessionId}`);
       const session = res.data;
       console.log('VideoCall: Session loaded, status:', session.status, 'room:', session.room_url);
+      
+      // Save teacher info for rating
+      if (session.teacher) {
+        setTeacherName(session.teacher.name || session.teacher.username || 'Insegnante');
+        setTeacherId(session.teacher_id);
+      }
       
       if (session.room_url) {
         setRoomUrl(session.room_url);
@@ -49,9 +59,28 @@ export default function VideoCallScreen() {
       { text: 'No', style: 'cancel' },
       { text: 'Termina', style: 'destructive', onPress: async () => {
         try { await api.post(`/live-sessions/${sessionId}/end`); } catch {}
-        router.back();
+        // Show rating modal
+        setShowRating(true);
       }},
     ]);
+  };
+
+  const handleSubmitRating = async (rating: number, comment: string) => {
+    try {
+      await api.post(`/live-sessions/${sessionId}/review`, {
+        rating,
+        text: comment,
+      });
+    } catch (e) {
+      console.log('Failed to submit rating:', e);
+    }
+    setShowRating(false);
+    router.back();
+  };
+
+  const handleSkipRating = () => {
+    setShowRating(false);
+    router.back();
   };
 
   // Loading session data
@@ -124,6 +153,15 @@ export default function VideoCallScreen() {
           )}
         </View>
       </SafeAreaView>
+
+      {/* Rating Modal - WhatsApp style */}
+      <CallRatingModal
+        visible={showRating}
+        teacherName={teacherName}
+        sessionId={sessionId || ''}
+        onSubmit={handleSubmitRating}
+        onSkip={handleSkipRating}
+      />
     </View>
   );
 }
