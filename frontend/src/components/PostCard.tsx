@@ -38,6 +38,7 @@ function isVideoPath(path: string | null | undefined): boolean {
 function FeedVideoPlayer({ url, height, isVisible }: { url: string; height: number; isVisible: boolean }) {
   const [muted, setMuted] = useState(true);
   const [paused, setPaused] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const webRef = useRef<WebView>(null);
 
   // Pause video when not visible
@@ -82,7 +83,8 @@ function FeedVideoPlayer({ url, height, isVisible }: { url: string; height: numb
     );
   }
 
-  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100%;height:100%;object-fit:cover}</style></head><body><video src="${url}" autoplay loop muted playsinline webkit-playsinline></video></body></html>`;
+  // Use object-fit: contain for proper aspect ratio (no black bars)
+  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100%;height:100%;object-fit:contain}</style></head><body><video src="${url}" autoplay loop muted playsinline webkit-playsinline onloadeddata="window.ReactNativeWebView.postMessage('loaded')"></video></body></html>`;
 
   return (
     <View style={{ width: '100%', height }}>
@@ -95,7 +97,16 @@ function FeedVideoPlayer({ url, height, isVisible }: { url: string; height: numb
         allowsInlineMediaPlayback={true}
         mediaPlaybackRequiresUserAction={false}
         javaScriptEnabled={true}
+        onMessage={(e) => {
+          if (e.nativeEvent.data === 'loaded') setIsLoading(false);
+        }}
       />
+      {/* Loading indicator */}
+      {isLoading && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
+          <Ionicons name="play-circle-outline" size={48} color="#444" />
+        </View>
+      )}
       {/* Tap overlay for play/pause */}
       <TouchableOpacity
         activeOpacity={1}
