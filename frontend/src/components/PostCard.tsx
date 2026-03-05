@@ -34,13 +34,13 @@ function isVideoPath(path: string | null | undefined): boolean {
   return l.includes('.mp4') || l.includes('.mov') || l.includes('.webm') || l.includes('video');
 }
 
-// WebView video player - simple and stable
+// WebView video player with loading indicator
 function FeedVideoPlayer({ url, height, isVisible }: { url: string; height: number; isVisible: boolean }) {
   const [muted, setMuted] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const webRef = useRef<WebView>(null);
 
-  // Always render WebView but control playback
-  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100%;height:100%;object-fit:cover}</style></head><body><video id="v" src="${url}" autoplay loop muted playsinline webkit-playsinline></video><script>var v=document.getElementById('v');v.play();</script></body></html>`;
+  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100%;height:100%;object-fit:cover}</style></head><body><video id="v" src="${url}" autoplay loop muted playsinline webkit-playsinline oncanplay="window.ReactNativeWebView.postMessage('ready')"></video></body></html>`;
 
   return (
     <View style={{ width: '100%', height }}>
@@ -53,7 +53,16 @@ function FeedVideoPlayer({ url, height, isVisible }: { url: string; height: numb
         allowsInlineMediaPlayback={true}
         mediaPlaybackRequiresUserAction={false}
         javaScriptEnabled={true}
+        onMessage={(e) => {
+          if (e.nativeEvent.data === 'ready') setIsLoading(false);
+        }}
       />
+      {isLoading && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
+          <Ionicons name="play-circle-outline" size={50} color="#FF6978" />
+          <Text style={{ color: '#666', marginTop: 8, fontSize: 11 }}>Caricamento...</Text>
+        </View>
+      )}
       <TouchableOpacity style={styles.muteButton} onPress={() => {
         const newMuted = !muted;
         setMuted(newMuted);

@@ -18,8 +18,10 @@ import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
 import api, { getMediaUrl } from '../../src/services/api';
 
-// WebView video player - stable, no conflicts
+// WebView video player with loading indicator
 function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: boolean }) {
+  const [isLoading, setIsLoading] = useState(true);
+
   if (!mediaUrl) {
     return (
       <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
@@ -36,18 +38,29 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
     );
   }
 
-  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100vw;height:100vh;object-fit:cover}</style></head><body><video src="${mediaUrl}" autoplay loop muted playsinline webkit-playsinline></video><script>var v=document.querySelector('video');document.addEventListener('click',function(){v.paused?v.play():v.pause()});</script></body></html>`;
+  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;background:#000}video{width:100vw;height:100vh;object-fit:cover}</style></head><body><video src="${mediaUrl}" autoplay loop muted playsinline webkit-playsinline oncanplay="window.ReactNativeWebView.postMessage('ready')"></video><script>var v=document.querySelector('video');document.addEventListener('click',function(){v.paused?v.play():v.pause()});</script></body></html>`;
 
   return (
-    <WebView
-      source={{ html }}
-      style={{ flex: 1 }}
-      scrollEnabled={false}
-      bounces={false}
-      allowsInlineMediaPlayback={true}
-      mediaPlaybackRequiresUserAction={false}
-      javaScriptEnabled={true}
-    />
+    <View style={{ flex: 1 }}>
+      <WebView
+        source={{ html }}
+        style={{ flex: 1 }}
+        scrollEnabled={false}
+        bounces={false}
+        allowsInlineMediaPlayback={true}
+        mediaPlaybackRequiresUserAction={false}
+        javaScriptEnabled={true}
+        onMessage={(e) => {
+          if (e.nativeEvent.data === 'ready') setIsLoading(false);
+        }}
+      />
+      {isLoading && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
+          <Ionicons name="play-circle-outline" size={60} color="#FF6978" />
+          <Text style={{ color: '#666', marginTop: 10, fontSize: 12 }}>Caricamento...</Text>
+        </View>
+      )}
+    </View>
   );
 }
 
