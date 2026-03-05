@@ -34,31 +34,25 @@ function isVideoPath(path: string | null | undefined): boolean {
   return l.includes('.mp4') || l.includes('.mov') || l.includes('.webm') || l.includes('video');
 }
 
-// WebView video player using server-side HTML page (loads from same origin as video)
-function FeedVideoPlayer({ url, height, isVisible, onFullscreen }: { url: string; height: number; isVisible: boolean; onFullscreen?: () => void }) {
-  const [muted, setMuted] = useState(true);
-  const [paused, setPaused] = useState(false);
+// WebView video player - pure rendering, no touch handling
+function FeedVideoPlayer({ url, height, isVisible, muted }: { url: string; height: number; isVisible: boolean; muted: boolean }) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const webRef = useRef<WebView>(null);
+  const lastMuted = useRef(muted);
 
-  // Extract filename from full URL to build the player URL
+  // Sync muted state with WebView
+  useEffect(() => {
+    if (lastMuted.current !== muted) {
+      lastMuted.current = muted;
+      webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v)v.muted=${muted};true;`);
+    }
+  }, [muted]);
+
   const playerUrl = getVideoPlayerUrl(url);
 
-  const togglePlay = () => {
-    const newPaused = !paused;
-    setPaused(newPaused);
-    webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v){${newPaused ? 'v.pause()' : 'v.play()'}}true;`);
-  };
-
-  const toggleMute = () => {
-    const newMuted = !muted;
-    setMuted(newMuted);
-    webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v)v.muted=${newMuted};true;`);
-  };
-
   return (
-    <View style={{ width: '100%', height }} data-testid="feed-video-player">
+    <View style={{ width: '100%', height }} pointerEvents="none">
       <WebView
         ref={webRef}
         source={{ uri: playerUrl }}
@@ -69,7 +63,6 @@ function FeedVideoPlayer({ url, height, isVisible, onFullscreen }: { url: string
         mediaPlaybackRequiresUserAction={false}
         javaScriptEnabled={true}
         originWhitelist={['*']}
-        pointerEvents="none"
         onMessage={(e) => {
           const msg = e.nativeEvent.data;
           if (msg === 'ready' || msg === 'playing') setIsLoading(false);
@@ -77,43 +70,18 @@ function FeedVideoPlayer({ url, height, isVisible, onFullscreen }: { url: string
         }}
         onError={() => setHasError(true)}
       />
-      {/* Loading overlay */}
       {isLoading && !hasError && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
           <ActivityIndicator size="large" color="#FF6978" />
           <Text style={{ color: '#888', fontSize: 12, marginTop: 8 }}>Caricamento video...</Text>
         </View>
       )}
-      {/* Error overlay */}
       {hasError && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
           <Ionicons name="videocam-off-outline" size={40} color="#666" />
           <Text style={{ color: '#888', fontSize: 12, marginTop: 8 }}>Video non disponibile</Text>
         </View>
       )}
-      {/* Touch overlay for play/pause */}
-      <TouchableOpacity
-        style={StyleSheet.absoluteFill}
-        activeOpacity={1}
-        onPress={togglePlay}
-      >
-        {paused && (
-          <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.3)' }]}>
-            <Ionicons name="play" size={50} color="#FFF" />
-          </View>
-        )}
-      </TouchableOpacity>
-      {/* Bottom controls */}
-      <View style={styles.videoControls} pointerEvents="box-none">
-        <TouchableOpacity onPress={toggleMute} style={styles.controlBtn}>
-          <Ionicons name={muted ? 'volume-mute' : 'volume-high'} size={20} color="#FFF" />
-        </TouchableOpacity>
-        {onFullscreen && (
-          <TouchableOpacity onPress={onFullscreen} style={styles.controlBtn}>
-            <Ionicons name="expand" size={20} color="#FFF" />
-          </TouchableOpacity>
-        )}
-      </View>
     </View>
   );
 }
@@ -127,6 +95,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
   const lastTap = useRef(0);
   const heartScale = useRef(new Animated.Value(0)).current;
   const heartOpacity = useRef(new Animated.Value(0)).current;
+  const [videoMuted, setVideoMuted] = useState(true);
 
   const mediaUrls = (post.media_urls && post.media_urls.length > 0)
     ? post.media_urls
@@ -148,6 +117,12 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
       lastTap.current = 0;
     } else {
       lastTap.current = now;
+      // Single tap: navigate to post detail after a short delay (cancelled if double-tap)
+      setTimeout(() => {
+        if (lastTap.current === now) {
+          onCommentPress?.(post.id);
+        }
+      }, 350);
     }
   };
 
@@ -192,20 +167,20 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
 
+  const hasVideo = mediaUrls.some(u => isVideoPath(u));
+
   const renderCarouselItem = ({ item: url, index }: { item: string; index: number }) => {
     const fullUrl = getMediaUrl(url) || '';
     const isVid = isVideoPath(url);
     const isCurrentSlide = index === carouselIndex;
     return (
-      <TouchableWithoutFeedback onPress={handleDoubleTap}>
-        <View style={{ width: SCREEN_WIDTH, height: mediaHeight }}>
-          {isVid ? (
-            <FeedVideoPlayer url={fullUrl} height={mediaHeight} isVisible={isCurrentSlide} onFullscreen={() => onCommentPress?.(post.id)} />
-          ) : (
-            <Image source={{ uri: fullUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-          )}
-        </View>
-      </TouchableWithoutFeedback>
+      <View style={{ width: SCREEN_WIDTH, height: mediaHeight }}>
+        {isVid ? (
+          <FeedVideoPlayer url={fullUrl} height={mediaHeight} isVisible={isCurrentSlide} muted={videoMuted} />
+        ) : (
+          <Image source={{ uri: fullUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+        )}
+      </View>
     );
   };
 
@@ -251,15 +226,32 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
               bounces={false}
             />
           ) : (
-            <TouchableWithoutFeedback onPress={handleDoubleTap}>
-              <View style={{ width: '100%', height: mediaHeight }}>
-                {isVideoPath(mediaUrls[0]) ? (
-                  <FeedVideoPlayer url={getMediaUrl(mediaUrls[0]) || ''} height={mediaHeight} isVisible={true} onFullscreen={() => onCommentPress?.(post.id)} />
-                ) : (
-                  <Image source={{ uri: getMediaUrl(mediaUrls[0]) || '' }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                )}
-              </View>
-            </TouchableWithoutFeedback>
+            <View style={{ width: '100%', height: mediaHeight }}>
+              {isVideoPath(mediaUrls[0]) ? (
+                <FeedVideoPlayer url={getMediaUrl(mediaUrls[0]) || ''} height={mediaHeight} isVisible={true} muted={videoMuted} />
+              ) : (
+                <Image source={{ uri: getMediaUrl(mediaUrls[0]) || '' }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+              )}
+            </View>
+          )}
+
+          {/* Touch overlay ON TOP of everything - handles tap to open post & double tap to like */}
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={handleDoubleTap}
+            data-testid={`media-tap-${post.id}`}
+          />
+
+          {/* Mute button for videos - on top of touch overlay */}
+          {hasVideo && (
+            <TouchableOpacity
+              onPress={() => setVideoMuted(!videoMuted)}
+              style={[styles.controlBtn, { position: 'absolute', bottom: 10, right: 10, zIndex: 10 }]}
+              data-testid={`mute-btn-${post.id}`}
+            >
+              <Ionicons name={videoMuted ? 'volume-mute' : 'volume-high'} size={20} color="#FFF" />
+            </TouchableOpacity>
           )}
 
           {isCarousel && (
