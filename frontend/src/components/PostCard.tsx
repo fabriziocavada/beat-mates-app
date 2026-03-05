@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, FlatList, Animated, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, FlatList, ScrollView, Animated, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import { useRouter } from 'expo-router';
@@ -168,30 +168,13 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
     return d.toLocaleDateString('it-IT');
   };
 
-  const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
-    if (viewableItems.length > 0) {
-      setCarouselIndex(viewableItems[0].index || 0);
-    }
-  }, []);
-
-  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
+  const handleCarouselScroll = (event: any) => {
+    const x = event.nativeEvent.contentOffset.x;
+    const newIndex = Math.round(x / SCREEN_WIDTH);
+    if (newIndex !== carouselIndex) setCarouselIndex(newIndex);
+  };
 
   const isSingleVideo = !isCarousel && mediaUrls.length === 1 && isVideoPath(mediaUrls[0]);
-
-  const renderCarouselItem = ({ item: url, index }: { item: string; index: number }) => {
-    const fullUrl = getMediaUrl(url) || '';
-    const isVid = isVideoPath(url);
-    const isCurrentSlide = index === carouselIndex;
-    return (
-      <View style={{ width: SCREEN_WIDTH, height: mediaHeight }}>
-        {isVid ? (
-          <FeedVideoPlayer url={fullUrl} height={mediaHeight} isVisible={isCurrentSlide} muted={videoMuted} />
-        ) : (
-          <Image source={{ uri: fullUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-        )}
-      </View>
-    );
-  };
 
   return (
     <View style={styles.container}>
@@ -221,20 +204,31 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
       {mediaUrls.length > 0 && (
         <View style={{ height: mediaHeight, position: 'relative' }}>
           {isCarousel ? (
-            /* Carousel: no overlay, free to swipe */
-            <FlatList
-              data={mediaUrls}
-              renderItem={renderCarouselItem}
-              keyExtractor={(_, i) => `media-${i}`}
+            /* Carousel: ScrollView for reliable horizontal swipe */
+            <ScrollView
               horizontal
               pagingEnabled
               showsHorizontalScrollIndicator={false}
-              onViewableItemsChanged={onViewableItemsChanged}
-              viewabilityConfig={viewabilityConfig}
-              getItemLayout={(_, index) => ({ length: SCREEN_WIDTH, offset: SCREEN_WIDTH * index, index })}
+              onMomentumScrollEnd={handleCarouselScroll}
               decelerationRate="fast"
               bounces={false}
-            />
+              nestedScrollEnabled={true}
+              scrollEventThrottle={16}
+            >
+              {mediaUrls.map((url, index) => {
+                const fullUrl = getMediaUrl(url) || '';
+                const isVid = isVideoPath(url);
+                return (
+                  <View key={index} style={{ width: SCREEN_WIDTH, height: mediaHeight }}>
+                    {isVid ? (
+                      <FeedVideoPlayer url={fullUrl} height={mediaHeight} isVisible={index === carouselIndex} muted={videoMuted} />
+                    ) : (
+                      <Image source={{ uri: fullUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                    )}
+                  </View>
+                );
+              })}
+            </ScrollView>
           ) : isSingleVideo ? (
             /* Single video: tap overlay → opens in Reels */
             <View style={{ width: '100%', height: mediaHeight }}>
