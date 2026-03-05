@@ -106,10 +106,11 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
   const mediaHeight = Math.min(SCREEN_WIDTH * 1.25, 500);
   const isOwner = currentUserId === post.user_id;
 
+  const isSingleVideo = !isCarousel && mediaUrls.length === 1 && isVideoPath(mediaUrls[0]);
+
   const handleDoubleTap = () => {
     const now = Date.now();
     if (now - lastTap.current < 350) {
-      // Double tap → like
       if (!isLiked) handleLike();
       heartScale.setValue(0.3);
       heartOpacity.setValue(1);
@@ -120,16 +121,10 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
       lastTap.current = 0;
     } else {
       lastTap.current = now;
-      // Single tap → navigate (after 350ms if no second tap)
       setTimeout(() => {
         if (lastTap.current === now) {
-          if (hasVideo) {
-            // Video post → open in Reels with this post
-            router.push({ pathname: '/(main)/reels', params: { postId: post.id } });
-          } else {
-            // Image post → open post detail
-            onCommentPress?.(post.id);
-          }
+          // This handler is only used on single video posts → always open Reels
+          router.push({ pathname: '/(main)/reels', params: { postId: post.id } });
         }
       }, 350);
     }
@@ -173,8 +168,6 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
     const newIndex = Math.round(x / SCREEN_WIDTH);
     if (newIndex !== carouselIndex) setCarouselIndex(newIndex);
   };
-
-  const isSingleVideo = !isCarousel && mediaUrls.length === 1 && isVideoPath(mediaUrls[0]);
 
   return (
     <View style={styles.container}>
