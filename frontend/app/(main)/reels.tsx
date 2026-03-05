@@ -304,6 +304,10 @@ export default function ReelsScreen() {
           decelerationRate="fast"
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
+          windowSize={3}
+          maxToRenderPerBatch={2}
+          removeClippedSubviews={true}
+          getItemLayout={(_, index) => ({ length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index })}
         />
       )}
       <TabBar activeTab="reels" onTabPress={handleTabPress} />

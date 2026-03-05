@@ -31,7 +31,7 @@ interface Comment {
 function VideoPlayer({ url, h }: { url: string; h: number }) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
-  const playerUrl = getVideoPlayerUrl(url, { controls: true, muted: false, autoplay: true });
+  const playerUrl = getVideoPlayerUrl(url, { controls: true, muted: false, autoplay: true, fit: 'contain' });
   return (
     <View style={{ width: '100%', height: h }}>
       <WebView
