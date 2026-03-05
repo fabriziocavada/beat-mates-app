@@ -45,20 +45,21 @@ export default function CreatePostScreen() {
       return;
     }
     
+    // Single selection - stable on iOS
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images', 'videos'],
-      allowsMultipleSelection: true,
-      selectionLimit: 10,
+      allowsMultipleSelection: false,
       quality: 0.5,
-      videoMaxDuration: 10,
+      videoMaxDuration: 60,
     });
     
     if (!result.canceled && result.assets.length > 0) {
-      const newItems: MediaItem[] = result.assets.map(a => ({
-        uri: a.uri,
-        type: a.type === 'video' ? 'video' : 'photo',
-      }));
-      setMediaItems(prev => [...prev, ...newItems].slice(0, 10));
+      const asset = result.assets[0];
+      const newItem: MediaItem = {
+        uri: asset.uri,
+        type: asset.type === 'video' ? 'video' : 'photo',
+      };
+      setMediaItems(prev => [...prev, newItem].slice(0, 10));
     }
   };
   
