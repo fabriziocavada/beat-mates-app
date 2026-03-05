@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import Colors from '../../src/constants/colors';
@@ -39,7 +39,7 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
     );
   }
 
-  const playerUrl = getVideoPlayerUrl(mediaUrl);
+  const playerUrl = getVideoPlayerUrl(mediaUrl, { muted: false });
 
   return (
     <View style={{ flex: 1 }}>
@@ -98,10 +98,12 @@ interface ReelPost {
 
 export default function ReelsScreen() {
   const router = useRouter();
+  const { postId } = useLocalSearchParams<{ postId?: string }>();
   const [reels, setReels] = useState<ReelPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
     loadReels();
@@ -110,11 +112,8 @@ export default function ReelsScreen() {
   const loadReels = async () => {
     try {
       const response = await api.get('/posts');
-      // Show video posts - handle both single videos and carousel videos
       const videoPosts = response.data.filter((p: any) => {
-        // Check if has video in media
         if (p.type === 'video' && p.media) return true;
-        // Check if has video in media_urls array
         if (p.media_urls && p.media_urls.length > 0) {
           return p.media_urls.some((url: string) => {
             const l = url.toLowerCase();
@@ -123,20 +122,26 @@ export default function ReelsScreen() {
         }
         return false;
       }).map((p: any) => {
-        // Make sure we have a video URL in media field
-        // First check media_urls for a video
         if (p.media_urls && p.media_urls.length > 0) {
           const videoUrl = p.media_urls.find((url: string) => {
             const l = url.toLowerCase();
             return l.includes('.mp4') || l.includes('.mov') || l.includes('.webm') || l.includes('video');
           });
-          if (videoUrl) {
-            return { ...p, media: videoUrl };
-          }
+          if (videoUrl) return { ...p, media: videoUrl };
         }
         return p;
       });
       setReels(videoPosts);
+      // Scroll to the specific post if coming from feed
+      if (postId && videoPosts.length > 0) {
+        const targetIndex = videoPosts.findIndex((p: ReelPost) => p.id === postId);
+        if (targetIndex >= 0) {
+          setCurrentIndex(targetIndex);
+          setTimeout(() => {
+            flatListRef.current?.scrollToIndex({ index: targetIndex, animated: false });
+          }, 100);
+        }
+      }
     } catch (error) {
       console.error('Failed to load reels', error);
     } finally {
@@ -295,6 +300,7 @@ export default function ReelsScreen() {
         </View>
       ) : (
         <FlatList
+          ref={flatListRef}
           data={reels}
           renderItem={renderReel}
           keyExtractor={(item) => item.id}

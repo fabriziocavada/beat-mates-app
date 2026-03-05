@@ -1,7 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, Image, Dimensions, FlatList, Animated, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, FlatList, Animated, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
+import { useRouter } from 'expo-router';
 import api, { getMediaUrl, getThumbnailUrl, getVideoPlayerUrl } from '../services/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -96,6 +97,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
   const heartScale = useRef(new Animated.Value(0)).current;
   const heartOpacity = useRef(new Animated.Value(0)).current;
   const [videoMuted, setVideoMuted] = useState(true);
+  const router = useRouter();
 
   const mediaUrls = (post.media_urls && post.media_urls.length > 0)
     ? post.media_urls
@@ -107,6 +109,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
   const handleDoubleTap = () => {
     const now = Date.now();
     if (now - lastTap.current < 350) {
+      // Double tap → like
       if (!isLiked) handleLike();
       heartScale.setValue(0.3);
       heartOpacity.setValue(1);
@@ -117,10 +120,16 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
       lastTap.current = 0;
     } else {
       lastTap.current = now;
-      // Single tap: navigate to post detail after a short delay (cancelled if double-tap)
+      // Single tap → navigate (after 350ms if no second tap)
       setTimeout(() => {
         if (lastTap.current === now) {
-          onCommentPress?.(post.id);
+          if (hasVideo) {
+            // Video post → open in Reels with this post
+            router.push({ pathname: '/(main)/reels', params: { postId: post.id } });
+          } else {
+            // Image post → open post detail
+            onCommentPress?.(post.id);
+          }
         }
       }, 350);
     }
