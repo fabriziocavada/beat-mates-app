@@ -96,7 +96,7 @@ export function getThumbnailUrl(mediaPath: string | null | undefined): string | 
 }
 
 // Get server-side video player URL (WebView loads this as a real page, same origin as video)
-export function getVideoPlayerUrl(mediaUrlOrPath: string, options?: { controls?: boolean; muted?: boolean; autoplay?: boolean; fit?: 'cover' | 'contain' }): string {
+export function getVideoPlayerUrl(mediaUrlOrPath: string, options?: { controls?: boolean; muted?: boolean; autoplay?: boolean; fit?: 'cover' | 'contain' | 'auto' }): string {
   let filename = mediaUrlOrPath;
   // Extract filename from various path formats
   if (filename.includes('/api/media/')) {
@@ -112,7 +112,7 @@ export function getVideoPlayerUrl(mediaUrlOrPath: string, options?: { controls?:
   const ctrl = options?.controls ? '1' : '0';
   const mt = options?.muted !== false ? '1' : '0';
   const ap = options?.autoplay !== false ? '1' : '0';
-  const fit = options?.fit || 'cover';
+  const fit = options?.fit || 'auto';
   return `${baseURL}/api/video-player/${filename}?controls=${ctrl}&muted=${mt}&autoplay=${ap}&fit=${fit}`;
 }
 

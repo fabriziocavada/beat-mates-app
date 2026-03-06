@@ -1672,18 +1672,24 @@ async def video_player_page(filename: str, controls: str = "0", muted: str = "1"
     ctrl = "controls" if controls == "1" else ""
     mt = "muted" if muted == "1" else ""
     ap = "autoplay" if autoplay == "1" else ""
-    obj_fit = fit if fit in ("cover", "contain") else "cover"
+    obj_fit = fit if fit in ("cover", "contain", "auto") else "cover"
     html = f"""<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <style>*{{margin:0;padding:0;overflow:hidden}}body{{background:#000;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center}}
 video{{width:100%;height:100%;object-fit:{obj_fit}}}</style></head>
-<body><video id="v" src="/api/media/{filename}" {ap} loop {mt} playsinline webkit-playsinline {ctrl}
-oncanplay="window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('ready')"
-onerror="window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('error')"></video>
+<body><video id="v" src="/api/media/{filename}" {ap} loop {mt} playsinline webkit-playsinline {ctrl}></video>
 <script>var v=document.getElementById('v');
+v.addEventListener('loadedmetadata',function(){{
+  var fit='{obj_fit}';
+  if(fit==='auto'){{
+    v.style.objectFit=(v.videoWidth>v.videoHeight)?'contain':'cover';
+  }}
+  window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('ready:'+v.videoWidth+'x'+v.videoHeight);
+}});
 v.addEventListener('playing',function(){{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('playing')}});
 v.addEventListener('pause',function(){{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('paused')}});
 v.addEventListener('error',function(){{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('error:'+JSON.stringify(v.error))}});
+v.addEventListener('canplay',function(){{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('ready')}});
 </script></body></html>"""
     return HTMLResponse(content=html, media_type="text/html")
 

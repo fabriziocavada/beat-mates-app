@@ -56,7 +56,7 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
     );
   }
 
-  const playerUrl = getVideoPlayerUrl(mediaUrl, { muted: false });
+  const playerUrl = getVideoPlayerUrl(mediaUrl, { muted: false, fit: 'contain' });
 
   const togglePlayPause = () => {
     const newPaused = !isPaused;
