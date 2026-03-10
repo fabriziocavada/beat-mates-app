@@ -266,7 +266,7 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
               <Text style={st.emptyText}>Caricamento e compressione video...</Text>
               <Text style={st.emptySubText}>Potrebbe richiedere qualche secondo</Text>
             </>
-          ) : isTeacher ? (
+          ) : (
             <>
               <Ionicons name="videocam-outline" size={56} color="#555" />
               <Text style={st.emptyText}>Registra o carica un video da analizzare insieme</Text>
@@ -278,11 +278,6 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
                 <Ionicons name="cloud-upload-outline" size={18} color="#FFF" />
                 <Text style={st.uploadBtnText}>Carica dalla galleria</Text>
               </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <ActivityIndicator size="small" color={Colors.primary} />
-              <Text style={st.emptyText}>In attesa che l'insegnante carichi un video...</Text>
             </>
           )}
         </View>
