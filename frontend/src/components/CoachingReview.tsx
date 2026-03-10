@@ -198,8 +198,7 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
   // Ref for the live stroke path string (avoids re-creating PanResponder)
   const liveStrokeRef = useRef('');
 
-  // Drawing PanResponder using refs to avoid stale closures
-  // Note: React Native state setters are stable references, so setDrawings/setLiveStroke are safe to capture
+  // Drawing PanResponder - both teacher and student can draw
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => toolActiveRef.current,
@@ -302,15 +301,13 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
       <View style={st.header}>
         <Text style={st.title}>Coaching Review</Text>
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-          {isTeacher && (
-            <TouchableOpacity
-              onPress={() => setToolActive(!toolActive)}
-              style={[st.toolToggle, toolActive && { backgroundColor: Colors.primary }]}
-              data-testid="coaching-draw-toggle"
-            >
-              <Ionicons name="brush" size={16} color="#FFF" />
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            onPress={() => setToolActive(!toolActive)}
+            style={[st.toolToggle, toolActive && { backgroundColor: Colors.primary }]}
+            data-testid="coaching-draw-toggle"
+          >
+            <Ionicons name="brush" size={16} color="#FFF" />
+          </TouchableOpacity>
           <TouchableOpacity onPress={onClose} style={st.closeBtn} data-testid="coaching-close-btn">
             <Ionicons name="close" size={24} color="#FFF" />
           </TouchableOpacity>
@@ -318,7 +315,7 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
       </View>
 
       {/* Video + Drawing Overlay */}
-      <View style={st.playerArea} {...(isTeacher && toolActive ? panResponder.panHandlers : {})}>
+      <View style={st.playerArea} {...(toolActive ? panResponder.panHandlers : {})}>
         <WebView
           ref={webRef}
           source={{ uri: playerUrl }}
@@ -354,7 +351,7 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
           ) : null}
         </Svg>
         {/* Drawing active indicator */}
-        {toolActive && isTeacher && (
+        {toolActive && (
           <View style={st.drawIndicator}>
             <View style={[st.drawDot, { backgroundColor: drawColor }]} />
             <Text style={st.drawLabel}>Disegno attivo</Text>
@@ -406,8 +403,8 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
           <Text style={st.timeText}>{duration.toFixed(1)}s</Text>
         </View>
 
-        {/* Drawing tools (teacher only) */}
-        {isTeacher && toolActive && (
+        {/* Drawing tools (both teacher and student) */}
+        {toolActive && (
           <View style={st.drawTools}>
             {colors.map(c => (
               <TouchableOpacity

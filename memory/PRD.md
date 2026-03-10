@@ -119,3 +119,17 @@ availability_slots, bookings, coaching_sessions, comments, conversations, follow
 ## Known Issues
 - Carousel swipe on home feed: fix applied but USER VERIFICATION PENDING
 - ffmpeg needs reinstall after environment restart (`sudo apt-get install -y ffmpeg`)
+- Daily.co tunnel may disconnect intermittently (preview environment limitation)
+
+## Recent Changes (March 10, 2026 - Session 2)
+- Fixed 8 video call UX issues:
+  1. Session persistence: active session saved to AsyncStorage, TV tab reconnects
+  2. Coaching button: bigger (44x44), round, well-spaced from end-call button
+  3. Post-call: navigates to home (not back to random chat screen)
+  4. WebView loading: 15s auto-timeout instead of infinite loading
+  5. Auto-retry: 3 retries on network errors
+  6. PiP layout: WhatsApp-style vertical box (same WebView, no duplicate connection)
+  7. Drawing for both users: teacher AND student can draw on coaching video
+  8. X closes coaching: returns to full-screen video call
+- Added 46 MongoDB indexes for performance
+- Installed ffmpeg for video compression

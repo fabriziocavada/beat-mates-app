@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, usePathname } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../store/authStore';
 import { getMediaUrl } from '../services/api';
 import Colors from '../constants/colors';
@@ -35,7 +36,17 @@ export default function TabBar({ activeTab, onTabPress }: TabBarProps) {
     return 'home';
   })();
 
-  const handlePress = (tabId: string) => {
+  const handlePress = async (tabId: string) => {
+    // If pressing the TV/available tab, check for active session to rejoin
+    if (tabId === 'available') {
+      try {
+        const activeSessionId = await AsyncStorage.getItem('active_session_id');
+        if (activeSessionId) {
+          router.push(`/(main)/video-call/${activeSessionId}` as any);
+          return;
+        }
+      } catch {}
+    }
     if (onTabPress) {
       onTabPress(tabId);
     } else {
