@@ -122,14 +122,17 @@ availability_slots, bookings, coaching_sessions, comments, conversations, follow
 - Daily.co tunnel may disconnect intermittently (preview environment limitation)
 
 ## Recent Changes (March 10, 2026 - Session 2)
-- Fixed 8 video call UX issues:
-  1. Session persistence: active session saved to AsyncStorage, TV tab reconnects
+- Fixed video call UX issues:
+  1. Session persistence: active session saved to AsyncStorage, TV tab verifies session is active + <2h before reconnecting
   2. Coaching button: bigger (44x44), round, well-spaced from end-call button
   3. Post-call: navigates to home (not back to random chat screen)
   4. WebView loading: 15s auto-timeout instead of infinite loading
   5. Auto-retry: 3 retries on network errors
-  6. PiP layout: WhatsApp-style vertical box (same WebView, no duplicate connection)
-  7. Drawing for both users: teacher AND student can draw on coaching video
-  8. X closes coaching: returns to full-screen video call
+  6. PiP layout: Animated dimensions (WebView NEVER remounts), draggable with edge-snapping
+  7. Drawing for BOTH users: teacher AND student can draw AND see each other's drawings (bidirectional sync)
+  8. Recording for BOTH users: teacher AND student can record/upload clips
+  9. All playback controls accessible to BOTH users (play/pause/seek/speed)
+  10. End-call confirmation dialog: "Sei sicuro di voler abbandonare?"
+  11. Fixed compress_video blocking event loop (asyncio.to_thread)
 - Added 46 MongoDB indexes for performance
 - Installed ffmpeg for video compression

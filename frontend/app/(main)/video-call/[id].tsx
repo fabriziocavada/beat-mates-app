@@ -15,9 +15,10 @@ import { useAuthStore } from '../../../src/store/authStore';
 import CoachingReview from '../../../src/components/CoachingReview';
 
 const { width: SW, height: SH } = Dimensions.get('window');
-const PIP_W = Math.round(SW * 0.32);
-const PIP_H = Math.round(PIP_W * 1.35);
-const TOP_BAR_H = 52;
+const PIP_W = Math.round(SW * 0.30);
+const PIP_H = Math.round(PIP_W * 1.4);
+const TOP_BAR = 56;
+const CONTENT_H = SH - TOP_BAR - 50; // approximate safe area
 
 async function saveActiveSession(id: string) {
   try { await AsyncStorage.setItem('active_session_id', id); } catch {}
@@ -98,35 +99,77 @@ export default function VideoCallScreen() {
   const retryCount = useRef(0);
   const loadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // PiP draggable position
-  const pipPos = useRef(new Animated.ValueXY({ x: SW - PIP_W - 14, y: 14 })).current;
-  const lastPipPos = useRef({ x: SW - PIP_W - 14, y: 14 });
+  // ─── Animated values for WebView dimensions (ALWAYS absolute, just resize) ───
+  const webW = useRef(new Animated.Value(SW)).current;
+  const webH = useRef(new Animated.Value(CONTENT_H)).current;
+  const webX = useRef(new Animated.Value(0)).current;
+  const webY = useRef(new Animated.Value(0)).current;
+  const webRadius = useRef(new Animated.Value(0)).current;
+  const webZ = useRef(new Animated.Value(1)).current;
+
+  // PiP drag offset
+  const pipDragOffset = useRef({ x: 0, y: 0 });
 
   const pipPan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 3 || Math.abs(g.dy) > 3,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2,
       onPanResponderGrant: () => {
-        pipPos.setOffset(lastPipPos.current);
-        pipPos.setValue({ x: 0, y: 0 });
+        // Store current position as offset
+        webX.stopAnimation(v => { pipDragOffset.current.x = v; });
+        webY.stopAnimation(v => { pipDragOffset.current.y = v; });
       },
-      onPanResponderMove: Animated.event([null, { dx: pipPos.x, dy: pipPos.y }], { useNativeDriver: false }),
+      onPanResponderMove: (_, g) => {
+        webX.setValue(pipDragOffset.current.x + g.dx);
+        webY.setValue(pipDragOffset.current.y + g.dy);
+      },
       onPanResponderRelease: (_, g) => {
-        pipPos.flattenOffset();
-        const rawX = lastPipPos.current.x + g.dx;
-        const rawY = lastPipPos.current.y + g.dy;
-        const snapX = rawX + PIP_W / 2 > SW / 2 ? SW - PIP_W - 14 : 14;
-        const snapY = Math.max(14, Math.min(SH - PIP_H - TOP_BAR_H - 100, rawY));
-        lastPipPos.current = { x: snapX, y: snapY };
-        Animated.spring(pipPos, { toValue: { x: snapX, y: snapY }, useNativeDriver: false, friction: 7 }).start();
+        const curX = pipDragOffset.current.x + g.dx;
+        const curY = pipDragOffset.current.y + g.dy;
+        // Snap to nearest horizontal edge
+        const snapX = (curX + PIP_W / 2) > SW / 2 ? SW - PIP_W - 12 : 12;
+        const snapY = Math.max(12, Math.min(CONTENT_H - PIP_H - 12, curY));
+        pipDragOffset.current = { x: snapX, y: snapY };
+        Animated.parallel([
+          Animated.spring(webX, { toValue: snapX, useNativeDriver: false, friction: 7 }),
+          Animated.spring(webY, { toValue: snapY, useNativeDriver: false, friction: 7 }),
+        ]).start();
       },
     })
   ).current;
 
+  // Animate between full-screen and PiP when coaching toggles
+  useEffect(() => {
+    if (showCoaching) {
+      const targetX = SW - PIP_W - 12;
+      const targetY = 12;
+      pipDragOffset.current = { x: targetX, y: targetY };
+      Animated.parallel([
+        Animated.spring(webW, { toValue: PIP_W, useNativeDriver: false, friction: 8 }),
+        Animated.spring(webH, { toValue: PIP_H, useNativeDriver: false, friction: 8 }),
+        Animated.spring(webX, { toValue: targetX, useNativeDriver: false, friction: 8 }),
+        Animated.spring(webY, { toValue: targetY, useNativeDriver: false, friction: 8 }),
+        Animated.timing(webRadius, { toValue: 14, duration: 200, useNativeDriver: false }),
+        Animated.timing(webZ, { toValue: 25, duration: 0, useNativeDriver: false }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.spring(webW, { toValue: SW, useNativeDriver: false, friction: 8 }),
+        Animated.spring(webH, { toValue: CONTENT_H, useNativeDriver: false, friction: 8 }),
+        Animated.spring(webX, { toValue: 0, useNativeDriver: false, friction: 8 }),
+        Animated.spring(webY, { toValue: 0, useNativeDriver: false, friction: 8 }),
+        Animated.timing(webRadius, { toValue: 0, duration: 200, useNativeDriver: false }),
+        Animated.timing(webZ, { toValue: 1, duration: 0, useNativeDriver: false }),
+      ]).start();
+    }
+  }, [showCoaching]);
+
   useEffect(() => {
     loadSession();
     if (sessionId) saveActiveSession(sessionId);
-    return () => { if (loadTimer.current) clearTimeout(loadTimer.current); };
+    return () => {
+      if (loadTimer.current) clearTimeout(loadTimer.current);
+    };
   }, [sessionId]);
 
   const loadSession = async () => {
@@ -148,14 +191,19 @@ export default function VideoCallScreen() {
   };
 
   const handleEndCall = useCallback(() => {
-    Alert.alert('Termina', 'Vuoi terminare la lezione?', [
-      { text: 'No', style: 'cancel' },
-      { text: 'Termina', style: 'destructive', onPress: async () => {
-        try { await api.post(`/live-sessions/${sessionId}/end`); } catch {}
-        await clearActiveSession();
-        setShowRating(true);
-      }},
-    ]);
+    Alert.alert(
+      'Termina lezione',
+      'Sei sicuro di voler abbandonare la videolezione? Non potrai rientrare.',
+      [
+        { text: 'Annulla', style: 'cancel' },
+        { text: 'Termina', style: 'destructive', onPress: async () => {
+          try { await api.post(`/live-sessions/${sessionId}/end`); } catch {}
+          await clearActiveSession();
+          setShowCoaching(false);
+          setShowRating(true);
+        }},
+      ]
+    );
   }, [sessionId]);
 
   const onRatingSubmit = useCallback(async (r: number, c: string) => {
@@ -174,10 +222,19 @@ export default function VideoCallScreen() {
     if (loadTimer.current) clearTimeout(loadTimer.current);
   }, []);
 
+  // Auto-timeout for WebView loading (15s)
+  useEffect(() => {
+    if (roomUrl && !webViewReady) {
+      loadTimer.current = setTimeout(() => setWebViewReady(true), 15000);
+    }
+    return () => { if (loadTimer.current) clearTimeout(loadTimer.current); };
+  }, [roomUrl, webViewReady]);
+
   const toggleCoaching = useCallback(() => {
     setShowCoaching(prev => !prev);
   }, []);
 
+  // Loading state
   if (loading) return (
     <View style={st.center}>
       <ActivityIndicator size="large" color={Colors.primary} />
@@ -185,6 +242,7 @@ export default function VideoCallScreen() {
     </View>
   );
 
+  // Error state
   if (error || !roomUrl) return (
     <View style={st.center}>
       <Ionicons name="videocam-off-outline" size={64} color="#666" />
@@ -222,11 +280,11 @@ export default function VideoCallScreen() {
           </View>
         </View>
 
-        {/* Content area - single container, WebView NEVER remounts */}
+        {/* Content: coaching review + video WebView in the SAME container */}
         <View style={{ flex: 1 }}>
-          {/* Layer 1: Coaching review (fills entire area when active) */}
+          {/* Coaching overlay (renders below WebView PiP) */}
           {showCoaching && (
-            <View style={st.coachingFill}>
+            <View style={StyleSheet.absoluteFill}>
               <CoachingReview
                 sessionId={sessionId || ''}
                 isTeacher={isTeacher}
@@ -236,17 +294,26 @@ export default function VideoCallScreen() {
           )}
 
           {/*
-            Layer 2: Daily.co WebView
-            CRITICAL: This is a SINGLE Animated.View that changes style.
-            In normal mode: flex fills parent.
-            In coaching mode: becomes a floating draggable PiP.
-            The WebView stays mounted and never re-creates the Daily.co connection.
+            Daily.co WebView - ALWAYS position:absolute.
+            Animated values control dimensions. Transitions smoothly between
+            full-screen (W=SW, H=CONTENT_H, X=0, Y=0) and
+            PiP (W=PIP_W, H=PIP_H, X=right-corner, Y=top).
+            The WebView NEVER unmounts/remounts. Connection stays alive.
           */}
           <Animated.View
-            style={showCoaching
-              ? [st.pipBox, { transform: pipPos.getTranslateTransform() }]
-              : st.fullVideoContainer
-            }
+            style={{
+              position: 'absolute',
+              width: webW,
+              height: webH,
+              left: webX,
+              top: webY,
+              borderRadius: webRadius,
+              overflow: 'hidden',
+              zIndex: webZ,
+              borderWidth: showCoaching ? 2 : 0,
+              borderColor: 'rgba(255,255,255,0.3)',
+              backgroundColor: '#111',
+            }}
             {...(showCoaching ? pipPan.panHandlers : {})}
           >
             <WebView
@@ -263,7 +330,7 @@ export default function VideoCallScreen() {
             />
           </Animated.View>
 
-          {/* Loading overlay (only in full-screen mode) */}
+          {/* Loading overlay (only in full-screen mode before WebView loads) */}
           {!webViewReady && !showCoaching && (
             <View style={st.overlay} pointerEvents="none">
               <ActivityIndicator size="large" color={Colors.primary} />
@@ -291,32 +358,11 @@ const st = StyleSheet.create({
   retryBtnText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
   backBtn: { marginTop: 8, paddingHorizontal: 24, paddingVertical: 12, borderWidth: 1, borderColor: '#333', borderRadius: 12 },
   backBtnText: { color: '#FFF', fontSize: 14 },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, height: TOP_BAR_H, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 30 },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, height: TOP_BAR, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 30 },
   topBtn: { padding: 8 },
   topTitle: { color: '#FFF', fontSize: 16, fontWeight: '600' },
   topActions: { flexDirection: 'row', alignItems: 'center' },
   coachingBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
   endBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center' },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center', zIndex: 5 },
-  // Full video fills the parent
-  fullVideoContainer: { flex: 1, zIndex: 1 },
-  // Coaching review fills below the PiP
-  coachingFill: { ...StyleSheet.absoluteFillObject, zIndex: 2 },
-  // PiP floating box (WhatsApp style) - draggable
-  pipBox: {
-    position: 'absolute',
-    width: PIP_W,
-    height: PIP_H,
-    borderRadius: 14,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
-    zIndex: 25,
-    backgroundColor: '#111',
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-  },
 });

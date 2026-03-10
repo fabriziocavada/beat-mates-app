@@ -11,7 +11,6 @@ import api, { getVideoPlayerUrl } from '../services/api';
 import Colors from '../constants/colors';
 
 const { width: SW } = Dimensions.get('window');
-const TIMELINE_H_PAD = 48; // left text + right text space
 
 interface CoachingReviewProps {
   sessionId: string;
@@ -34,26 +33,25 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
   const [drawings, setDrawings] = useState<DrawPath[]>([]);
   const [drawColor, setDrawColor] = useState('#FF6978');
   const [toolActive, setToolActive] = useState(false);
-  const [liveStroke, setLiveStroke] = useState(''); // current drawing path while finger is down
+  const [liveStroke, setLiveStroke] = useState('');
 
   const webRef = useRef<WebView>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Refs to avoid stale closures in PanResponder
+  // Refs for PanResponder (avoids stale closures)
   const drawColorRef = useRef(drawColor);
   const toolActiveRef = useRef(toolActive);
-
   useEffect(() => { drawColorRef.current = drawColor; }, [drawColor]);
   useEffect(() => { toolActiveRef.current = toolActive; }, [toolActive]);
 
-  // Student polls teacher's state (including initial video URL)
+  // ─── BOTH users poll for state changes ───
   useEffect(() => {
-    if (isTeacher) return;
     pollRef.current = setInterval(async () => {
       try {
         const res = await api.get(`/coaching/${sessionId}/state`);
         const s = res.data;
-        if (s.video_url) setVideoUrl(s.video_url);
+        if (s.video_url && !videoUrl) setVideoUrl(s.video_url);
+
         if (typeof s.is_playing === 'boolean') {
           setIsPlaying(prev => {
             if (prev !== s.is_playing) {
@@ -66,7 +64,7 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
         }
         if (typeof s.current_time === 'number') {
           setCurrentTime(prev => {
-            if (Math.abs(prev - s.current_time) > 0.5) {
+            if (Math.abs(prev - s.current_time) > 0.8) {
               webRef.current?.injectJavaScript(
                 `var v=document.getElementById('v');if(v)v.currentTime=${s.current_time};true;`
               );
@@ -85,17 +83,28 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
             return s.speed;
           });
         }
-        if (Array.isArray(s.drawings)) {
-          setDrawings(s.drawings.map((d: string) => {
-            try { return JSON.parse(d); } catch { return { d: '', color: '#FFF' }; }
-          }));
+        // Drawings: backend is source of truth (both users' drawings combined)
+        if (Array.isArray(s.drawings) && s.drawings.length > 0) {
+          const parsed = s.drawings.map((d: string) => {
+            try { return JSON.parse(d); } catch { return null; }
+          }).filter(Boolean);
+          setDrawings(parsed);
+        } else if (Array.isArray(s.drawings) && s.drawings.length === 0) {
+          setDrawings([]);
         }
       } catch {}
-    }, 600);
+    }, 700);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [isTeacher, sessionId]);
+  }, [sessionId]);
 
-  // Record clip via camera
+  // ─── Send command (BOTH users can send) ───
+  const sendCommand = useCallback(async (action: string, value?: string) => {
+    try {
+      await api.post(`/coaching/${sessionId}/command`, { action, value });
+    } catch {}
+  }, [sessionId]);
+
+  // ─── Record clip via camera (BOTH users) ───
   const handleRecord = async () => {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
@@ -112,7 +121,7 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
     await uploadClip(result.assets[0]);
   };
 
-  // Upload from gallery
+  // ─── Upload from gallery (BOTH users) ───
   const handleUpload = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['videos'],
@@ -138,33 +147,26 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
       });
       setVideoUrl(res.data.video_url);
       setDuration(asset.duration ? asset.duration / 1000 : 20);
-    } catch (e) {
+    } catch {
       Alert.alert('Errore', 'Upload del video fallito. Riprova.');
     } finally {
       setIsUploading(false);
     }
   };
 
-  // Teacher sends commands to sync with student
-  const sendCommand = useCallback(async (action: string, value?: string) => {
-    if (!isTeacher) return;
-    try {
-      await api.post(`/coaching/${sessionId}/command`, { action, value });
-    } catch {}
-  }, [isTeacher, sessionId]);
-
+  // ─── Controls (BOTH users can use ALL controls) ───
   const handleSeek = useCallback((time: number) => {
     const clamped = Math.max(0, Math.min(duration, time));
     setCurrentTime(clamped);
     webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v)v.currentTime=${clamped};true;`);
-    if (isTeacher) sendCommand('seek', String(clamped));
-  }, [duration, isTeacher, sendCommand]);
+    sendCommand('seek', String(clamped));
+  }, [duration, sendCommand]);
 
   const handleSpeed = useCallback((s: number) => {
     setSpeed(s);
     webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v)v.playbackRate=${s};true;`);
-    if (isTeacher) sendCommand('speed', String(s));
-  }, [isTeacher, sendCommand]);
+    sendCommand('speed', String(s));
+  }, [sendCommand]);
 
   const togglePlay = useCallback(() => {
     setIsPlaying(prev => {
@@ -172,33 +174,27 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
       webRef.current?.injectJavaScript(
         `var v=document.getElementById('v');if(v){${next ? 'v.play()' : 'v.pause()'}}true;`
       );
-      if (isTeacher) sendCommand(next ? 'play' : 'pause');
+      sendCommand(next ? 'play' : 'pause');
       return next;
     });
-  }, [isTeacher, sendCommand]);
+  }, [sendCommand]);
 
   const clearDrawings = useCallback(() => {
     setDrawings([]);
-    if (isTeacher) sendCommand('clear_drawings');
-  }, [isTeacher, sendCommand]);
+    sendCommand('clear_drawings');
+  }, [sendCommand]);
 
   const undoDrawing = useCallback(() => {
     setDrawings(prev => {
       const next = prev.slice(0, -1);
-      // For undo, we send the full remaining drawings array... or just clear and re-draw
-      // Simpler: send clear + redraw all remaining
-      if (isTeacher) {
-        sendCommand('clear_drawings');
-        next.forEach(p => sendCommand('draw', JSON.stringify(p)));
-      }
+      sendCommand('clear_drawings');
+      next.forEach(p => sendCommand('draw', JSON.stringify(p)));
       return next;
     });
-  }, [isTeacher, sendCommand]);
+  }, [sendCommand]);
 
-  // Ref for the live stroke path string (avoids re-creating PanResponder)
+  // ─── Drawing PanResponder (BOTH users can draw) ───
   const liveStrokeRef = useRef('');
-
-  // Drawing PanResponder - both teacher and student can draw
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => toolActiveRef.current,
@@ -218,8 +214,11 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
         if (pathD) {
           const newPath: DrawPath = { d: pathD, color: drawColorRef.current };
           setDrawings(prev => [...prev, newPath]);
-          // Sync to student
-          api.post(`/coaching/${sessionId}/command`, { action: 'draw', value: JSON.stringify(newPath) }).catch(() => {});
+          // Send to backend so OTHER user sees it via polling
+          api.post(`/coaching/${sessionId}/command`, {
+            action: 'draw',
+            value: JSON.stringify(newPath),
+          }).catch(() => {});
         }
         liveStrokeRef.current = '';
         setLiveStroke('');
@@ -230,26 +229,21 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
   // Build player URL
   const playerUrl = videoUrl ? getVideoPlayerUrl(videoUrl, { controls: false, muted: true, autoplay: false, fit: 'contain' }) : '';
 
-  // Time tracking from WebView
+  // WebView messages
   const handleMessage = useCallback((e: any) => {
     const msg = e.nativeEvent.data;
-    if (msg.startsWith('time:')) {
-      const t = parseFloat(msg.split(':')[1]) || 0;
-      setCurrentTime(t);
-    } else if (msg.startsWith('duration:')) {
-      setDuration(parseFloat(msg.split(':')[1]) || 20);
-    }
+    if (msg.startsWith('time:')) setCurrentTime(parseFloat(msg.split(':')[1]) || 0);
+    else if (msg.startsWith('duration:')) setDuration(parseFloat(msg.split(':')[1]) || 20);
   }, []);
 
-  // Timeline tap handler
   const onTimelineTap = useCallback((e: GestureResponderEvent) => {
     const x = e.nativeEvent.locationX;
-    const width = SW - TIMELINE_H_PAD - 32; // approximate usable width
+    const width = SW - 80;
     const pct = Math.max(0, Math.min(1, x / width));
     handleSeek(pct * duration);
   }, [duration, handleSeek]);
 
-  // === EMPTY STATE: No video yet ===
+  // ═══ EMPTY STATE: No video yet ═══
   if (!videoUrl) {
     return (
       <View style={st.container}>
@@ -285,14 +279,13 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
     );
   }
 
-  // === VIDEO LOADED: Review player ===
+  // ═══ VIDEO LOADED: Review player ═══
   const speeds = [0.25, 0.5, 0.75, 1];
   const colors = ['#FF6978', '#4CD964', '#007AFF', '#FFD700', '#FFF'];
   const progressPct = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
     <View style={st.container}>
-      {/* Header */}
       <View style={st.header}>
         <Text style={st.title}>Coaching Review</Text>
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
@@ -309,7 +302,7 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
         </View>
       </View>
 
-      {/* Video + Drawing Overlay */}
+      {/* Video + Drawing */}
       <View style={st.playerArea} {...(toolActive ? panResponder.panHandlers : {})}>
         <WebView
           ref={webRef}
@@ -336,16 +329,12 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
             }true;
           `}
         />
-        {/* SVG Drawing overlay */}
         <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
           {drawings.map((p, i) => (
             <Path key={`${i}-${p.d.length}`} d={p.d} stroke={p.color} strokeWidth={3} fill="none" strokeLinecap="round" />
           ))}
-          {liveStroke ? (
-            <Path d={liveStroke} stroke={drawColor} strokeWidth={3} fill="none" strokeLinecap="round" />
-          ) : null}
+          {liveStroke ? <Path d={liveStroke} stroke={drawColor} strokeWidth={3} fill="none" strokeLinecap="round" /> : null}
         </Svg>
-        {/* Drawing active indicator */}
         {toolActive && (
           <View style={st.drawIndicator}>
             <View style={[st.drawDot, { backgroundColor: drawColor }]} />
@@ -356,40 +345,29 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
 
       {/* Controls */}
       <View style={st.controls}>
-        {/* Play / Skip / Speed */}
         <View style={st.controlRow}>
-          <TouchableOpacity onPress={() => handleSeek(Math.max(0, currentTime - 2))} style={st.ctrlBtn} data-testid="coaching-skip-back">
+          <TouchableOpacity onPress={() => handleSeek(Math.max(0, currentTime - 2))} style={st.ctrlBtn}>
             <Ionicons name="play-back" size={18} color="#FFF" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={togglePlay} style={st.playBtn} data-testid="coaching-play-btn">
+          <TouchableOpacity onPress={togglePlay} style={st.playBtn}>
             <Ionicons name={isPlaying ? 'pause' : 'play'} size={22} color="#FFF" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleSeek(Math.min(duration, currentTime + 2))} style={st.ctrlBtn} data-testid="coaching-skip-forward">
+          <TouchableOpacity onPress={() => handleSeek(Math.min(duration, currentTime + 2))} style={st.ctrlBtn}>
             <Ionicons name="play-forward" size={18} color="#FFF" />
           </TouchableOpacity>
           <View style={st.speedRow}>
             {speeds.map(sp => (
-              <TouchableOpacity
-                key={sp}
-                onPress={() => handleSpeed(sp)}
-                style={[st.speedBtn, speed === sp && { backgroundColor: Colors.primary }]}
-                data-testid={`coaching-speed-${sp}`}
-              >
+              <TouchableOpacity key={sp} onPress={() => handleSpeed(sp)}
+                style={[st.speedBtn, speed === sp && { backgroundColor: Colors.primary }]}>
                 <Text style={[st.speedText, speed === sp && { color: '#FFF' }]}>{sp}x</Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
-        {/* Timeline */}
         <View style={st.timelineRow}>
           <Text style={st.timeText}>{currentTime.toFixed(1)}s</Text>
-          <TouchableOpacity
-            activeOpacity={1}
-            style={st.timelineTouch}
-            onPress={onTimelineTap}
-            data-testid="coaching-timeline"
-          >
+          <TouchableOpacity activeOpacity={1} style={st.timelineTouch} onPress={onTimelineTap}>
             <View style={st.timelineTrack}>
               <View style={[st.timelineFill, { width: `${Math.min(100, progressPct)}%` }]} />
             </View>
@@ -398,35 +376,26 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
           <Text style={st.timeText}>{duration.toFixed(1)}s</Text>
         </View>
 
-        {/* Drawing tools (both teacher and student) */}
         {toolActive && (
           <View style={st.drawTools}>
             {colors.map(c => (
-              <TouchableOpacity
-                key={c}
-                onPress={() => setDrawColor(c)}
-                style={[st.colorBtn, { backgroundColor: c }, drawColor === c && st.colorActive]}
-                data-testid={`coaching-color-${c}`}
-              />
+              <TouchableOpacity key={c} onPress={() => setDrawColor(c)}
+                style={[st.colorBtn, { backgroundColor: c }, drawColor === c && st.colorActive]} />
             ))}
-            <TouchableOpacity onPress={undoDrawing} style={st.undoBtn} data-testid="coaching-undo-btn">
+            <TouchableOpacity onPress={undoDrawing} style={st.undoBtn}>
               <Ionicons name="arrow-undo" size={16} color="#FFF" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={clearDrawings} style={st.clearBtn} data-testid="coaching-clear-btn">
+            <TouchableOpacity onPress={clearDrawings} style={st.clearBtn}>
               <Ionicons name="trash-outline" size={16} color="#FF3B30" />
             </TouchableOpacity>
           </View>
         )}
 
-        {/* Role label */}
         <View style={st.roleRow}>
           <View style={[st.roleBadge, { backgroundColor: isTeacher ? Colors.primary : '#333' }]}>
             <Ionicons name={isTeacher ? 'school' : 'person'} size={12} color="#FFF" />
             <Text style={st.roleText}>{isTeacher ? 'Insegnante' : 'Studente'}</Text>
           </View>
-          {!isTeacher && (
-            <Text style={st.syncLabel}>Controlli sincronizzati con l'insegnante</Text>
-          )}
         </View>
       </View>
     </View>
@@ -439,8 +408,6 @@ const st = StyleSheet.create({
   title: { color: '#FFF', fontSize: 16, fontWeight: '700' },
   closeBtn: { padding: 4 },
   toolToggle: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
-
-  // Empty state
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, padding: 32 },
   emptyText: { color: '#999', fontSize: 14, textAlign: 'center', lineHeight: 20 },
   emptySubText: { color: '#666', fontSize: 12, textAlign: 'center' },
@@ -448,15 +415,11 @@ const st = StyleSheet.create({
   recordBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
   uploadBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#222', paddingHorizontal: 18, paddingVertical: 11, borderRadius: 20 },
   uploadBtnText: { color: '#CCC', fontSize: 13 },
-
-  // Player
   playerArea: { flex: 1, backgroundColor: '#000', position: 'relative' },
   webview: { flex: 1 },
   drawIndicator: { position: 'absolute', top: 8, left: 8, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   drawDot: { width: 10, height: 10, borderRadius: 5 },
   drawLabel: { color: '#FFF', fontSize: 11, fontWeight: '600' },
-
-  // Controls
   controls: { backgroundColor: '#0a0a1a', paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4 },
   controlRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
   ctrlBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#1c1c2e', alignItems: 'center', justifyContent: 'center' },
@@ -464,25 +427,18 @@ const st = StyleSheet.create({
   speedRow: { flexDirection: 'row', gap: 4, marginLeft: 'auto' },
   speedBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, backgroundColor: '#1c1c2e' },
   speedText: { color: '#777', fontSize: 11, fontWeight: '700' },
-
-  // Timeline
   timelineRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   timeText: { color: '#777', fontSize: 10, width: 34, textAlign: 'center', fontVariant: ['tabular-nums'] },
   timelineTouch: { flex: 1, height: 24, justifyContent: 'center', position: 'relative' },
   timelineTrack: { height: 4, backgroundColor: '#222', borderRadius: 2, overflow: 'hidden' },
   timelineFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 2 },
   timelineThumb: { position: 'absolute', top: 4, width: 14, height: 14, borderRadius: 7, backgroundColor: '#FFF', marginLeft: -7 },
-
-  // Drawing tools
   drawTools: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#1a1a2e' },
   colorBtn: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: 'transparent' },
   colorActive: { borderColor: '#FFF', transform: [{ scale: 1.15 }] },
   undoBtn: { padding: 6, backgroundColor: '#1c1c2e', borderRadius: 12 },
   clearBtn: { marginLeft: 'auto', padding: 6 },
-
-  // Role badge
   roleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
   roleBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
   roleText: { color: '#FFF', fontSize: 10, fontWeight: '600' },
-  syncLabel: { color: '#555', fontSize: 10, fontStyle: 'italic' },
 });

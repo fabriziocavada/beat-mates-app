@@ -1276,8 +1276,9 @@ async def upload_coaching_clip(session_id: str, file: UploadFile = File(...), cu
     with open(filepath, "wb") as f:
         f.write(content)
     
-    # Compress for web compatibility
-    compressed = compress_video(str(filepath))
+    # Compress for web compatibility (run in thread to avoid blocking event loop)
+    import asyncio
+    compressed = await asyncio.to_thread(compress_video, str(filepath))
     media_url = f"/api/uploads/{compressed}"
     
     # Store coaching state
@@ -1624,8 +1625,9 @@ async def upload_file(
             filename = mp4_filename
             filepath = mp4_path
     elif is_video:
-        # ALWAYS compress MP4 videos for fast loading
-        compressed_filename = compress_video(str(filepath))
+        # ALWAYS compress MP4 videos for fast loading (run in thread to not block event loop)
+        import asyncio
+        compressed_filename = await asyncio.to_thread(compress_video, str(filepath))
         filename = compressed_filename
         filepath = UPLOADS_DIR / filename
 
