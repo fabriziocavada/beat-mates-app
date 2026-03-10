@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, usePathname } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../store/authStore';
-import { getMediaUrl } from '../services/api';
+import api, { getMediaUrl } from '../services/api';
 import Colors from '../constants/colors';
 
 interface TabBarProps {
@@ -42,10 +42,25 @@ export default function TabBar({ activeTab, onTabPress }: TabBarProps) {
       try {
         const activeSessionId = await AsyncStorage.getItem('active_session_id');
         if (activeSessionId) {
-          router.push(`/(main)/video-call/${activeSessionId}` as any);
-          return;
+          const res = await api.get(`/live-sessions/${activeSessionId}`);
+          const session = res.data;
+          // Only redirect if session is genuinely active
+          if (session && session.status === 'active') {
+            // Check if session is not stale (< 2 hours old)
+            const created = new Date(session.created_at).getTime();
+            const now = Date.now();
+            const twoHours = 2 * 60 * 60 * 1000;
+            if (now - created < twoHours) {
+              router.push(`/(main)/video-call/${activeSessionId}` as any);
+              return;
+            }
+          }
+          // Session ended, stale, or not found - clear
+          await AsyncStorage.removeItem('active_session_id');
         }
-      } catch {}
+      } catch {
+        await AsyncStorage.removeItem('active_session_id');
+      }
     }
     if (onTabPress) {
       onTabPress(tabId);
