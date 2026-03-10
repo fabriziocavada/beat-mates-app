@@ -16,7 +16,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://dance-feed-test.preview.emergentagent.com')
+BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://coaching-live-demo.preview.emergentagent.com')
 
 class TestMusicFeature:
     """Music playlist and song management tests"""

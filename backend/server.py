@@ -1257,6 +1257,84 @@ async def end_live_session(session_id: str, current_user: dict = Depends(get_cur
     )
     return {"status": "completed"}
 
+# ==================== COACHING REVIEW TOOL ====================
+
+class CoachingCommand(BaseModel):
+    action: str  # "seek", "speed", "play", "pause", "draw", "clear_drawings"
+    value: Optional[str] = None  # seek time, speed value, or drawing SVG path data
+
+@api_router.post("/coaching/{session_id}/upload")
+async def upload_coaching_clip(session_id: str, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    """Upload a 20-second coaching clip during a live session."""
+    session = await db.live_sessions.find_one({"id": session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    filename = f"coaching_{session_id}_{uuid.uuid4().hex[:8]}.mp4"
+    filepath = UPLOADS_DIR / filename
+    content = await file.read()
+    with open(filepath, "wb") as f:
+        f.write(content)
+    
+    # Compress for web compatibility
+    compressed = compress_video(str(filepath))
+    media_url = f"/api/uploads/{compressed}"
+    
+    # Store coaching state
+    await db.coaching_sessions.update_one(
+        {"session_id": session_id},
+        {"$set": {
+            "session_id": session_id,
+            "video_url": media_url,
+            "current_time": 0,
+            "speed": 1.0,
+            "is_playing": False,
+            "drawings": [],
+            "updated_at": datetime.utcnow().isoformat(),
+        }},
+        upsert=True
+    )
+    return {"video_url": media_url}
+
+@api_router.post("/coaching/{session_id}/command")
+async def send_coaching_command(session_id: str, cmd: CoachingCommand, current_user: dict = Depends(get_current_user)):
+    """Teacher sends playback/drawing commands."""
+    update = {"updated_at": datetime.utcnow().isoformat()}
+    if cmd.action == "seek":
+        update["current_time"] = float(cmd.value or 0)
+    elif cmd.action == "speed":
+        update["speed"] = float(cmd.value or 1)
+    elif cmd.action == "play":
+        update["is_playing"] = True
+    elif cmd.action == "pause":
+        update["is_playing"] = False
+    elif cmd.action == "draw":
+        # Append a drawing path
+        await db.coaching_sessions.update_one(
+            {"session_id": session_id},
+            {"$push": {"drawings": cmd.value}, "$set": {"updated_at": datetime.utcnow().isoformat()}}
+        )
+        return {"ok": True}
+    elif cmd.action == "clear_drawings":
+        update["drawings"] = []
+    
+    await db.coaching_sessions.update_one(
+        {"session_id": session_id},
+        {"$set": update},
+        upsert=True
+    )
+    return {"ok": True}
+
+@api_router.get("/coaching/{session_id}/state")
+async def get_coaching_state(session_id: str, current_user: dict = Depends(get_current_user)):
+    """Student polls this to sync with teacher's controls."""
+    state = await db.coaching_sessions.find_one({"session_id": session_id}, {"_id": 0})
+    if not state:
+        return {"session_id": session_id, "video_url": None}
+    return state
+
+# ==================== END COACHING ====================
+
 @api_router.get("/live-sessions/{session_id}", response_model=LiveSessionResponse)
 async def get_live_session(session_id: str, current_user: dict = Depends(get_current_user)):
     session = await db.live_sessions.find_one({"id": session_id})

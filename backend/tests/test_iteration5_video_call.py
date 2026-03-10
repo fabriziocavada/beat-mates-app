@@ -16,7 +16,7 @@ import uuid
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
-    BASE_URL = "https://dance-feed-test.preview.emergentagent.com"
+    BASE_URL = "https://coaching-live-demo.preview.emergentagent.com"
 
 class TestHealthAndRegression:
     """Health check and regression tests"""

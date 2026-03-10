@@ -12,7 +12,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://dance-feed-test.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://coaching-live-demo.preview.emergentagent.com')
 
 class TestIteration9:
     """Tests for iteration 9 features: likes, hamburger menu, video call auto-join"""

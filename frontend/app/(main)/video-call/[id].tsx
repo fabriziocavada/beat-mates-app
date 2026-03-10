@@ -9,6 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import Colors from '../../../src/constants/colors';
 import api from '../../../src/services/api';
+import { useAuthStore } from '../../../src/store/authStore';
+import CoachingReview from '../../../src/components/CoachingReview';
 
 // Inline CallRatingModal to avoid import issues
 function CallRatingModal({ visible, teacherName, sessionId, onSubmit, onSkip }: {
@@ -104,6 +106,9 @@ export default function VideoCallScreen() {
   const [showRating, setShowRating] = useState(false);
   const [teacherName, setTeacherName] = useState('');
   const [teacherId, setTeacherId] = useState('');
+  const [showCoaching, setShowCoaching] = useState(false);
+  const [isTeacher, setIsTeacher] = useState(false);
+  const currentUser = useAuthStore(s => s.user);
 
   useEffect(() => {
     console.log('VideoCall: Loading session', sessionId);
@@ -120,6 +125,7 @@ export default function VideoCallScreen() {
       if (session.teacher) {
         setTeacherName(session.teacher.name || session.teacher.username || 'Insegnante');
         setTeacherId(session.teacher_id);
+        setIsTeacher(currentUser?.id === session.teacher_id);
       }
       
       if (session.room_url) {
@@ -197,44 +203,79 @@ export default function VideoCallScreen() {
             <Ionicons name="chevron-back" size={24} color="#FFF" />
           </TouchableOpacity>
           <Text style={styles.topTitle}>Lezione Live</Text>
-          <TouchableOpacity onPress={handleEndCall} style={styles.endBtn}>
-            <Ionicons name="call" size={20} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {/* Coaching Review button */}
+            <TouchableOpacity
+              onPress={() => setShowCoaching(!showCoaching)}
+              style={[styles.coachingBtn, showCoaching && { backgroundColor: Colors.primary }]}
+              data-testid="coaching-toggle-btn"
+            >
+              <Ionicons name="analytics" size={18} color="#FFF" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleEndCall} style={styles.endBtn}>
+              <Ionicons name="call" size={20} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* WebView with Daily.co room - direct URL, not iframe */}
-        <View style={{ flex: 1 }}>
-          <WebView
-            source={{ uri: roomUrl }}
-            style={{ flex: 1 }}
-            javaScriptEnabled
-            domStorageEnabled
-            mediaPlaybackRequiresUserAction={false}
-            allowsInlineMediaPlayback
-            mediaCapturePermissionGrantType="grant"
-            onLoadStart={() => {
-              console.log('VideoCall: WebView loading started');
-              setWebViewLoading(true);
-            }}
-            onLoadEnd={() => {
-              console.log('VideoCall: WebView loaded');
-              setWebViewLoading(false);
-            }}
-            onError={(e) => {
-              console.log('VideoCall: WebView error', e.nativeEvent.description);
-              setError('Errore di connessione alla videochiamata');
-            }}
-          />
-          
-          {/* Loading overlay while WebView loads */}
-          {webViewLoading && (
-            <View style={styles.webViewOverlay}>
-              <ActivityIndicator size="large" color={Colors.primary} />
-              <Text style={styles.statusText}>Caricamento videochiamata...</Text>
-              <Text style={styles.subText}>Potrebbe richiedere qualche secondo</Text>
+        {showCoaching ? (
+          /* COACHING MODE: Review on top, Daily.co faces on bottom */
+          <View style={{ flex: 1 }}>
+            <View style={{ flex: 1 }}>
+              <CoachingReview
+                sessionId={sessionId || ''}
+                isTeacher={isTeacher}
+                onClose={() => setShowCoaching(false)}
+              />
             </View>
-          )}
-        </View>
+            {/* Daily.co faces - small strip at bottom */}
+            <View style={{ height: 120, borderTopWidth: 1, borderTopColor: '#222' }}>
+              <WebView
+                source={{ uri: roomUrl }}
+                style={{ flex: 1 }}
+                javaScriptEnabled
+                domStorageEnabled
+                mediaPlaybackRequiresUserAction={false}
+                allowsInlineMediaPlayback
+                mediaCapturePermissionGrantType="grant"
+              />
+            </View>
+          </View>
+        ) : (
+          /* NORMAL MODE: Full screen Daily.co */
+          <View style={{ flex: 1 }}>
+            <WebView
+              source={{ uri: roomUrl }}
+              style={{ flex: 1 }}
+              javaScriptEnabled
+              domStorageEnabled
+              mediaPlaybackRequiresUserAction={false}
+              allowsInlineMediaPlayback
+              mediaCapturePermissionGrantType="grant"
+              onLoadStart={() => {
+                console.log('VideoCall: WebView loading started');
+                setWebViewLoading(true);
+              }}
+              onLoadEnd={() => {
+                console.log('VideoCall: WebView loaded');
+                setWebViewLoading(false);
+              }}
+              onError={(e) => {
+                console.log('VideoCall: WebView error', e.nativeEvent.description);
+                setError('Errore di connessione alla videochiamata');
+              }}
+            />
+            
+            {/* Loading overlay while WebView loads */}
+            {webViewLoading && (
+              <View style={styles.webViewOverlay}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+                <Text style={styles.statusText}>Caricamento videochiamata...</Text>
+                <Text style={styles.subText}>Potrebbe richiedere qualche secondo</Text>
+              </View>
+            )}
+          </View>
+        )}
       </SafeAreaView>
 
       {/* Rating Modal - WhatsApp style */}
