@@ -18,7 +18,7 @@ const { width: SW, height: SH } = Dimensions.get('window');
 const PIP_W = Math.round(SW * 0.30);
 const PIP_H = Math.round(PIP_W * 1.4);
 const TOP_BAR = 56;
-const CONTENT_H = SH - TOP_BAR - 50; // approximate safe area
+const CONTENT_H = SH - TOP_BAR - 50;
 
 async function saveActiveSession(id: string) {
   try { await AsyncStorage.setItem('active_session_id', id); } catch {}
@@ -27,7 +27,7 @@ async function clearActiveSession() {
   try { await AsyncStorage.removeItem('active_session_id'); } catch {}
 }
 
-// ─── Rating Modal ───
+// ─── Rating Modal (inline) ───
 function CallRatingModal({ visible, teacherName, onSubmit, onSkip }: {
   visible: boolean; teacherName: string;
   onSubmit: (r: number, c: string) => void; onSkip: () => void;
@@ -98,24 +98,22 @@ export default function VideoCallScreen() {
   const currentUser = useAuthStore(s => s.user);
   const retryCount = useRef(0);
   const loadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const coachPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ─── Animated values for WebView dimensions (ALWAYS absolute, just resize) ───
+  // Animated WebView dimensions (ALWAYS absolute, never changes layout type)
   const webW = useRef(new Animated.Value(SW)).current;
   const webH = useRef(new Animated.Value(CONTENT_H)).current;
   const webX = useRef(new Animated.Value(0)).current;
   const webY = useRef(new Animated.Value(0)).current;
   const webRadius = useRef(new Animated.Value(0)).current;
-  const webZ = useRef(new Animated.Value(1)).current;
 
-  // PiP drag offset
+  // PiP drag
   const pipDragOffset = useRef({ x: 0, y: 0 });
-
   const pipPan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2,
       onPanResponderGrant: () => {
-        // Store current position as offset
         webX.stopAnimation(v => { pipDragOffset.current.x = v; });
         webY.stopAnimation(v => { pipDragOffset.current.y = v; });
       },
@@ -126,7 +124,6 @@ export default function VideoCallScreen() {
       onPanResponderRelease: (_, g) => {
         const curX = pipDragOffset.current.x + g.dx;
         const curY = pipDragOffset.current.y + g.dy;
-        // Snap to nearest horizontal edge
         const snapX = (curX + PIP_W / 2) > SW / 2 ? SW - PIP_W - 12 : 12;
         const snapY = Math.max(12, Math.min(CONTENT_H - PIP_H - 12, curY));
         pipDragOffset.current = { x: snapX, y: snapY };
@@ -138,38 +135,71 @@ export default function VideoCallScreen() {
     })
   ).current;
 
-  // Animate between full-screen and PiP when coaching toggles
+  // Animate WebView between full-screen and PiP
+  const animateToPiP = useCallback(() => {
+    const tx = SW - PIP_W - 12;
+    pipDragOffset.current = { x: tx, y: 12 };
+    Animated.parallel([
+      Animated.spring(webW, { toValue: PIP_W, useNativeDriver: false, friction: 8 }),
+      Animated.spring(webH, { toValue: PIP_H, useNativeDriver: false, friction: 8 }),
+      Animated.spring(webX, { toValue: tx, useNativeDriver: false, friction: 8 }),
+      Animated.spring(webY, { toValue: 12, useNativeDriver: false, friction: 8 }),
+      Animated.timing(webRadius, { toValue: 14, duration: 200, useNativeDriver: false }),
+    ]).start();
+  }, []);
+
+  const animateToFull = useCallback(() => {
+    Animated.parallel([
+      Animated.spring(webW, { toValue: SW, useNativeDriver: false, friction: 8 }),
+      Animated.spring(webH, { toValue: CONTENT_H, useNativeDriver: false, friction: 8 }),
+      Animated.spring(webX, { toValue: 0, useNativeDriver: false, friction: 8 }),
+      Animated.spring(webY, { toValue: 0, useNativeDriver: false, friction: 8 }),
+      Animated.timing(webRadius, { toValue: 0, duration: 200, useNativeDriver: false }),
+    ]).start();
+  }, []);
+
+  // Coaching toggle (sends sync command to other device)
+  const openCoaching = useCallback(() => {
+    setShowCoaching(true);
+    animateToPiP();
+    api.post(`/coaching/${sessionId}/command`, { action: 'start_coaching' }).catch(() => {});
+  }, [sessionId, animateToPiP]);
+
+  const closeCoaching = useCallback(() => {
+    setShowCoaching(false);
+    animateToFull();
+    api.post(`/coaching/${sessionId}/command`, { action: 'stop_coaching' }).catch(() => {});
+  }, [sessionId, animateToFull]);
+
+  // Poll coaching state to sync coaching_active between devices
   useEffect(() => {
-    if (showCoaching) {
-      const targetX = SW - PIP_W - 12;
-      const targetY = 12;
-      pipDragOffset.current = { x: targetX, y: targetY };
-      Animated.parallel([
-        Animated.spring(webW, { toValue: PIP_W, useNativeDriver: false, friction: 8 }),
-        Animated.spring(webH, { toValue: PIP_H, useNativeDriver: false, friction: 8 }),
-        Animated.spring(webX, { toValue: targetX, useNativeDriver: false, friction: 8 }),
-        Animated.spring(webY, { toValue: targetY, useNativeDriver: false, friction: 8 }),
-        Animated.timing(webRadius, { toValue: 14, duration: 200, useNativeDriver: false }),
-        Animated.timing(webZ, { toValue: 25, duration: 0, useNativeDriver: false }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.spring(webW, { toValue: SW, useNativeDriver: false, friction: 8 }),
-        Animated.spring(webH, { toValue: CONTENT_H, useNativeDriver: false, friction: 8 }),
-        Animated.spring(webX, { toValue: 0, useNativeDriver: false, friction: 8 }),
-        Animated.spring(webY, { toValue: 0, useNativeDriver: false, friction: 8 }),
-        Animated.timing(webRadius, { toValue: 0, duration: 200, useNativeDriver: false }),
-        Animated.timing(webZ, { toValue: 1, duration: 0, useNativeDriver: false }),
-      ]).start();
-    }
-  }, [showCoaching]);
+    if (!sessionId || !roomUrl) return;
+    coachPollRef.current = setInterval(async () => {
+      try {
+        const res = await api.get(`/coaching/${sessionId}/state`);
+        const s = res.data;
+        if (typeof s.coaching_active === 'boolean') {
+          setShowCoaching(prev => {
+            if (s.coaching_active && !prev) {
+              animateToPiP();
+              return true;
+            }
+            if (!s.coaching_active && prev) {
+              animateToFull();
+              return false;
+            }
+            return prev;
+          });
+        }
+      } catch {}
+    }, 1200);
+    return () => { if (coachPollRef.current) clearInterval(coachPollRef.current); };
+  }, [sessionId, roomUrl, animateToPiP, animateToFull]);
 
   useEffect(() => {
     loadSession();
     if (sessionId) saveActiveSession(sessionId);
-    return () => {
-      if (loadTimer.current) clearTimeout(loadTimer.current);
-    };
+    return () => { if (loadTimer.current) clearTimeout(loadTimer.current); };
   }, [sessionId]);
 
   const loadSession = async () => {
@@ -197,14 +227,15 @@ export default function VideoCallScreen() {
       [
         { text: 'Annulla', style: 'cancel' },
         { text: 'Termina', style: 'destructive', onPress: async () => {
+          setShowCoaching(false);
+          animateToFull();
           try { await api.post(`/live-sessions/${sessionId}/end`); } catch {}
           await clearActiveSession();
-          setShowCoaching(false);
           setShowRating(true);
         }},
       ]
     );
-  }, [sessionId]);
+  }, [sessionId, animateToFull]);
 
   const onRatingSubmit = useCallback(async (r: number, c: string) => {
     try { await api.post(`/live-sessions/${sessionId}/review`, { rating: r, text: c }); } catch {}
@@ -222,7 +253,6 @@ export default function VideoCallScreen() {
     if (loadTimer.current) clearTimeout(loadTimer.current);
   }, []);
 
-  // Auto-timeout for WebView loading (15s)
   useEffect(() => {
     if (roomUrl && !webViewReady) {
       loadTimer.current = setTimeout(() => setWebViewReady(true), 15000);
@@ -230,11 +260,6 @@ export default function VideoCallScreen() {
     return () => { if (loadTimer.current) clearTimeout(loadTimer.current); };
   }, [roomUrl, webViewReady]);
 
-  const toggleCoaching = useCallback(() => {
-    setShowCoaching(prev => !prev);
-  }, []);
-
-  // Loading state
   if (loading) return (
     <View style={st.center}>
       <ActivityIndicator size="large" color={Colors.primary} />
@@ -242,7 +267,6 @@ export default function VideoCallScreen() {
     </View>
   );
 
-  // Error state
   if (error || !roomUrl) return (
     <View style={st.center}>
       <Ionicons name="videocam-off-outline" size={64} color="#666" />
@@ -267,7 +291,7 @@ export default function VideoCallScreen() {
           <Text style={st.topTitle}>Lezione Live</Text>
           <View style={st.topActions}>
             <TouchableOpacity
-              onPress={toggleCoaching}
+              onPress={showCoaching ? closeCoaching : openCoaching}
               style={[st.coachingBtn, showCoaching && { backgroundColor: Colors.primary }]}
               data-testid="coaching-toggle-btn"
             >
@@ -280,26 +304,19 @@ export default function VideoCallScreen() {
           </View>
         </View>
 
-        {/* Content: coaching review + video WebView in the SAME container */}
         <View style={{ flex: 1 }}>
-          {/* Coaching overlay (renders below WebView PiP) */}
+          {/* Coaching overlay */}
           {showCoaching && (
             <View style={StyleSheet.absoluteFill}>
               <CoachingReview
                 sessionId={sessionId || ''}
                 isTeacher={isTeacher}
-                onClose={toggleCoaching}
+                onClose={closeCoaching}
               />
             </View>
           )}
 
-          {/*
-            Daily.co WebView - ALWAYS position:absolute.
-            Animated values control dimensions. Transitions smoothly between
-            full-screen (W=SW, H=CONTENT_H, X=0, Y=0) and
-            PiP (W=PIP_W, H=PIP_H, X=right-corner, Y=top).
-            The WebView NEVER unmounts/remounts. Connection stays alive.
-          */}
+          {/* WebView (always absolute, animated dimensions) */}
           <Animated.View
             style={{
               position: 'absolute',
@@ -309,7 +326,7 @@ export default function VideoCallScreen() {
               top: webY,
               borderRadius: webRadius,
               overflow: 'hidden',
-              zIndex: webZ,
+              zIndex: showCoaching ? 25 : 1,
               borderWidth: showCoaching ? 2 : 0,
               borderColor: 'rgba(255,255,255,0.3)',
               backgroundColor: '#111',
@@ -330,23 +347,17 @@ export default function VideoCallScreen() {
             />
           </Animated.View>
 
-          {/* Loading overlay (only in full-screen mode before WebView loads) */}
+          {/* Loading overlay */}
           {!webViewReady && !showCoaching && (
             <View style={st.overlay} pointerEvents="none">
               <ActivityIndicator size="large" color={Colors.primary} />
               <Text style={st.statusText}>Caricamento videochiamata...</Text>
-              <Text style={{ color: '#666', fontSize: 12, marginTop: 4 }}>Potrebbe richiedere qualche secondo</Text>
             </View>
           )}
         </View>
       </SafeAreaView>
 
-      <CallRatingModal
-        visible={showRating}
-        teacherName={teacherName}
-        onSubmit={onRatingSubmit}
-        onSkip={onRatingSkip}
-      />
+      <CallRatingModal visible={showRating} teacherName={teacherName} onSubmit={onRatingSubmit} onSkip={onRatingSkip} />
     </View>
   );
 }

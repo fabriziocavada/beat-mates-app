@@ -1299,7 +1299,7 @@ async def upload_coaching_clip(session_id: str, file: UploadFile = File(...), cu
 
 @api_router.post("/coaching/{session_id}/command")
 async def send_coaching_command(session_id: str, cmd: CoachingCommand, current_user: dict = Depends(get_current_user)):
-    """Teacher sends playback/drawing commands."""
+    """Both users can send playback/drawing commands."""
     update = {"updated_at": datetime.utcnow().isoformat()}
     if cmd.action == "seek":
         update["current_time"] = float(cmd.value or 0)
@@ -1309,11 +1309,15 @@ async def send_coaching_command(session_id: str, cmd: CoachingCommand, current_u
         update["is_playing"] = True
     elif cmd.action == "pause":
         update["is_playing"] = False
+    elif cmd.action == "start_coaching":
+        update["coaching_active"] = True
+    elif cmd.action == "stop_coaching":
+        update["coaching_active"] = False
     elif cmd.action == "draw":
-        # Append a drawing path
         await db.coaching_sessions.update_one(
             {"session_id": session_id},
-            {"$push": {"drawings": cmd.value}, "$set": {"updated_at": datetime.utcnow().isoformat()}}
+            {"$push": {"drawings": cmd.value}, "$set": {"updated_at": datetime.utcnow().isoformat()}},
+            upsert=True
         )
         return {"ok": True}
     elif cmd.action == "clear_drawings":
