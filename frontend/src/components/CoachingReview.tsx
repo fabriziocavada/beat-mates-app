@@ -366,6 +366,9 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
         </View>
 
         <View style={st.timelineRow}>
+          <TouchableOpacity onPress={() => handleSeek(Math.max(0, currentTime - 0.1))} style={st.frameBtn}>
+            <Ionicons name="remove" size={14} color="#FFF" />
+          </TouchableOpacity>
           <Text style={st.timeText}>{currentTime.toFixed(1)}s</Text>
           <TouchableOpacity activeOpacity={1} style={st.timelineTouch} onPress={onTimelineTap}>
             <View style={st.timelineTrack}>
@@ -374,6 +377,9 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
             <View style={[st.timelineThumb, { left: `${Math.min(100, progressPct)}%` }]} />
           </TouchableOpacity>
           <Text style={st.timeText}>{duration.toFixed(1)}s</Text>
+          <TouchableOpacity onPress={() => handleSeek(Math.min(duration, currentTime + 0.1))} style={st.frameBtn}>
+            <Ionicons name="add" size={14} color="#FFF" />
+          </TouchableOpacity>
         </View>
 
         {toolActive && (
@@ -397,6 +403,12 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
             <Text style={st.roleText}>{isTeacher ? 'Insegnante' : 'Studente'}</Text>
           </View>
         </View>
+
+        {/* "Back to videocall" button */}
+        <TouchableOpacity onPress={onClose} style={st.backToCallBtn} data-testid="coaching-back-to-call">
+          <Ionicons name="videocam" size={18} color="#FFF" />
+          <Text style={st.backToCallText}>Torna alla videolezione</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );

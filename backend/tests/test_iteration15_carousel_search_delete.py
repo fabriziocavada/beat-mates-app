@@ -14,7 +14,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://coaching-live-demo.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://rhythm-connect-14.preview.emergentagent.com').rstrip('/')
 
 # Test users from requirements
 TEACHER_EMAIL = "tutor@test.com"

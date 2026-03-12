@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, Alert, Modal, TextInput, Dimensions,
-  Animated, PanResponder,
+  Animated, PanResponder, Platform, PermissionsAndroid, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -202,9 +202,43 @@ export default function VideoCallScreen() {
     return () => { if (loadTimer.current) clearTimeout(loadTimer.current); };
   }, [sessionId]);
 
+  const requestPermissions = async (): Promise<boolean> => {
+    if (Platform.OS === 'web') return true;
+    if (Platform.OS === 'android') {
+      try {
+        const grants = await PermissionsAndroid.requestMultiple([
+          PermissionsAndroid.PERMISSIONS.CAMERA,
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        ]);
+        const camOk = grants[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED;
+        const micOk = grants[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.RESULTS.GRANTED;
+        if (!camOk || !micOk) {
+          Alert.alert(
+            'Permessi necessari',
+            'Serve accesso a camera e microfono per la videolezione. Vai nelle impostazioni dell\'app per abilitarli.',
+            [
+              { text: 'Apri Impostazioni', onPress: () => Linking.openSettings() },
+              { text: 'Annulla', style: 'cancel' },
+            ]
+          );
+          return false;
+        }
+        return true;
+      } catch { return false; }
+    }
+    // iOS: use expo-camera-like approach via react-native
+    return true;
+  };
+
   const loadSession = async () => {
     setLoading(true); setError(null);
     try {
+      const permOk = await requestPermissions();
+      if (!permOk) {
+        setError('Servono i permessi per camera e microfono per la videolezione.');
+        setLoading(false);
+        return;
+      }
       const res = await api.get(`/live-sessions/${sessionId}`);
       const s = res.data;
       if (s.teacher) {
@@ -340,10 +374,18 @@ export default function VideoCallScreen() {
               domStorageEnabled
               mediaPlaybackRequiresUserAction={false}
               allowsInlineMediaPlayback
+              allowsFullscreenVideo
               mediaCapturePermissionGrantType="grant"
+              androidLayerType="hardware"
               scrollEnabled={false}
               bounces={false}
               onLoadEnd={onWebViewLoadEnd}
+              onPermissionRequest={(event: any) => {
+                if (event?.nativeEvent?.resources) {
+                  event.nativeEvent.grant(event.nativeEvent.resources);
+                }
+              }}
+              originWhitelist={['*']}
             />
           </Animated.View>
 
