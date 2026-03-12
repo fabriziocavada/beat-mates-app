@@ -307,6 +307,7 @@ export default function VideoCallScreen() {
               originWhitelist={['*']}
               injectedJavaScriptBeforeContentLoaded={`
                 (function() {
+                  // 1) Auto-grant permissions so Daily.co skips its permission dialog
                   if (navigator.permissions) {
                     var orig = navigator.permissions.query;
                     navigator.permissions.query = function(desc) {
@@ -316,6 +317,32 @@ export default function VideoCallScreen() {
                       return orig ? orig.call(navigator.permissions, desc) : Promise.resolve({ state: 'granted' });
                     };
                   }
+                  // 2) CRITICAL FIX: Android WebView bug - onClick doesn't fire but touchend does.
+                  // Convert touchend events into synthetic click events for all interactive elements.
+                  var lastTouchTime = 0;
+                  document.addEventListener('touchend', function(e) {
+                    var now = Date.now();
+                    if (now - lastTouchTime < 300) return; // debounce
+                    lastTouchTime = now;
+                    var el = e.target;
+                    while (el && el !== document.body) {
+                      var tag = (el.tagName || '').toLowerCase();
+                      var role = el.getAttribute && el.getAttribute('role');
+                      var isClickable = (tag === 'button' || tag === 'a' || tag === 'input' ||
+                        tag === 'select' || tag === 'label' || tag === 'summary' ||
+                        role === 'button' || role === 'link' || role === 'menuitem' ||
+                        role === 'tab' || role === 'switch' || role === 'checkbox' ||
+                        el.onclick != null || el.hasAttribute('tabindex') ||
+                        (el.style && el.style.cursor === 'pointer'));
+                      if (isClickable) {
+                        e.preventDefault();
+                        el.click();
+                        el.focus && el.focus();
+                        return;
+                      }
+                      el = el.parentElement;
+                    }
+                  }, { passive: false, capture: true });
                 })();
                 true;
               `}
