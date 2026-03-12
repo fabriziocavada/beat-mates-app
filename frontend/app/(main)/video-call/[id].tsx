@@ -352,6 +352,7 @@ export default function VideoCallScreen() {
 
           {/* WebView (always absolute, animated dimensions) */}
           <Animated.View
+            collapsable={false}
             style={{
               position: 'absolute',
               width: webW,
@@ -376,16 +377,27 @@ export default function VideoCallScreen() {
               allowsInlineMediaPlayback
               allowsFullscreenVideo
               mediaCapturePermissionGrantType="grant"
-              androidLayerType="hardware"
-              scrollEnabled={false}
+              nestedScrollEnabled
+              overScrollMode="never"
               bounces={false}
               onLoadEnd={onWebViewLoadEnd}
-              onPermissionRequest={(event: any) => {
-                if (event?.nativeEvent?.resources) {
-                  event.nativeEvent.grant(event.nativeEvent.resources);
-                }
-              }}
               originWhitelist={['*']}
+              userAgent="Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
+              injectedJavaScriptBeforeContentLoaded={`
+                (function() {
+                  // Auto-grant permissions so Daily.co skips its permission dialog
+                  var origQuery = navigator.permissions && navigator.permissions.query;
+                  if (navigator.permissions) {
+                    navigator.permissions.query = function(desc) {
+                      if (desc.name === 'camera' || desc.name === 'microphone') {
+                        return Promise.resolve({ state: 'granted', onchange: null });
+                      }
+                      return origQuery ? origQuery.call(navigator.permissions, desc) : Promise.resolve({ state: 'granted' });
+                    };
+                  }
+                })();
+                true;
+              `}
             />
           </Animated.View>
 
