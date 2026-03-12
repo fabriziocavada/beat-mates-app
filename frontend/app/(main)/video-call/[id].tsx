@@ -8,15 +8,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
+import * as WebBrowser from 'expo-web-browser';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../../../src/constants/colors';
 import api from '../../../src/services/api';
 import { useAuthStore } from '../../../src/store/authStore';
 import CoachingReview from '../../../src/components/CoachingReview';
 
-const { width: SW, height: SH } = Dimensions.get('window');
+const { width: SW } = Dimensions.get('window');
 const PIP_W = Math.round(SW * 0.30);
 const PIP_H = Math.round(PIP_W * 1.4);
+const IS_ANDROID = Platform.OS === 'android';
 
 async function saveActiveSession(id: string) {
   try { await AsyncStorage.setItem('active_session_id', id); } catch {}
@@ -38,7 +40,7 @@ function CallRatingModal({ visible, teacherName, onSubmit, onSkip }: {
       <View style={rs.overlay}>
         <View style={rs.box}>
           <View style={rs.icon}><Ionicons name="videocam" size={36} color="#FFF" /></View>
-          <Text style={rs.title}>Com'è andata la lezione?</Text>
+          <Text style={rs.title}>Com'e andata la lezione?</Text>
           <Text style={rs.sub}>Valuta la tua esperienza con {teacherName}</Text>
           <View style={rs.stars}>
             {[1,2,3,4,5].map(s => (
@@ -93,61 +95,11 @@ export default function VideoCallScreen() {
   const [teacherName, setTeacherName] = useState('');
   const [showCoaching, setShowCoaching] = useState(false);
   const [isTeacher, setIsTeacher] = useState(false);
+  const [androidCallActive, setAndroidCallActive] = useState(false);
   const currentUser = useAuthStore(s => s.user);
   const retryCount = useRef(0);
   const loadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const coachPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const webViewRef = useRef<WebView>(null);
-
-  // Android touch-to-click fix script (onClick bug in Android WebView)
-  const ANDROID_TOUCH_FIX = Platform.OS === 'android' ? `
-    (function() {
-      if (window.__touchFixApplied) return;
-      window.__touchFixApplied = true;
-      var lastT = 0;
-      document.addEventListener('touchend', function(e) {
-        var now = Date.now();
-        if (now - lastT < 250) return;
-        lastT = now;
-        var el = e.target;
-        for (var i = 0; i < 10 && el && el !== document.body; i++) {
-          var tag = (el.tagName || '').toLowerCase();
-          var role = el.getAttribute ? (el.getAttribute('role') || '') : '';
-          if (tag === 'button' || tag === 'a' || tag === 'input' ||
-              tag === 'select' || tag === 'label' || tag === 'summary' ||
-              role === 'button' || role === 'link' || role === 'menuitem' ||
-              role === 'tab' || role === 'switch' || role === 'checkbox' ||
-              el.onclick != null || el.hasAttribute('tabindex')) {
-            e.preventDefault();
-            e.stopPropagation();
-            var evt = new MouseEvent('click', { bubbles: true, cancelable: true });
-            el.dispatchEvent(evt);
-            return;
-          }
-          el = el.parentElement;
-        }
-      }, { passive: false, capture: true });
-    })();
-    true;
-  ` : 'true;';
-
-  // Permission override script
-  const PERMISSION_FIX = `
-    (function() {
-      if (window.__permFixApplied) return;
-      window.__permFixApplied = true;
-      if (navigator.permissions) {
-        var orig = navigator.permissions.query;
-        navigator.permissions.query = function(desc) {
-          if (desc.name === 'camera' || desc.name === 'microphone') {
-            return Promise.resolve({ state: 'granted', onchange: null });
-          }
-          return orig ? orig.call(navigator.permissions, desc) : Promise.resolve({ state: 'granted' });
-        };
-      }
-    })();
-    true;
-  `;
 
   // Coaching toggle
   const openCoaching = useCallback(() => {
@@ -160,9 +112,9 @@ export default function VideoCallScreen() {
     api.post(`/coaching/${sessionId}/command`, { action: 'stop_coaching' }).catch(() => {});
   }, [sessionId]);
 
-  // Poll coaching state to sync between devices
+  // Poll coaching state
   useEffect(() => {
-    if (!sessionId || !roomUrl) return;
+    if (!sessionId || (!roomUrl && !androidCallActive)) return;
     coachPollRef.current = setInterval(async () => {
       try {
         const res = await api.get(`/coaching/${sessionId}/state`);
@@ -177,33 +129,38 @@ export default function VideoCallScreen() {
       } catch {}
     }, 1200);
     return () => { if (coachPollRef.current) clearInterval(coachPollRef.current); };
-  }, [sessionId, roomUrl]);
+  }, [sessionId, roomUrl, androidCallActive]);
 
-  const requestPermissions = async (): Promise<boolean> => {
-    if (Platform.OS === 'web') return true;
-    if (Platform.OS === 'android') {
+  const requestAndroidPermissions = async (): Promise<boolean> => {
+    try {
+      const grants = await PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+      ]);
+      const camOk = grants[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED;
+      const micOk = grants[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.RESULTS.GRANTED;
+      if (!camOk || !micOk) {
+        Alert.alert('Permessi necessari', 'Serve accesso a camera e microfono.',
+          [{ text: 'Apri Impostazioni', onPress: () => Linking.openSettings() }, { text: 'Annulla', style: 'cancel' }]);
+        return false;
+      }
+      return true;
+    } catch { return false; }
+  };
+
+  // Build the room URL with token
+  const buildRoomUrl = async (session: any): Promise<string | null> => {
+    if (!session.room_url) return null;
+    let finalUrl = session.room_url;
+    if (session.room_name) {
       try {
-        const grants = await PermissionsAndroid.requestMultiple([
-          PermissionsAndroid.PERMISSIONS.CAMERA,
-          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-        ]);
-        const camOk = grants[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED;
-        const micOk = grants[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.RESULTS.GRANTED;
-        if (!camOk || !micOk) {
-          Alert.alert(
-            'Permessi necessari',
-            'Serve accesso a camera e microfono per la videolezione. Vai nelle impostazioni.',
-            [
-              { text: 'Apri Impostazioni', onPress: () => Linking.openSettings() },
-              { text: 'Annulla', style: 'cancel' },
-            ]
-          );
-          return false;
+        const tokenRes = await api.post(`/video-call/token?room_name=${session.room_name}`);
+        if (tokenRes.data?.token) {
+          finalUrl = `${session.room_url}?t=${tokenRes.data.token}`;
         }
-        return true;
-      } catch { return false; }
+      } catch { /* fallback to plain room_url */ }
     }
-    return true;
+    return finalUrl;
   };
 
   useEffect(() => {
@@ -215,33 +172,55 @@ export default function VideoCallScreen() {
   const loadSession = async () => {
     setLoading(true); setError(null);
     try {
-      const permOk = await requestPermissions();
-      if (!permOk) {
-        setError('Servono i permessi per camera e microfono per la videolezione.');
-        setLoading(false);
-        return;
+      // Request permissions on Android
+      if (IS_ANDROID) {
+        const permOk = await requestAndroidPermissions();
+        if (!permOk) {
+          setError('Servono i permessi per camera e microfono.');
+          setLoading(false);
+          return;
+        }
       }
+
       const res = await api.get(`/live-sessions/${sessionId}`);
       const s = res.data;
       if (s.teacher) {
         setTeacherName(s.teacher.name || s.teacher.username || 'Insegnante');
         setIsTeacher(currentUser?.id === s.teacher_id);
       }
+
       if (s.room_url) {
-        // Get a meeting token to auto-join with camera/mic ON (bypasses Daily.co permission UI on Android)
-        let finalUrl = s.room_url;
-        if (s.room_name) {
-          try {
-            const tokenRes = await api.post(`/video-call/token?room_name=${s.room_name}`);
-            if (tokenRes.data?.token) {
-              finalUrl = `${s.room_url}?t=${tokenRes.data.token}`;
-            }
-          } catch { /* fallback to room_url without token */ }
+        const finalUrl = await buildRoomUrl(s);
+        if (!finalUrl) {
+          setError('URL della stanza non disponibile');
+          return;
         }
-        setRoomUrl(finalUrl);
+
+        if (IS_ANDROID) {
+          // ANDROID: Open in Chrome Custom Tab (full WebRTC support)
+          setLoading(false);
+          setAndroidCallActive(true);
+          try {
+            await WebBrowser.openBrowserAsync(finalUrl, {
+              dismissButtonStyle: 'close',
+              showTitle: true,
+              enableBarCollapsing: true,
+            });
+          } catch {}
+          // User returned from browser - show rating
+          setAndroidCallActive(false);
+          try { await api.post(`/live-sessions/${sessionId}/end`); } catch {}
+          await clearActiveSession();
+          setShowRating(true);
+        } else {
+          // iOS: Use WebView (works fine)
+          setRoomUrl(finalUrl);
+        }
+      } else if (s.status === 'completed') {
+        setError('Questa lezione e gia terminata.');
+      } else {
+        setError('La sessione non e ancora attiva');
       }
-      else if (s.status === 'completed') setError('Questa lezione è già terminata.');
-      else setError('La sessione non è ancora attiva');
     } catch {
       if (retryCount.current < 3) { retryCount.current++; setTimeout(loadSession, 2000); return; }
       setError('Impossibile caricare la sessione. Controlla la connessione.');
@@ -249,9 +228,7 @@ export default function VideoCallScreen() {
   };
 
   const handleEndCall = useCallback(() => {
-    Alert.alert(
-      'Termina lezione',
-      'Sei sicuro di voler abbandonare la videolezione? Non potrai rientrare.',
+    Alert.alert('Termina lezione', 'Sei sicuro di voler abbandonare la videolezione?',
       [
         { text: 'Annulla', style: 'cancel' },
         { text: 'Termina', style: 'destructive', onPress: async () => {
@@ -260,8 +237,7 @@ export default function VideoCallScreen() {
           await clearActiveSession();
           setShowRating(true);
         }},
-      ]
-    );
+      ]);
   }, [sessionId]);
 
   const onRatingSubmit = useCallback(async (r: number, c: string) => {
@@ -278,17 +254,6 @@ export default function VideoCallScreen() {
   const onWebViewLoadEnd = useCallback(() => {
     setWebViewReady(true);
     if (loadTimer.current) clearTimeout(loadTimer.current);
-    // Re-inject touch fix after page load for extra reliability on Android
-    if (Platform.OS === 'android' && webViewRef.current) {
-      setTimeout(() => {
-        webViewRef.current?.injectJavaScript(ANDROID_TOUCH_FIX);
-        webViewRef.current?.injectJavaScript(PERMISSION_FIX);
-      }, 500);
-      // Inject again after Daily.co fully renders (it loads dynamically)
-      setTimeout(() => {
-        webViewRef.current?.injectJavaScript(ANDROID_TOUCH_FIX);
-      }, 3000);
-    }
   }, []);
 
   useEffect(() => {
@@ -298,6 +263,7 @@ export default function VideoCallScreen() {
     return () => { if (loadTimer.current) clearTimeout(loadTimer.current); };
   }, [roomUrl, webViewReady]);
 
+  // --- LOADING STATE ---
   if (loading) return (
     <View style={st.center}>
       <ActivityIndicator size="large" color={Colors.primary} />
@@ -305,6 +271,19 @@ export default function VideoCallScreen() {
     </View>
   );
 
+  // --- ANDROID: Call active in Chrome Custom Tab ---
+  if (IS_ANDROID && androidCallActive) return (
+    <View style={st.center}>
+      <Ionicons name="videocam" size={64} color={Colors.primary} />
+      <Text style={st.statusText}>Videolezione in corso nel browser</Text>
+      <Text style={[st.statusText, { fontSize: 13, color: '#888' }]}>Chiudi il browser quando hai finito</Text>
+      <TouchableOpacity style={st.retryBtn} onPress={handleEndCall}>
+        <Text style={st.retryBtnText}>Termina lezione</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  // --- ERROR STATE ---
   if (error || !roomUrl) return (
     <View style={st.center}>
       <Ionicons name="videocam-off-outline" size={64} color="#666" />
@@ -318,15 +297,10 @@ export default function VideoCallScreen() {
     </View>
   );
 
-  // ---- MAIN RENDER ----
-  // KEY ARCHITECTURE: The WebView is ALWAYS in the same position in the React tree.
-  // When coaching is OFF: WebView container uses flex:1 (fills screen, touch works perfectly)
-  // When coaching is ON: WebView container uses position:absolute with small PiP size
-  // The coaching overlay renders BEHIND the PiP WebView via zIndex.
+  // --- iOS: WebView RENDER ---
   return (
     <View style={{ flex: 1, backgroundColor: '#000' }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        {/* Top bar */}
         <View style={st.topBar}>
           <TouchableOpacity onPress={() => router.back()} style={st.topBtn} data-testid="back-btn">
             <Ionicons name="chevron-back" size={24} color="#FFF" />
@@ -347,26 +321,15 @@ export default function VideoCallScreen() {
           </View>
         </View>
 
-        {/* Content area */}
         <View style={{ flex: 1 }}>
-          {/* Coaching overlay (behind PiP) */}
           {showCoaching && (
             <View style={StyleSheet.absoluteFill} data-testid="coaching-overlay">
-              <CoachingReview
-                sessionId={sessionId || ''}
-                isTeacher={isTeacher}
-                onClose={closeCoaching}
-              />
+              <CoachingReview sessionId={sessionId || ''} isTeacher={isTeacher} onClose={closeCoaching} />
             </View>
           )}
 
-          {/* WebView container: flex:1 normally, absolute PiP in coaching mode */}
-          <View
-            style={showCoaching ? st.pipContainer : st.fullContainer}
-            data-testid="webview-container"
-          >
+          <View style={showCoaching ? st.pipContainer : st.fullContainer} data-testid="webview-container">
             <WebView
-              ref={webViewRef}
               source={{ uri: roomUrl }}
               style={{ flex: 1 }}
               javaScriptEnabled
@@ -375,17 +338,12 @@ export default function VideoCallScreen() {
               allowsInlineMediaPlayback
               allowsFullscreenVideo
               mediaCapturePermissionGrantType="grant"
-              nestedScrollEnabled
-              overScrollMode="never"
               bounces={false}
               onLoadEnd={onWebViewLoadEnd}
               originWhitelist={['*']}
-              injectedJavaScriptBeforeContentLoaded={PERMISSION_FIX}
-              injectedJavaScript={ANDROID_TOUCH_FIX + PERMISSION_FIX}
             />
           </View>
 
-          {/* Loading overlay */}
           {!webViewReady && !showCoaching && (
             <View style={st.overlay} pointerEvents="none">
               <ActivityIndicator size="large" color={Colors.primary} />
@@ -414,23 +372,11 @@ const st = StyleSheet.create({
   coachingBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
   endBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center' },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center', zIndex: 5 },
-  // Normal mode: WebView fills all available space with flex layout (best for Android touch)
-  fullContainer: {
-    flex: 1,
-    backgroundColor: '#111',
-  },
-  // PiP mode: small container in top-right corner
+  fullContainer: { flex: 1, backgroundColor: '#111' },
   pipContainer: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: PIP_W,
-    height: PIP_H,
-    borderRadius: 14,
-    overflow: 'hidden',
-    zIndex: 25,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
-    backgroundColor: '#111',
+    position: 'absolute', top: 12, right: 12,
+    width: PIP_W, height: PIP_H, borderRadius: 14,
+    overflow: 'hidden', zIndex: 25, borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)', backgroundColor: '#111',
   },
 });
