@@ -44,25 +44,7 @@
                 }
             ],
             "expo-secure-store",
-            "expo-video",
-            [
-                "react-native-webview",
-                {
-                    "androidPermissions": [
-                        "android.permission.CAMERA",
-                        "android.permission.RECORD_AUDIO",
-                        "android.permission.MODIFY_AUDIO_SETTINGS"
-                    ]
-                }
-            ],
-            [
-                "expo-camera",
-                {
-                    "cameraPermission": "Serve per le videolezioni live",
-                    "microphonePermission": "Serve per le videolezioni live",
-                    "recordAudioAndroid": true
-                }
-            ]
+            "expo-video"
         ],
         "experiments": {
             "typedRoutes": true
