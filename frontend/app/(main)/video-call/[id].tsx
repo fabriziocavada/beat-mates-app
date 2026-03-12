@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, Alert, Modal, TextInput, Dimensions,
-  Animated, PanResponder, Platform, PermissionsAndroid, Linking,
+  Platform, PermissionsAndroid, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -17,8 +17,6 @@ import CoachingReview from '../../../src/components/CoachingReview';
 const { width: SW, height: SH } = Dimensions.get('window');
 const PIP_W = Math.round(SW * 0.30);
 const PIP_H = Math.round(PIP_W * 1.4);
-const TOP_BAR = 56;
-const CONTENT_H = SH - TOP_BAR - 50;
 
 async function saveActiveSession(id: string) {
   try { await AsyncStorage.setItem('active_session_id', id); } catch {}
@@ -27,7 +25,7 @@ async function clearActiveSession() {
   try { await AsyncStorage.removeItem('active_session_id'); } catch {}
 }
 
-// ─── Rating Modal (inline) ───
+// ---- Rating Modal ----
 function CallRatingModal({ visible, teacherName, onSubmit, onSkip }: {
   visible: boolean; teacherName: string;
   onSubmit: (r: number, c: string) => void; onSkip: () => void;
@@ -83,7 +81,7 @@ const rs = StyleSheet.create({
   submitT: { color: '#FFF', fontSize: 15, fontWeight: '700' },
 });
 
-// ─── Main Screen ───
+// ---- Main Screen ----
 export default function VideoCallScreen() {
   const router = useRouter();
   const { id: sessionId } = useLocalSearchParams<{ id: string }>();
@@ -100,78 +98,18 @@ export default function VideoCallScreen() {
   const loadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const coachPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Animated WebView dimensions (ALWAYS absolute, never changes layout type)
-  const webW = useRef(new Animated.Value(SW)).current;
-  const webH = useRef(new Animated.Value(CONTENT_H)).current;
-  const webX = useRef(new Animated.Value(0)).current;
-  const webY = useRef(new Animated.Value(0)).current;
-  const webRadius = useRef(new Animated.Value(0)).current;
-
-  // PiP drag
-  const pipDragOffset = useRef({ x: 0, y: 0 });
-  const pipPan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2,
-      onPanResponderGrant: () => {
-        webX.stopAnimation(v => { pipDragOffset.current.x = v; });
-        webY.stopAnimation(v => { pipDragOffset.current.y = v; });
-      },
-      onPanResponderMove: (_, g) => {
-        webX.setValue(pipDragOffset.current.x + g.dx);
-        webY.setValue(pipDragOffset.current.y + g.dy);
-      },
-      onPanResponderRelease: (_, g) => {
-        const curX = pipDragOffset.current.x + g.dx;
-        const curY = pipDragOffset.current.y + g.dy;
-        const snapX = (curX + PIP_W / 2) > SW / 2 ? SW - PIP_W - 12 : 12;
-        const snapY = Math.max(12, Math.min(CONTENT_H - PIP_H - 12, curY));
-        pipDragOffset.current = { x: snapX, y: snapY };
-        Animated.parallel([
-          Animated.spring(webX, { toValue: snapX, useNativeDriver: false, friction: 7 }),
-          Animated.spring(webY, { toValue: snapY, useNativeDriver: false, friction: 7 }),
-        ]).start();
-      },
-    })
-  ).current;
-
-  // Animate WebView between full-screen and PiP
-  const animateToPiP = useCallback(() => {
-    const tx = SW - PIP_W - 12;
-    pipDragOffset.current = { x: tx, y: 12 };
-    Animated.parallel([
-      Animated.spring(webW, { toValue: PIP_W, useNativeDriver: false, friction: 8 }),
-      Animated.spring(webH, { toValue: PIP_H, useNativeDriver: false, friction: 8 }),
-      Animated.spring(webX, { toValue: tx, useNativeDriver: false, friction: 8 }),
-      Animated.spring(webY, { toValue: 12, useNativeDriver: false, friction: 8 }),
-      Animated.timing(webRadius, { toValue: 14, duration: 200, useNativeDriver: false }),
-    ]).start();
-  }, []);
-
-  const animateToFull = useCallback(() => {
-    Animated.parallel([
-      Animated.spring(webW, { toValue: SW, useNativeDriver: false, friction: 8 }),
-      Animated.spring(webH, { toValue: CONTENT_H, useNativeDriver: false, friction: 8 }),
-      Animated.spring(webX, { toValue: 0, useNativeDriver: false, friction: 8 }),
-      Animated.spring(webY, { toValue: 0, useNativeDriver: false, friction: 8 }),
-      Animated.timing(webRadius, { toValue: 0, duration: 200, useNativeDriver: false }),
-    ]).start();
-  }, []);
-
-  // Coaching toggle (sends sync command to other device)
+  // Coaching toggle
   const openCoaching = useCallback(() => {
     setShowCoaching(true);
-    animateToPiP();
     api.post(`/coaching/${sessionId}/command`, { action: 'start_coaching' }).catch(() => {});
-  }, [sessionId, animateToPiP]);
+  }, [sessionId]);
 
   const closeCoaching = useCallback(() => {
     setShowCoaching(false);
-    animateToFull();
     api.post(`/coaching/${sessionId}/command`, { action: 'stop_coaching' }).catch(() => {});
-  }, [sessionId, animateToFull]);
+  }, [sessionId]);
 
-  // Poll coaching state to sync coaching_active between devices
+  // Poll coaching state to sync between devices
   useEffect(() => {
     if (!sessionId || !roomUrl) return;
     coachPollRef.current = setInterval(async () => {
@@ -180,27 +118,15 @@ export default function VideoCallScreen() {
         const s = res.data;
         if (typeof s.coaching_active === 'boolean') {
           setShowCoaching(prev => {
-            if (s.coaching_active && !prev) {
-              animateToPiP();
-              return true;
-            }
-            if (!s.coaching_active && prev) {
-              animateToFull();
-              return false;
-            }
+            if (s.coaching_active && !prev) return true;
+            if (!s.coaching_active && prev) return false;
             return prev;
           });
         }
       } catch {}
     }, 1200);
     return () => { if (coachPollRef.current) clearInterval(coachPollRef.current); };
-  }, [sessionId, roomUrl, animateToPiP, animateToFull]);
-
-  useEffect(() => {
-    loadSession();
-    if (sessionId) saveActiveSession(sessionId);
-    return () => { if (loadTimer.current) clearTimeout(loadTimer.current); };
-  }, [sessionId]);
+  }, [sessionId, roomUrl]);
 
   const requestPermissions = async (): Promise<boolean> => {
     if (Platform.OS === 'web') return true;
@@ -215,7 +141,7 @@ export default function VideoCallScreen() {
         if (!camOk || !micOk) {
           Alert.alert(
             'Permessi necessari',
-            'Serve accesso a camera e microfono per la videolezione. Vai nelle impostazioni dell\'app per abilitarli.',
+            'Serve accesso a camera e microfono per la videolezione. Vai nelle impostazioni.',
             [
               { text: 'Apri Impostazioni', onPress: () => Linking.openSettings() },
               { text: 'Annulla', style: 'cancel' },
@@ -226,9 +152,14 @@ export default function VideoCallScreen() {
         return true;
       } catch { return false; }
     }
-    // iOS: use expo-camera-like approach via react-native
     return true;
   };
+
+  useEffect(() => {
+    loadSession();
+    if (sessionId) saveActiveSession(sessionId);
+    return () => { if (loadTimer.current) clearTimeout(loadTimer.current); };
+  }, [sessionId]);
 
   const loadSession = async () => {
     setLoading(true); setError(null);
@@ -262,14 +193,13 @@ export default function VideoCallScreen() {
         { text: 'Annulla', style: 'cancel' },
         { text: 'Termina', style: 'destructive', onPress: async () => {
           setShowCoaching(false);
-          animateToFull();
           try { await api.post(`/live-sessions/${sessionId}/end`); } catch {}
           await clearActiveSession();
           setShowRating(true);
         }},
       ]
     );
-  }, [sessionId, animateToFull]);
+  }, [sessionId]);
 
   const onRatingSubmit = useCallback(async (r: number, c: string) => {
     try { await api.post(`/live-sessions/${sessionId}/review`, { rating: r, text: c }); } catch {}
@@ -314,12 +244,17 @@ export default function VideoCallScreen() {
     </View>
   );
 
+  // ---- MAIN RENDER ----
+  // KEY ARCHITECTURE: The WebView is ALWAYS in the same position in the React tree.
+  // When coaching is OFF: WebView container uses flex:1 (fills screen, touch works perfectly)
+  // When coaching is ON: WebView container uses position:absolute with small PiP size
+  // The coaching overlay renders BEHIND the PiP WebView via zIndex.
   return (
     <View style={{ flex: 1, backgroundColor: '#000' }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Top bar */}
         <View style={st.topBar}>
-          <TouchableOpacity onPress={() => router.back()} style={st.topBtn}>
+          <TouchableOpacity onPress={() => router.back()} style={st.topBtn} data-testid="back-btn">
             <Ionicons name="chevron-back" size={24} color="#FFF" />
           </TouchableOpacity>
           <Text style={st.topTitle}>Lezione Live</Text>
@@ -338,10 +273,11 @@ export default function VideoCallScreen() {
           </View>
         </View>
 
+        {/* Content area */}
         <View style={{ flex: 1 }}>
-          {/* Coaching overlay */}
+          {/* Coaching overlay (behind PiP) */}
           {showCoaching && (
-            <View style={StyleSheet.absoluteFill}>
+            <View style={StyleSheet.absoluteFill} data-testid="coaching-overlay">
               <CoachingReview
                 sessionId={sessionId || ''}
                 isTeacher={isTeacher}
@@ -350,23 +286,10 @@ export default function VideoCallScreen() {
             </View>
           )}
 
-          {/* WebView (always absolute, animated dimensions) */}
-          <Animated.View
-            collapsable={false}
-            style={{
-              position: 'absolute',
-              width: webW,
-              height: webH,
-              left: webX,
-              top: webY,
-              borderRadius: webRadius,
-              overflow: 'hidden',
-              zIndex: showCoaching ? 25 : 1,
-              borderWidth: showCoaching ? 2 : 0,
-              borderColor: 'rgba(255,255,255,0.3)',
-              backgroundColor: '#111',
-            }}
-            {...(showCoaching ? pipPan.panHandlers : {})}
+          {/* WebView container: flex:1 normally, absolute PiP in coaching mode */}
+          <View
+            style={showCoaching ? st.pipContainer : st.fullContainer}
+            data-testid="webview-container"
           >
             <WebView
               source={{ uri: roomUrl }}
@@ -382,24 +305,22 @@ export default function VideoCallScreen() {
               bounces={false}
               onLoadEnd={onWebViewLoadEnd}
               originWhitelist={['*']}
-              userAgent="Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
               injectedJavaScriptBeforeContentLoaded={`
                 (function() {
-                  // Auto-grant permissions so Daily.co skips its permission dialog
-                  var origQuery = navigator.permissions && navigator.permissions.query;
                   if (navigator.permissions) {
+                    var orig = navigator.permissions.query;
                     navigator.permissions.query = function(desc) {
                       if (desc.name === 'camera' || desc.name === 'microphone') {
                         return Promise.resolve({ state: 'granted', onchange: null });
                       }
-                      return origQuery ? origQuery.call(navigator.permissions, desc) : Promise.resolve({ state: 'granted' });
+                      return orig ? orig.call(navigator.permissions, desc) : Promise.resolve({ state: 'granted' });
                     };
                   }
                 })();
                 true;
               `}
             />
-          </Animated.View>
+          </View>
 
           {/* Loading overlay */}
           {!webViewReady && !showCoaching && (
@@ -423,11 +344,30 @@ const st = StyleSheet.create({
   retryBtnText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
   backBtn: { marginTop: 8, paddingHorizontal: 24, paddingVertical: 12, borderWidth: 1, borderColor: '#333', borderRadius: 12 },
   backBtnText: { color: '#FFF', fontSize: 14 },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, height: TOP_BAR, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 30 },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, height: 56, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 30 },
   topBtn: { padding: 8 },
   topTitle: { color: '#FFF', fontSize: 16, fontWeight: '600' },
   topActions: { flexDirection: 'row', alignItems: 'center' },
   coachingBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
   endBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center' },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center', zIndex: 5 },
+  // Normal mode: WebView fills all available space with flex layout (best for Android touch)
+  fullContainer: {
+    flex: 1,
+    backgroundColor: '#111',
+  },
+  // PiP mode: small container in top-right corner
+  pipContainer: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: PIP_W,
+    height: PIP_H,
+    borderRadius: 14,
+    overflow: 'hidden',
+    zIndex: 25,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: '#111',
+  },
 });
