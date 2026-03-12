@@ -97,6 +97,57 @@ export default function VideoCallScreen() {
   const retryCount = useRef(0);
   const loadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const coachPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const webViewRef = useRef<WebView>(null);
+
+  // Android touch-to-click fix script (onClick bug in Android WebView)
+  const ANDROID_TOUCH_FIX = Platform.OS === 'android' ? `
+    (function() {
+      if (window.__touchFixApplied) return;
+      window.__touchFixApplied = true;
+      var lastT = 0;
+      document.addEventListener('touchend', function(e) {
+        var now = Date.now();
+        if (now - lastT < 250) return;
+        lastT = now;
+        var el = e.target;
+        for (var i = 0; i < 10 && el && el !== document.body; i++) {
+          var tag = (el.tagName || '').toLowerCase();
+          var role = el.getAttribute ? (el.getAttribute('role') || '') : '';
+          if (tag === 'button' || tag === 'a' || tag === 'input' ||
+              tag === 'select' || tag === 'label' || tag === 'summary' ||
+              role === 'button' || role === 'link' || role === 'menuitem' ||
+              role === 'tab' || role === 'switch' || role === 'checkbox' ||
+              el.onclick != null || el.hasAttribute('tabindex')) {
+            e.preventDefault();
+            e.stopPropagation();
+            var evt = new MouseEvent('click', { bubbles: true, cancelable: true });
+            el.dispatchEvent(evt);
+            return;
+          }
+          el = el.parentElement;
+        }
+      }, { passive: false, capture: true });
+    })();
+    true;
+  ` : 'true;';
+
+  // Permission override script
+  const PERMISSION_FIX = `
+    (function() {
+      if (window.__permFixApplied) return;
+      window.__permFixApplied = true;
+      if (navigator.permissions) {
+        var orig = navigator.permissions.query;
+        navigator.permissions.query = function(desc) {
+          if (desc.name === 'camera' || desc.name === 'microphone') {
+            return Promise.resolve({ state: 'granted', onchange: null });
+          }
+          return orig ? orig.call(navigator.permissions, desc) : Promise.resolve({ state: 'granted' });
+        };
+      }
+    })();
+    true;
+  `;
 
   // Coaching toggle
   const openCoaching = useCallback(() => {
@@ -176,7 +227,19 @@ export default function VideoCallScreen() {
         setTeacherName(s.teacher.name || s.teacher.username || 'Insegnante');
         setIsTeacher(currentUser?.id === s.teacher_id);
       }
-      if (s.room_url) setRoomUrl(s.room_url);
+      if (s.room_url) {
+        // Get a meeting token to auto-join with camera/mic ON (bypasses Daily.co permission UI on Android)
+        let finalUrl = s.room_url;
+        if (s.room_name) {
+          try {
+            const tokenRes = await api.post(`/video-call/token?room_name=${s.room_name}`);
+            if (tokenRes.data?.token) {
+              finalUrl = `${s.room_url}?t=${tokenRes.data.token}`;
+            }
+          } catch { /* fallback to room_url without token */ }
+        }
+        setRoomUrl(finalUrl);
+      }
       else if (s.status === 'completed') setError('Questa lezione è già terminata.');
       else setError('La sessione non è ancora attiva');
     } catch {
@@ -215,6 +278,17 @@ export default function VideoCallScreen() {
   const onWebViewLoadEnd = useCallback(() => {
     setWebViewReady(true);
     if (loadTimer.current) clearTimeout(loadTimer.current);
+    // Re-inject touch fix after page load for extra reliability on Android
+    if (Platform.OS === 'android' && webViewRef.current) {
+      setTimeout(() => {
+        webViewRef.current?.injectJavaScript(ANDROID_TOUCH_FIX);
+        webViewRef.current?.injectJavaScript(PERMISSION_FIX);
+      }, 500);
+      // Inject again after Daily.co fully renders (it loads dynamically)
+      setTimeout(() => {
+        webViewRef.current?.injectJavaScript(ANDROID_TOUCH_FIX);
+      }, 3000);
+    }
   }, []);
 
   useEffect(() => {
@@ -292,6 +366,7 @@ export default function VideoCallScreen() {
             data-testid="webview-container"
           >
             <WebView
+              ref={webViewRef}
               source={{ uri: roomUrl }}
               style={{ flex: 1 }}
               javaScriptEnabled
@@ -305,47 +380,8 @@ export default function VideoCallScreen() {
               bounces={false}
               onLoadEnd={onWebViewLoadEnd}
               originWhitelist={['*']}
-              injectedJavaScriptBeforeContentLoaded={`
-                (function() {
-                  // 1) Auto-grant permissions so Daily.co skips its permission dialog
-                  if (navigator.permissions) {
-                    var orig = navigator.permissions.query;
-                    navigator.permissions.query = function(desc) {
-                      if (desc.name === 'camera' || desc.name === 'microphone') {
-                        return Promise.resolve({ state: 'granted', onchange: null });
-                      }
-                      return orig ? orig.call(navigator.permissions, desc) : Promise.resolve({ state: 'granted' });
-                    };
-                  }
-                  // 2) CRITICAL FIX: Android WebView bug - onClick doesn't fire but touchend does.
-                  // Convert touchend events into synthetic click events for all interactive elements.
-                  var lastTouchTime = 0;
-                  document.addEventListener('touchend', function(e) {
-                    var now = Date.now();
-                    if (now - lastTouchTime < 300) return; // debounce
-                    lastTouchTime = now;
-                    var el = e.target;
-                    while (el && el !== document.body) {
-                      var tag = (el.tagName || '').toLowerCase();
-                      var role = el.getAttribute && el.getAttribute('role');
-                      var isClickable = (tag === 'button' || tag === 'a' || tag === 'input' ||
-                        tag === 'select' || tag === 'label' || tag === 'summary' ||
-                        role === 'button' || role === 'link' || role === 'menuitem' ||
-                        role === 'tab' || role === 'switch' || role === 'checkbox' ||
-                        el.onclick != null || el.hasAttribute('tabindex') ||
-                        (el.style && el.style.cursor === 'pointer'));
-                      if (isClickable) {
-                        e.preventDefault();
-                        el.click();
-                        el.focus && el.focus();
-                        return;
-                      }
-                      el = el.parentElement;
-                    }
-                  }, { passive: false, capture: true });
-                })();
-                true;
-              `}
+              injectedJavaScriptBeforeContentLoaded={PERMISSION_FIX}
+              injectedJavaScript={ANDROID_TOUCH_FIX + PERMISSION_FIX}
             />
           </View>
 

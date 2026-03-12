@@ -1820,7 +1820,7 @@ async def get_video_call_token(room_name: str, current_user: dict = Depends(get_
         response = await client_http.post(
             f"{DAILY_API_URL}/meeting-tokens",
             headers={"Authorization": f"Bearer {DAILY_API_KEY}", "Content-Type": "application/json"},
-            json={"properties": {"room_name": room_name, "user_name": current_user.get("name", current_user["username"]), "user_id": current_user["id"], "exp": exp_timestamp}}
+            json={"properties": {"room_name": room_name, "user_name": current_user.get("name", current_user["username"]), "user_id": current_user["id"], "exp": exp_timestamp, "start_video_off": False, "start_audio_off": False, "enable_prejoin_ui": False}}
         )
         if response.status_code != 200:
             logger.error(f"Daily.co token generation failed: {response.text}")
