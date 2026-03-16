@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, Alert, Modal, TextInput, Dimensions,
-  Platform, PermissionsAndroid, Linking,
+  Platform, PermissionsAndroid, Linking, StatusBar, BackHandler,
+  Animated, PanResponder,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
@@ -15,10 +15,10 @@ import api from '../../../src/services/api';
 import { useAuthStore } from '../../../src/store/authStore';
 import CoachingReview from '../../../src/components/CoachingReview';
 
-const { width: SW } = Dimensions.get('window');
-const PIP_W = Math.round(SW * 0.30);
-const PIP_H = Math.round(PIP_W * 1.4);
+const { width: SW, height: SH } = Dimensions.get('window');
 const IS_ANDROID = Platform.OS === 'android';
+const PIP_W = 120;
+const PIP_H = 170;
 
 async function saveActiveSession(id: string) {
   try { await AsyncStorage.setItem('active_session_id', id); } catch {}
@@ -96,19 +96,62 @@ export default function VideoCallScreen() {
   const [showCoaching, setShowCoaching] = useState(false);
   const [isTeacher, setIsTeacher] = useState(false);
   const [androidCallActive, setAndroidCallActive] = useState(false);
+  const [showControls, setShowControls] = useState(true);
   const currentUser = useAuthStore(s => s.user);
   const retryCount = useRef(0);
   const loadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const coachPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // PiP dragging for coaching mode
+  const pipPos = useRef(new Animated.ValueXY({ x: SW - PIP_W - 12, y: 50 })).current;
+  const pipPan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        pipPos.setOffset({ x: (pipPos.x as any)._value, y: (pipPos.y as any)._value });
+        pipPos.setValue({ x: 0, y: 0 });
+      },
+      onPanResponderMove: Animated.event([null, { dx: pipPos.x, dy: pipPos.y }], { useNativeDriver: false }),
+      onPanResponderRelease: () => { pipPos.flattenOffset(); },
+    })
+  ).current;
+
+  // Block hardware back button during call (WhatsApp-like)
+  useEffect(() => {
+    const handler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (roomUrl || androidCallActive) {
+        handleEndCall();
+        return true; // prevent default back
+      }
+      return false;
+    });
+    return () => handler.remove();
+  }, [roomUrl, androidCallActive]);
+
+  // Auto-hide controls after 4 seconds
+  const resetControlsTimer = useCallback(() => {
+    setShowControls(true);
+    if (controlsTimer.current) clearTimeout(controlsTimer.current);
+    controlsTimer.current = setTimeout(() => setShowControls(false), 4000);
+  }, []);
+
+  useEffect(() => {
+    if (roomUrl && webViewReady && !showCoaching) resetControlsTimer();
+    return () => { if (controlsTimer.current) clearTimeout(controlsTimer.current); };
+  }, [roomUrl, webViewReady, showCoaching]);
 
   // Coaching toggle
   const openCoaching = useCallback(() => {
     setShowCoaching(true);
+    setShowControls(true);
     api.post(`/coaching/${sessionId}/command`, { action: 'start_coaching' }).catch(() => {});
   }, [sessionId]);
 
   const closeCoaching = useCallback(() => {
     setShowCoaching(false);
+    resetControlsTimer();
     api.post(`/coaching/${sessionId}/command`, { action: 'stop_coaching' }).catch(() => {});
   }, [sessionId]);
 
@@ -148,17 +191,14 @@ export default function VideoCallScreen() {
     } catch { return false; }
   };
 
-  // Build the room URL with token
   const buildRoomUrl = async (session: any): Promise<string | null> => {
     if (!session.room_url) return null;
     let finalUrl = session.room_url;
     if (session.room_name) {
       try {
         const tokenRes = await api.post(`/video-call/token?room_name=${session.room_name}`);
-        if (tokenRes.data?.token) {
-          finalUrl = `${session.room_url}?t=${tokenRes.data.token}`;
-        }
-      } catch { /* fallback to plain room_url */ }
+        if (tokenRes.data?.token) finalUrl = `${session.room_url}?t=${tokenRes.data.token}`;
+      } catch {}
     }
     return finalUrl;
   };
@@ -172,55 +212,34 @@ export default function VideoCallScreen() {
   const loadSession = async () => {
     setLoading(true); setError(null);
     try {
-      // Request permissions on Android
       if (IS_ANDROID) {
         const permOk = await requestAndroidPermissions();
-        if (!permOk) {
-          setError('Servono i permessi per camera e microfono.');
-          setLoading(false);
-          return;
-        }
+        if (!permOk) { setError('Servono i permessi per camera e microfono.'); setLoading(false); return; }
       }
-
       const res = await api.get(`/live-sessions/${sessionId}`);
       const s = res.data;
       if (s.teacher) {
         setTeacherName(s.teacher.name || s.teacher.username || 'Insegnante');
         setIsTeacher(currentUser?.id === s.teacher_id);
       }
-
       if (s.room_url) {
         const finalUrl = await buildRoomUrl(s);
-        if (!finalUrl) {
-          setError('URL della stanza non disponibile');
-          return;
-        }
-
+        if (!finalUrl) { setError('URL della stanza non disponibile'); return; }
         if (IS_ANDROID) {
-          // ANDROID: Open in Chrome Custom Tab (full WebRTC support)
           setLoading(false);
           setAndroidCallActive(true);
           try {
-            await WebBrowser.openBrowserAsync(finalUrl, {
-              dismissButtonStyle: 'close',
-              showTitle: true,
-              enableBarCollapsing: true,
-            });
+            await WebBrowser.openBrowserAsync(finalUrl, { dismissButtonStyle: 'close', showTitle: true, enableBarCollapsing: true });
           } catch {}
-          // User returned from browser - show rating
           setAndroidCallActive(false);
           try { await api.post(`/live-sessions/${sessionId}/end`); } catch {}
           await clearActiveSession();
           setShowRating(true);
         } else {
-          // iOS: Use WebView (works fine)
           setRoomUrl(finalUrl);
         }
-      } else if (s.status === 'completed') {
-        setError('Questa lezione e gia terminata.');
-      } else {
-        setError('La sessione non e ancora attiva');
-      }
+      } else if (s.status === 'completed') setError('Questa lezione e gia terminata.');
+      else setError('La sessione non e ancora attiva');
     } catch {
       if (retryCount.current < 3) { retryCount.current++; setTimeout(loadSession, 2000); return; }
       setError('Impossibile caricare la sessione. Controlla la connessione.');
@@ -228,7 +247,7 @@ export default function VideoCallScreen() {
   };
 
   const handleEndCall = useCallback(() => {
-    Alert.alert('Termina lezione', 'Sei sicuro di voler abbandonare la videolezione?',
+    Alert.alert('Termina lezione', 'Sei sicuro di voler abbandonare la videolezione? Non potrai rientrare.',
       [
         { text: 'Annulla', style: 'cancel' },
         { text: 'Termina', style: 'destructive', onPress: async () => {
@@ -254,6 +273,7 @@ export default function VideoCallScreen() {
   const onWebViewLoadEnd = useCallback(() => {
     setWebViewReady(true);
     if (loadTimer.current) clearTimeout(loadTimer.current);
+    resetControlsTimer();
   }, []);
 
   useEffect(() => {
@@ -263,17 +283,19 @@ export default function VideoCallScreen() {
     return () => { if (loadTimer.current) clearTimeout(loadTimer.current); };
   }, [roomUrl, webViewReady]);
 
-  // --- LOADING STATE ---
+  // --- LOADING ---
   if (loading) return (
     <View style={st.center}>
+      <StatusBar barStyle="light-content" />
       <ActivityIndicator size="large" color={Colors.primary} />
       <Text style={st.statusText}>Connessione alla lezione...</Text>
     </View>
   );
 
-  // --- ANDROID: Call active in Chrome Custom Tab ---
+  // --- ANDROID BROWSER ---
   if (IS_ANDROID && androidCallActive) return (
     <View style={st.center}>
+      <StatusBar barStyle="light-content" />
       <Ionicons name="videocam" size={64} color={Colors.primary} />
       <Text style={st.statusText}>Videolezione in corso nel browser</Text>
       <Text style={[st.statusText, { fontSize: 13, color: '#888' }]}>Chiudi il browser quando hai finito</Text>
@@ -283,9 +305,10 @@ export default function VideoCallScreen() {
     </View>
   );
 
-  // --- ERROR STATE ---
+  // --- ERROR ---
   if (error || !roomUrl) return (
     <View style={st.center}>
+      <StatusBar barStyle="light-content" />
       <Ionicons name="videocam-off-outline" size={64} color="#666" />
       <Text style={st.statusText}>{error || 'Stanza non disponibile'}</Text>
       <TouchableOpacity style={st.retryBtn} onPress={() => { retryCount.current = 0; loadSession(); }}>
@@ -297,61 +320,125 @@ export default function VideoCallScreen() {
     </View>
   );
 
-  // --- iOS: WebView RENDER ---
+  // ==============================================================
+  // MAIN RENDER - WhatsApp-like fullscreen video call
+  // KEY ARCHITECTURE:
+  // - WebView is ALWAYS fullscreen (flex:1). NEVER changes layout.
+  // - Coaching opens as a MODAL overlay on top.
+  // - WebView stays mounted and active behind the modal.
+  // - No PiP style change = no crash, no blank view.
+  // ==============================================================
   return (
     <View style={{ flex: 1, backgroundColor: '#000' }}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <View style={st.topBar}>
-          <TouchableOpacity onPress={() => router.back()} style={st.topBtn} data-testid="back-btn">
-            <Ionicons name="chevron-back" size={24} color="#FFF" />
-          </TouchableOpacity>
-          <Text style={st.topTitle}>Lezione Live</Text>
-          <View style={st.topActions}>
-            <TouchableOpacity
-              onPress={showCoaching ? closeCoaching : openCoaching}
-              style={[st.coachingBtn, showCoaching && { backgroundColor: Colors.primary }]}
-              data-testid="coaching-toggle-btn"
-            >
-              <Ionicons name="analytics" size={20} color="#FFF" />
+      <StatusBar hidden />
+
+      {/* LAYER 1: WebView - ALWAYS fullscreen, NEVER changes */}
+      <View style={StyleSheet.absoluteFill} data-testid="webview-container">
+        <WebView
+          source={{ uri: roomUrl }}
+          style={{ flex: 1 }}
+          javaScriptEnabled
+          domStorageEnabled
+          mediaPlaybackRequiresUserAction={false}
+          allowsInlineMediaPlayback
+          allowsFullscreenVideo
+          mediaCapturePermissionGrantType="grant"
+          bounces={false}
+          onLoadEnd={onWebViewLoadEnd}
+          originWhitelist={['*']}
+        />
+      </View>
+
+      {/* LAYER 2: Floating controls (auto-hide) - tap screen to show */}
+      {!showCoaching && (
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={resetControlsTimer}
+          data-testid="controls-tap-area"
+        >
+          {showControls && (
+            <>
+              {/* Top bar */}
+              <View style={st.floatingTop}>
+                <Text style={st.topTitle}>Lezione Live</Text>
+                <Text style={st.topSubtitle}>con {teacherName}</Text>
+              </View>
+
+              {/* Bottom controls */}
+              <View style={st.floatingBottom}>
+                <TouchableOpacity
+                  onPress={openCoaching}
+                  style={st.controlBtn}
+                  data-testid="coaching-toggle-btn"
+                >
+                  <Ionicons name="analytics" size={26} color="#FFF" />
+                  <Text style={st.controlLabel}>Coach</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleEndCall}
+                  style={st.endCallBtn}
+                  data-testid="end-call-btn"
+                >
+                  <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+                </TouchableOpacity>
+
+                <View style={st.controlBtn}>
+                  <Ionicons name="chatbubble-ellipses" size={26} color="rgba(255,255,255,0.3)" />
+                  <Text style={[st.controlLabel, { color: 'rgba(255,255,255,0.3)' }]}>Chat</Text>
+                </View>
+              </View>
+            </>
+          )}
+        </TouchableOpacity>
+      )}
+
+      {/* LAYER 3: Coaching modal - covers screen, WebView stays alive behind */}
+      {showCoaching && (
+        <View style={StyleSheet.absoluteFill} data-testid="coaching-modal">
+          {/* Coaching content */}
+          <CoachingReview
+            sessionId={sessionId || ''}
+            isTeacher={isTeacher}
+            onClose={closeCoaching}
+          />
+
+          {/* Draggable PiP window showing video call info */}
+          <Animated.View
+            style={[st.pipWindow, { transform: pipPos.getTranslateTransform() }]}
+            {...pipPan.panHandlers}
+            data-testid="pip-window"
+          >
+            <View style={st.pipContent}>
+              <Ionicons name="videocam" size={22} color="#FFF" />
+              <Text style={st.pipText}>LIVE</Text>
+              <TouchableOpacity onPress={closeCoaching} style={st.pipClose}>
+                <Ionicons name="expand" size={18} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+
+          {/* Coaching controls bar */}
+          <View style={st.coachingBottomBar}>
+            <TouchableOpacity onPress={closeCoaching} style={st.coachingBackBtn}>
+              <Ionicons name="videocam" size={20} color="#FFF" />
+              <Text style={st.coachingBackText}>Torna alla videochiamata</Text>
             </TouchableOpacity>
-            <View style={{ width: 20 }} />
-            <TouchableOpacity onPress={handleEndCall} style={st.endBtn} data-testid="end-call-btn">
-              <Ionicons name="call" size={20} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+            <TouchableOpacity onPress={handleEndCall} style={st.coachingEndBtn}>
+              <Ionicons name="call" size={18} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
             </TouchableOpacity>
           </View>
         </View>
+      )}
 
-        <View style={{ flex: 1 }}>
-          {showCoaching && (
-            <View style={StyleSheet.absoluteFill} data-testid="coaching-overlay">
-              <CoachingReview sessionId={sessionId || ''} isTeacher={isTeacher} onClose={closeCoaching} />
-            </View>
-          )}
-
-          <View style={showCoaching ? st.pipContainer : st.fullContainer} data-testid="webview-container">
-            <WebView
-              source={{ uri: roomUrl }}
-              style={{ flex: 1 }}
-              javaScriptEnabled
-              domStorageEnabled
-              mediaPlaybackRequiresUserAction={false}
-              allowsInlineMediaPlayback
-              allowsFullscreenVideo
-              mediaCapturePermissionGrantType="grant"
-              bounces={false}
-              onLoadEnd={onWebViewLoadEnd}
-              originWhitelist={['*']}
-            />
-          </View>
-
-          {!webViewReady && !showCoaching && (
-            <View style={st.overlay} pointerEvents="none">
-              <ActivityIndicator size="large" color={Colors.primary} />
-              <Text style={st.statusText}>Caricamento videochiamata...</Text>
-            </View>
-          )}
+      {/* Loading overlay */}
+      {!webViewReady && (
+        <View style={st.loadingOverlay} pointerEvents="none">
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={st.statusText}>Caricamento videochiamata...</Text>
         </View>
-      </SafeAreaView>
+      )}
 
       <CallRatingModal visible={showRating} teacherName={teacherName} onSubmit={onRatingSubmit} onSkip={onRatingSkip} />
     </View>
@@ -365,18 +452,77 @@ const st = StyleSheet.create({
   retryBtnText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
   backBtn: { marginTop: 8, paddingHorizontal: 24, paddingVertical: 12, borderWidth: 1, borderColor: '#333', borderRadius: 12 },
   backBtnText: { color: '#FFF', fontSize: 14 },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, height: 56, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 30 },
-  topBtn: { padding: 8 },
-  topTitle: { color: '#FFF', fontSize: 16, fontWeight: '600' },
-  topActions: { flexDirection: 'row', alignItems: 'center' },
-  coachingBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
-  endBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center' },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center', zIndex: 5 },
-  fullContainer: { flex: 1, backgroundColor: '#111' },
-  pipContainer: {
-    position: 'absolute', top: 12, right: 12,
-    width: PIP_W, height: PIP_H, borderRadius: 14,
-    overflow: 'hidden', zIndex: 25, borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)', backgroundColor: '#111',
+
+  // Floating top bar (WhatsApp-like)
+  floatingTop: {
+    position: 'absolute', top: 0, left: 0, right: 0,
+    paddingTop: 60, paddingBottom: 20, paddingHorizontal: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  topTitle: { color: '#FFF', fontSize: 18, fontWeight: '700' },
+  topSubtitle: { color: 'rgba(255,255,255,0.7)', fontSize: 14, marginTop: 2 },
+
+  // Floating bottom controls (WhatsApp-like)
+  floatingBottom: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly',
+    paddingBottom: 50, paddingTop: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  controlBtn: { alignItems: 'center', gap: 6, width: 70 },
+  controlLabel: { color: '#FFF', fontSize: 12, fontWeight: '500' },
+  endCallBtn: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center', justifyContent: 'center',
+  },
+
+  // Loading overlay
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000',
+    alignItems: 'center', justifyContent: 'center', zIndex: 10,
+  },
+
+  // PiP window during coaching
+  pipWindow: {
+    position: 'absolute',
+    width: PIP_W, height: PIP_H,
+    borderRadius: 16, overflow: 'hidden',
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    borderWidth: 2, borderColor: Colors.primary,
+    zIndex: 50,
+  },
+  pipContent: {
+    flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6,
+  },
+  pipText: {
+    color: Colors.primary, fontSize: 13, fontWeight: '800',
+    letterSpacing: 2,
+  },
+  pipClose: {
+    position: 'absolute', top: 6, right: 6,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+
+  // Coaching bottom bar
+  coachingBottomBar: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingBottom: 40, paddingTop: 12,
+    backgroundColor: 'rgba(0,0,0,0.9)', gap: 12,
+  },
+  coachingBackBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingVertical: 14, paddingHorizontal: 16,
+    backgroundColor: '#333', borderRadius: 12,
+  },
+  coachingBackText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
+  coachingEndBtn: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center', justifyContent: 'center',
   },
 });
