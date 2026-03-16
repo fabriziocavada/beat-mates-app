@@ -12,7 +12,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://rhythm-connect-14.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://dance-community-app.preview.emergentagent.com')
 
 class TestIteration9:
     """Tests for iteration 9 features: likes, hamburger menu, video call auto-join"""

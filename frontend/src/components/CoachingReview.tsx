@@ -343,12 +343,15 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
           injectedJavaScript={`
             var v=document.getElementById('v');
             if(v){
+              v.preload='auto';
+              v.currentTime=0.001;
               v.playbackRate=${speed};
               setInterval(function(){
                 window.ReactNativeWebView.postMessage('time:'+v.currentTime);
-              },250);
+              },50);
               v.addEventListener('loadedmetadata',function(){
                 window.ReactNativeWebView.postMessage('duration:'+v.duration);
+                v.currentTime=0.001;
               });
             }true;
           `}
@@ -370,13 +373,13 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
       {/* Controls */}
       <View style={st.controls}>
         <View style={st.controlRow}>
-          <TouchableOpacity onPress={() => handleSeek(Math.max(0, currentTime - 2))} style={st.ctrlBtn}>
+          <TouchableOpacity onPress={() => handleSeek(Math.max(0, currentTime - 0.5))} style={st.ctrlBtn}>
             <Ionicons name="play-back" size={18} color="#FFF" />
           </TouchableOpacity>
           <TouchableOpacity onPress={togglePlay} style={st.playBtn}>
             <Ionicons name={isPlaying ? 'pause' : 'play'} size={22} color="#FFF" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleSeek(Math.min(duration, currentTime + 2))} style={st.ctrlBtn}>
+          <TouchableOpacity onPress={() => handleSeek(Math.min(duration, currentTime + 0.5))} style={st.ctrlBtn}>
             <Ionicons name="play-forward" size={18} color="#FFF" />
           </TouchableOpacity>
           <View style={st.speedRow}>
@@ -390,18 +393,18 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
         </View>
 
         <View style={st.timelineRow}>
-          <TouchableOpacity onPress={() => handleSeek(Math.max(0, currentTime - 0.1))} style={st.frameBtn}>
+          <TouchableOpacity onPress={() => handleSeek(Math.max(0, currentTime - 0.033))} style={st.frameBtn}>
             <Ionicons name="remove" size={14} color="#FFF" />
           </TouchableOpacity>
-          <Text style={st.timeText}>{currentTime.toFixed(1)}s</Text>
+          <Text style={st.timeText}>{currentTime.toFixed(2)}s</Text>
           <TouchableOpacity activeOpacity={1} style={st.timelineTouch} onPress={onTimelineTap}>
             <View style={st.timelineTrack}>
               <View style={[st.timelineFill, { width: `${Math.min(100, progressPct)}%` }]} />
             </View>
             <View style={[st.timelineThumb, { left: `${Math.min(100, progressPct)}%` }]} />
           </TouchableOpacity>
-          <Text style={st.timeText}>{duration.toFixed(1)}s</Text>
-          <TouchableOpacity onPress={() => handleSeek(Math.min(duration, currentTime + 0.1))} style={st.frameBtn}>
+          <Text style={st.timeText}>{duration.toFixed(2)}s</Text>
+          <TouchableOpacity onPress={() => handleSeek(Math.min(duration, currentTime + 0.033))} style={st.frameBtn}>
             <Ionicons name="add" size={14} color="#FFF" />
           </TouchableOpacity>
         </View>

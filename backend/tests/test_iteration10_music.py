@@ -16,7 +16,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://rhythm-connect-14.preview.emergentagent.com')
+BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://dance-community-app.preview.emergentagent.com')
 
 class TestMusicFeature:
     """Music playlist and song management tests"""

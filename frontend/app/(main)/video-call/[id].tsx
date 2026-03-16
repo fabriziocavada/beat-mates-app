@@ -378,6 +378,16 @@ export default function VideoCallScreen() {
             onNewSession={openCoaching}
             onEndCall={handleEndCall}
           />
+          {/* Small LIVE indicator at bottom-right */}
+          <TouchableOpacity
+            onPress={closeCoaching}
+            style={st.liveIndicator}
+            activeOpacity={0.8}
+            data-testid="live-indicator"
+          >
+            <View style={st.liveDot} />
+            <Text style={st.liveText}>LIVE</Text>
+          </TouchableOpacity>
         </View>
       )}
 
