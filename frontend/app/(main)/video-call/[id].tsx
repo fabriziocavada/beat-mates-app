@@ -3,7 +3,6 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, Alert, Modal, TextInput, Dimensions,
   Platform, PermissionsAndroid, Linking, StatusBar, BackHandler,
-  Animated, PanResponder,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,8 +16,6 @@ import CoachingReview from '../../../src/components/CoachingReview';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 const IS_ANDROID = Platform.OS === 'android';
-const PIP_W = 120;
-const PIP_H = 170;
 const TOP_SAFE = Platform.OS === 'ios' ? 54 : 30; // iPhone dynamic island margin
 
 // CSS/JS to inject into Daily.co to make it fullscreen
@@ -26,28 +23,38 @@ const DAILY_INJECT = `
 (function() {
   if (window.__injected) return;
   window.__injected = true;
-  var s = document.createElement('style');
-  s.textContent = [
-    '.top-bar, [data-testid="top-bar"], [class*="TopBar"], [class*="top-bar"] { display:none!important; }',
-    '.bottom-bar-info, [class*="BottomInfo"], [class*="HomePageLink"] { display:none!important; }',
-    '[class*="bottom-bar-info"] { display:none!important; }',
-    'a[href*="daily.co"] { display:none!important; }',
-    '.app { height:100vh!important; }',
-  ].join('');
-  document.head.appendChild(s);
-  // Retry injection after Daily loads its SPA
-  setTimeout(function() {
-    var s2 = document.createElement('style');
-    s2.textContent = s.textContent;
-    document.head.appendChild(s2);
-    // Hide "Home page" and "X people in call" link
-    var links = document.querySelectorAll('a');
-    links.forEach(function(l) {
-      if (l.textContent.includes('Home page') || l.textContent.includes('people in call')) {
+  function hideUI() {
+    // Hide all links containing "Home page" or "daily.co"
+    document.querySelectorAll('a').forEach(function(l) {
+      var t = l.textContent || '';
+      if (t.includes('Home page') || t.includes('daily.co') || t.includes('people in call')) {
+        var p = l.closest('div');
+        if (p) p.style.display = 'none';
         l.style.display = 'none';
       }
     });
-  }, 3000);
+    // Make background black instead of navy
+    document.body.style.backgroundColor = '#000';
+    document.querySelectorAll('div').forEach(function(d) {
+      var bg = window.getComputedStyle(d).backgroundColor;
+      // Target the dark navy backgrounds (rgb ~26,26,46 or similar)
+      if (bg && (bg.includes('26, 26') || bg.includes('29, 32') || bg.includes('31, 35'))) {
+        d.style.backgroundColor = '#000';
+      }
+    });
+    // Force all video elements to cover the viewport
+    document.querySelectorAll('video').forEach(function(v) {
+      v.style.objectFit = 'cover';
+    });
+  }
+  // Run multiple times as Daily.co loads its SPA dynamically
+  hideUI();
+  setTimeout(hideUI, 2000);
+  setTimeout(hideUI, 5000);
+  setTimeout(hideUI, 10000);
+  // Observe DOM changes and re-hide
+  var obs = new MutationObserver(function() { setTimeout(hideUI, 100); });
+  obs.observe(document.body, { childList: true, subtree: true });
 })();
 true;
 `;
@@ -134,21 +141,6 @@ export default function VideoCallScreen() {
   const loadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const coachPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const webViewRef = useRef<WebView>(null);
-
-  // PiP dragging
-  const pipPos = useRef(new Animated.ValueXY({ x: SW - PIP_W - 12, y: TOP_SAFE + 60 })).current;
-  const pipPan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        pipPos.setOffset({ x: (pipPos.x as any)._value, y: (pipPos.y as any)._value });
-        pipPos.setValue({ x: 0, y: 0 });
-      },
-      onPanResponderMove: Animated.event([null, { dx: pipPos.x, dy: pipPos.y }], { useNativeDriver: false }),
-      onPanResponderRelease: () => { pipPos.flattenOffset(); },
-    })
-  ).current;
 
   // Block hardware back button (WhatsApp-like)
   useEffect(() => {
@@ -378,44 +370,14 @@ export default function VideoCallScreen() {
       {/* LAYER 3: Coaching overlay - fullscreen modal, WebView stays alive behind */}
       {showCoaching && (
         <View style={StyleSheet.absoluteFill} data-testid="coaching-modal">
-          {/* Coaching content */}
           <CoachingReview
             key={`coaching-${coachingKey}`}
             sessionId={sessionId || ''}
             isTeacher={isTeacher}
             onClose={closeCoaching}
+            onNewSession={openCoaching}
+            onEndCall={handleEndCall}
           />
-
-          {/* Draggable PiP indicator */}
-          <Animated.View
-            style={[st.pipWindow, { transform: pipPos.getTranslateTransform() }]}
-            {...pipPan.panHandlers}
-            data-testid="pip-window"
-          >
-            <TouchableOpacity style={st.pipContent} onPress={closeCoaching} activeOpacity={0.8}>
-              <Ionicons name="videocam" size={24} color="#FFF" />
-              <Text style={st.pipText}>LIVE</Text>
-              <View style={st.pipDot} />
-              <Text style={st.pipExpand}>Tocca per tornare</Text>
-            </TouchableOpacity>
-          </Animated.View>
-
-          {/* Top bar in coaching mode */}
-          <View style={st.coachingTopBar}>
-            <TouchableOpacity onPress={closeCoaching} style={st.coachingBackBtn}>
-              <Ionicons name="videocam" size={18} color="#FFF" />
-              <Text style={st.coachingBackText}>Videochiamata</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={openCoaching} style={st.coachingNewBtn}>
-              <Ionicons name="add" size={18} color="#FFF" />
-              <Text style={st.coachingBackText}>Nuovo</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={handleEndCall} style={st.coachingEndBtn}>
-              <Ionicons name="call" size={16} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
-            </TouchableOpacity>
-          </View>
         </View>
       )}
 
@@ -478,55 +440,5 @@ const st = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#000',
     alignItems: 'center', justifyContent: 'center', zIndex: 10,
-  },
-
-  // PiP window
-  pipWindow: {
-    position: 'absolute',
-    width: PIP_W, height: PIP_H,
-    borderRadius: 16, overflow: 'hidden',
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    borderWidth: 2, borderColor: Colors.primary,
-    zIndex: 50,
-  },
-  pipContent: {
-    flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4,
-  },
-  pipText: { color: Colors.primary, fontSize: 14, fontWeight: '800', letterSpacing: 2 },
-  pipDot: {
-    width: 8, height: 8, borderRadius: 4,
-    backgroundColor: '#FF3B30',
-  },
-  pipExpand: { color: 'rgba(255,255,255,0.5)', fontSize: 10, marginTop: 4 },
-
-  // Coaching top bar
-  coachingTopBar: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0,
-    paddingTop: TOP_SAFE,
-    paddingHorizontal: 12,
-    paddingBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    zIndex: 60,
-  },
-  coachingBackBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 12, paddingVertical: 8,
-    backgroundColor: '#333', borderRadius: 16,
-  },
-  coachingNewBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 12, paddingVertical: 8,
-    backgroundColor: Colors.primary, borderRadius: 16,
-  },
-  coachingBackText: { color: '#FFF', fontSize: 13, fontWeight: '600' },
-  coachingEndBtn: {
-    marginLeft: 'auto',
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: '#FF3B30',
-    alignItems: 'center', justifyContent: 'center',
   },
 });

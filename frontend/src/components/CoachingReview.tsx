@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Dimensions,
-  ActivityIndicator, PanResponder, Alert, GestureResponderEvent,
+  ActivityIndicator, PanResponder, Alert, GestureResponderEvent, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
@@ -16,6 +16,8 @@ interface CoachingReviewProps {
   sessionId: string;
   isTeacher: boolean;
   onClose: () => void;
+  onNewSession?: () => void;
+  onEndCall?: () => void;
 }
 
 interface DrawPath {
@@ -23,7 +25,7 @@ interface DrawPath {
   color: string;
 }
 
-export default function CoachingReview({ sessionId, isTeacher, onClose }: CoachingReviewProps) {
+export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSession, onEndCall }: CoachingReviewProps) {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -248,10 +250,22 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
     return (
       <View style={st.container}>
         <View style={st.header}>
-          <Text style={st.title}>Coaching Review</Text>
-          <TouchableOpacity onPress={onClose} style={st.closeBtn} data-testid="coaching-close-btn">
-            <Ionicons name="close" size={24} color="#FFF" />
-          </TouchableOpacity>
+          <Text style={st.title} numberOfLines={1}>Coaching Review</Text>
+          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+            {onNewSession && (
+              <TouchableOpacity onPress={onNewSession} style={st.headerActionBtn}>
+                <Ionicons name="add" size={16} color="#FFF" />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity onPress={onClose} style={st.headerVideoBtn} data-testid="coaching-back-btn">
+              <Ionicons name="videocam" size={16} color="#FFF" />
+            </TouchableOpacity>
+            {onEndCall && (
+              <TouchableOpacity onPress={onEndCall} style={st.headerEndBtn} data-testid="coaching-end-btn">
+                <Ionicons name="call" size={14} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
         <View style={st.emptyState}>
           {isUploading ? (
@@ -287,8 +301,8 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
   return (
     <View style={st.container}>
       <View style={st.header}>
-        <Text style={st.title}>Coaching Review</Text>
-        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+        <Text style={st.title} numberOfLines={1}>Coaching Review</Text>
+        <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
           <TouchableOpacity
             onPress={() => setToolActive(!toolActive)}
             style={[st.toolToggle, toolActive && { backgroundColor: Colors.primary }]}
@@ -296,9 +310,19 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
           >
             <Ionicons name="brush" size={16} color="#FFF" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={onClose} style={st.closeBtn} data-testid="coaching-close-btn">
-            <Ionicons name="close" size={24} color="#FFF" />
+          {onNewSession && (
+            <TouchableOpacity onPress={onNewSession} style={st.headerActionBtn}>
+              <Ionicons name="add" size={16} color="#FFF" />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={onClose} style={st.headerVideoBtn} data-testid="coaching-back-btn">
+            <Ionicons name="videocam" size={16} color="#FFF" />
           </TouchableOpacity>
+          {onEndCall && (
+            <TouchableOpacity onPress={onEndCall} style={st.headerEndBtn} data-testid="coaching-end-btn">
+              <Ionicons name="call" size={14} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -404,11 +428,7 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
           </View>
         </View>
 
-        {/* "Back to videocall" button */}
-        <TouchableOpacity onPress={onClose} style={st.backToCallBtn} data-testid="coaching-back-to-call">
-          <Ionicons name="videocam" size={18} color="#FFF" />
-          <Text style={st.backToCallText}>Torna alla videolezione</Text>
-        </TouchableOpacity>
+        {/* "Back to videocall" button - removed, now integrated in header */}
       </View>
     </View>
   );
@@ -416,9 +436,12 @@ export default function CoachingReview({ sessionId, isTeacher, onClose }: Coachi
 
 const st = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0a1a' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, paddingTop: Platform.OS === 'ios' ? 54 : 30 },
   title: { color: '#FFF', fontSize: 16, fontWeight: '700' },
   closeBtn: { padding: 4 },
+  headerActionBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
+  headerVideoBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
+  headerEndBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center' },
   toolToggle: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, padding: 32 },
   emptyText: { color: '#999', fontSize: 14, textAlign: 'center', lineHeight: 20 },
