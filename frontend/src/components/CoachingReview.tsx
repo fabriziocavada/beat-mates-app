@@ -228,14 +228,18 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
     })
   ).current;
 
-  // Build player URL
+  // Build player URL - add poster param for first frame
   const playerUrl = videoUrl ? getVideoPlayerUrl(videoUrl, { controls: false, muted: true, autoplay: false, fit: 'contain' }) : '';
+
+  // Track if video has loaded its first frame
+  const [videoLoaded, setVideoLoaded] = useState(false);
 
   // WebView messages
   const handleMessage = useCallback((e: any) => {
     const msg = e.nativeEvent.data;
     if (msg.startsWith('time:')) setCurrentTime(parseFloat(msg.split(':')[1]) || 0);
     else if (msg.startsWith('duration:')) setDuration(parseFloat(msg.split(':')[1]) || 20);
+    else if (msg === 'video_loaded') setVideoLoaded(true);
   }, []);
 
   const onTimelineTap = useCallback((e: GestureResponderEvent) => {
@@ -257,8 +261,9 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
                 <Ionicons name="add" size={16} color="#FFF" />
               </TouchableOpacity>
             )}
-            <TouchableOpacity onPress={onClose} style={st.headerVideoBtn} data-testid="coaching-back-btn">
-              <Ionicons name="videocam" size={16} color="#FFF" />
+            <TouchableOpacity onPress={onClose} style={st.headerBackBtn} data-testid="coaching-back-btn">
+              <Ionicons name="videocam" size={14} color="#FFF" />
+              <Text style={st.headerBackText}>Videochiamata</Text>
             </TouchableOpacity>
             {onEndCall && (
               <TouchableOpacity onPress={onEndCall} style={st.headerEndBtn} data-testid="coaching-end-btn">
@@ -344,18 +349,28 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
             var v=document.getElementById('v');
             if(v){
               v.preload='auto';
-              v.currentTime=0.001;
               v.playbackRate=${speed};
+              // Show first frame
+              v.addEventListener('loadeddata',function(){
+                v.currentTime=0.01;
+                window.ReactNativeWebView.postMessage('video_loaded');
+              });
+              v.addEventListener('loadedmetadata',function(){
+                window.ReactNativeWebView.postMessage('duration:'+v.duration);
+              });
               setInterval(function(){
                 window.ReactNativeWebView.postMessage('time:'+v.currentTime);
               },50);
-              v.addEventListener('loadedmetadata',function(){
-                window.ReactNativeWebView.postMessage('duration:'+v.duration);
-                v.currentTime=0.001;
-              });
             }true;
           `}
         />
+        {/* Loading overlay until first frame renders */}
+        {!videoLoaded && (
+          <View style={st.videoLoadingOverlay}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={{ color: '#999', fontSize: 13, marginTop: 10 }}>Caricamento video...</Text>
+          </View>
+        )}
         <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
           {drawings.map((p, i) => (
             <Path key={`${i}-${p.d.length}`} d={p.d} stroke={p.color} strokeWidth={3} fill="none" strokeLinecap="round" />
@@ -444,6 +459,8 @@ const st = StyleSheet.create({
   closeBtn: { padding: 4 },
   headerActionBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
   headerVideoBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
+  headerBackBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#333', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 },
+  headerBackText: { color: '#FFF', fontSize: 11, fontWeight: '600' },
   headerEndBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center' },
   toolToggle: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, padding: 32 },
@@ -455,6 +472,7 @@ const st = StyleSheet.create({
   uploadBtnText: { color: '#CCC', fontSize: 13 },
   playerArea: { flex: 1, backgroundColor: '#000', position: 'relative' },
   webview: { flex: 1 },
+  videoLoadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#0a0a1a', alignItems: 'center', justifyContent: 'center', zIndex: 5 },
   drawIndicator: { position: 'absolute', top: 8, left: 8, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   drawDot: { width: 10, height: 10, borderRadius: 5 },
   drawLabel: { color: '#FFF', fontSize: 11, fontWeight: '600' },

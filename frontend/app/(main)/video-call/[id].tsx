@@ -152,10 +152,12 @@ export default function VideoCallScreen() {
   }, [roomUrl, androidCallActive]);
 
   // Coaching toggle - creates NEW session each time
-  const openCoaching = useCallback(() => {
+  const openCoaching = useCallback(async () => {
+    // Reset backend coaching state first so new session starts clean
+    await api.post(`/coaching/${sessionId}/command`, { action: 'reset_coaching' }).catch(() => {});
+    await api.post(`/coaching/${sessionId}/command`, { action: 'start_coaching' }).catch(() => {});
     setCoachingKey(k => k + 1); // new key = new coaching session
     setShowCoaching(true);
-    api.post(`/coaching/${sessionId}/command`, { action: 'start_coaching' }).catch(() => {});
   }, [sessionId]);
 
   const closeCoaching = useCallback(() => {
@@ -378,15 +380,18 @@ export default function VideoCallScreen() {
             onNewSession={openCoaching}
             onEndCall={handleEndCall}
           />
-          {/* Small LIVE indicator at bottom-right */}
+          {/* PiP-style LIVE indicator - shows call is still active */}
           <TouchableOpacity
             onPress={closeCoaching}
-            style={st.liveIndicator}
+            style={st.pipIndicator}
             activeOpacity={0.8}
             data-testid="live-indicator"
           >
-            <View style={st.liveDot} />
-            <Text style={st.liveText}>LIVE</Text>
+            <View style={st.pipInner}>
+              <View style={st.pipLiveDot} />
+              <Ionicons name="videocam" size={16} color="#FFF" />
+              <Text style={st.pipLiveText}>LIVE</Text>
+            </View>
           </TouchableOpacity>
         </View>
       )}
@@ -450,5 +455,36 @@ const st = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#000',
     alignItems: 'center', justifyContent: 'center', zIndex: 10,
+  },
+
+  // PiP LIVE indicator - floating badge when coaching is open
+  pipIndicator: {
+    position: 'absolute',
+    bottom: 24,
+    right: 16,
+    zIndex: 30,
+  },
+  pipInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: '#FF3B30',
+  },
+  pipLiveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FF3B30',
+  },
+  pipLiveText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
 });

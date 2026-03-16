@@ -1313,6 +1313,12 @@ async def send_coaching_command(session_id: str, cmd: CoachingCommand, current_u
         update["coaching_active"] = True
     elif cmd.action == "stop_coaching":
         update["coaching_active"] = False
+    elif cmd.action == "reset_coaching":
+        update["video_url"] = None
+        update["current_time"] = 0
+        update["speed"] = 1.0
+        update["is_playing"] = False
+        update["drawings"] = []
     elif cmd.action == "draw":
         await db.coaching_sessions.update_one(
             {"session_id": session_id},
