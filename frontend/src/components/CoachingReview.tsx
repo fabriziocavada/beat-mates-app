@@ -36,6 +36,7 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
   const [drawColor, setDrawColor] = useState('#FF6978');
   const [toolActive, setToolActive] = useState(false);
   const [liveStroke, setLiveStroke] = useState('');
+  const [videoLoaded, setVideoLoaded] = useState(false);
 
   const webRef = useRef<WebView>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -231,16 +232,23 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
   // Build player URL - add poster param for first frame
   const playerUrl = videoUrl ? getVideoPlayerUrl(videoUrl, { controls: false, muted: true, autoplay: false, fit: 'contain' }) : '';
 
-  // Track if video has loaded its first frame
-  const [videoLoaded, setVideoLoaded] = useState(false);
-
   // WebView messages
   const handleMessage = useCallback((e: any) => {
     const msg = e.nativeEvent.data;
     if (msg.startsWith('time:')) setCurrentTime(parseFloat(msg.split(':')[1]) || 0);
     else if (msg.startsWith('duration:')) setDuration(parseFloat(msg.split(':')[1]) || 20);
+    // Video player HTML sends 'ready' on canplay and 'ready:WxH' on loadedmetadata
+    else if (msg.startsWith('ready')) setVideoLoaded(true);
     else if (msg === 'video_loaded') setVideoLoaded(true);
   }, []);
+
+  // Fallback: dismiss loading after 4 seconds even if event didn't fire
+  useEffect(() => {
+    if (videoUrl && !videoLoaded) {
+      const timer = setTimeout(() => setVideoLoaded(true), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [videoUrl, videoLoaded]);
 
   const onTimelineTap = useCallback((e: GestureResponderEvent) => {
     const x = e.nativeEvent.locationX;
@@ -265,11 +273,6 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
               <Ionicons name="videocam" size={14} color="#FFF" />
               <Text style={st.headerBackText}>Videochiamata</Text>
             </TouchableOpacity>
-            {onEndCall && (
-              <TouchableOpacity onPress={onEndCall} style={st.headerEndBtn} data-testid="coaching-end-btn">
-                <Ionicons name="call" size={14} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
-              </TouchableOpacity>
-            )}
           </View>
         </View>
         <View style={st.emptyState}>
@@ -320,14 +323,10 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
               <Ionicons name="add" size={16} color="#FFF" />
             </TouchableOpacity>
           )}
-          <TouchableOpacity onPress={onClose} style={st.headerVideoBtn} data-testid="coaching-back-btn">
-            <Ionicons name="videocam" size={16} color="#FFF" />
+          <TouchableOpacity onPress={onClose} style={st.headerBackBtn} data-testid="coaching-back-btn">
+            <Ionicons name="videocam" size={14} color="#FFF" />
+            <Text style={st.headerBackText}>Videochiamata</Text>
           </TouchableOpacity>
-          {onEndCall && (
-            <TouchableOpacity onPress={onEndCall} style={st.headerEndBtn} data-testid="coaching-end-btn">
-              <Ionicons name="call" size={14} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
-            </TouchableOpacity>
-          )}
         </View>
       </View>
 

@@ -18,13 +18,25 @@ const { width: SW, height: SH } = Dimensions.get('window');
 const IS_ANDROID = Platform.OS === 'android';
 const TOP_SAFE = Platform.OS === 'ios' ? 54 : 30; // iPhone dynamic island margin
 
-// CSS/JS to inject into Daily.co to make it fullscreen
+// CSS/JS to inject into Daily.co to make it fullscreen vertical
 const DAILY_INJECT = `
 (function() {
   if (window.__injected) return;
   window.__injected = true;
+  var css = document.createElement('style');
+  css.textContent = [
+    '* { box-sizing: border-box !important; }',
+    'body, html { margin:0 !important; padding:0 !important; overflow:hidden !important; background:#000 !important; width:100vw !important; height:100vh !important; }',
+    // Force all video containers to fill viewport
+    'video { object-fit:cover !important; width:100vw !important; height:100vh !important; position:fixed !important; top:0 !important; left:0 !important; }',
+    // Hide Daily.co branding and UI chrome
+    'a[href*="daily.co"], [class*="branding"], [class*="Brand"]  { display:none !important; }',
+    // Force main container to fill screen
+    '[class*="call-container"], [class*="videoContainer"], [class*="tile"], [data-cam-id] { width:100vw !important; height:100vh !important; position:fixed !important; top:0 !important; left:0 !important; }',
+  ].join('\\n');
+  document.head.appendChild(css);
+
   function hideUI() {
-    // Hide all links containing "Home page" or "daily.co"
     document.querySelectorAll('a').forEach(function(l) {
       var t = l.textContent || '';
       if (t.includes('Home page') || t.includes('daily.co') || t.includes('people in call')) {
@@ -33,26 +45,17 @@ const DAILY_INJECT = `
         l.style.display = 'none';
       }
     });
-    // Make background black instead of navy
-    document.body.style.backgroundColor = '#000';
     document.querySelectorAll('div').forEach(function(d) {
       var bg = window.getComputedStyle(d).backgroundColor;
-      // Target the dark navy backgrounds (rgb ~26,26,46 or similar)
       if (bg && (bg.includes('26, 26') || bg.includes('29, 32') || bg.includes('31, 35'))) {
         d.style.backgroundColor = '#000';
       }
     });
-    // Force all video elements to cover the viewport
-    document.querySelectorAll('video').forEach(function(v) {
-      v.style.objectFit = 'cover';
-    });
   }
-  // Run multiple times as Daily.co loads its SPA dynamically
   hideUI();
   setTimeout(hideUI, 2000);
   setTimeout(hideUI, 5000);
   setTimeout(hideUI, 10000);
-  // Observe DOM changes and re-hide
   var obs = new MutationObserver(function() { setTimeout(hideUI, 100); });
   obs.observe(document.body, { childList: true, subtree: true });
 })();

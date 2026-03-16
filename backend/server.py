@@ -1767,7 +1767,7 @@ async def video_player_page(filename: str, controls: str = "0", muted: str = "1"
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <style>*{{margin:0;padding:0;overflow:hidden}}body{{background:#000;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center}}
 video{{width:100%;height:100%;object-fit:{obj_fit}}}</style></head>
-<body><video id="v" src="/api/media/{filename}" {ap} loop {mt} playsinline webkit-playsinline {ctrl}></video>
+<body><video id="v" src="/api/media/{filename}" {ap} loop {mt} playsinline webkit-playsinline preload="auto" {ctrl}></video>
 <script>var v=document.getElementById('v');
 v.addEventListener('loadedmetadata',function(){{
   var fit='{obj_fit}';
