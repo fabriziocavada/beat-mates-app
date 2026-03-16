@@ -19,6 +19,38 @@ const { width: SW, height: SH } = Dimensions.get('window');
 const IS_ANDROID = Platform.OS === 'android';
 const PIP_W = 120;
 const PIP_H = 170;
+const TOP_SAFE = Platform.OS === 'ios' ? 54 : 30; // iPhone dynamic island margin
+
+// CSS/JS to inject into Daily.co to make it fullscreen
+const DAILY_INJECT = `
+(function() {
+  if (window.__injected) return;
+  window.__injected = true;
+  var s = document.createElement('style');
+  s.textContent = [
+    '.top-bar, [data-testid="top-bar"], [class*="TopBar"], [class*="top-bar"] { display:none!important; }',
+    '.bottom-bar-info, [class*="BottomInfo"], [class*="HomePageLink"] { display:none!important; }',
+    '[class*="bottom-bar-info"] { display:none!important; }',
+    'a[href*="daily.co"] { display:none!important; }',
+    '.app { height:100vh!important; }',
+  ].join('');
+  document.head.appendChild(s);
+  // Retry injection after Daily loads its SPA
+  setTimeout(function() {
+    var s2 = document.createElement('style');
+    s2.textContent = s.textContent;
+    document.head.appendChild(s2);
+    // Hide "Home page" and "X people in call" link
+    var links = document.querySelectorAll('a');
+    links.forEach(function(l) {
+      if (l.textContent.includes('Home page') || l.textContent.includes('people in call')) {
+        l.style.display = 'none';
+      }
+    });
+  }, 3000);
+})();
+true;
+`;
 
 async function saveActiveSession(id: string) {
   try { await AsyncStorage.setItem('active_session_id', id); } catch {}
@@ -94,17 +126,17 @@ export default function VideoCallScreen() {
   const [showRating, setShowRating] = useState(false);
   const [teacherName, setTeacherName] = useState('');
   const [showCoaching, setShowCoaching] = useState(false);
+  const [coachingKey, setCoachingKey] = useState(0); // increment to create new coaching session
   const [isTeacher, setIsTeacher] = useState(false);
   const [androidCallActive, setAndroidCallActive] = useState(false);
-  const [showControls, setShowControls] = useState(true);
   const currentUser = useAuthStore(s => s.user);
   const retryCount = useRef(0);
   const loadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const coachPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const webViewRef = useRef<WebView>(null);
 
-  // PiP dragging for coaching mode
-  const pipPos = useRef(new Animated.ValueXY({ x: SW - PIP_W - 12, y: 50 })).current;
+  // PiP dragging
+  const pipPos = useRef(new Animated.ValueXY({ x: SW - PIP_W - 12, y: TOP_SAFE + 60 })).current;
   const pipPan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -118,40 +150,24 @@ export default function VideoCallScreen() {
     })
   ).current;
 
-  // Block hardware back button during call (WhatsApp-like)
+  // Block hardware back button (WhatsApp-like)
   useEffect(() => {
     const handler = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (roomUrl || androidCallActive) {
-        handleEndCall();
-        return true; // prevent default back
-      }
+      if (roomUrl || androidCallActive) { handleEndCall(); return true; }
       return false;
     });
     return () => handler.remove();
   }, [roomUrl, androidCallActive]);
 
-  // Auto-hide controls after 4 seconds
-  const resetControlsTimer = useCallback(() => {
-    setShowControls(true);
-    if (controlsTimer.current) clearTimeout(controlsTimer.current);
-    controlsTimer.current = setTimeout(() => setShowControls(false), 4000);
-  }, []);
-
-  useEffect(() => {
-    if (roomUrl && webViewReady && !showCoaching) resetControlsTimer();
-    return () => { if (controlsTimer.current) clearTimeout(controlsTimer.current); };
-  }, [roomUrl, webViewReady, showCoaching]);
-
-  // Coaching toggle
+  // Coaching toggle - creates NEW session each time
   const openCoaching = useCallback(() => {
+    setCoachingKey(k => k + 1); // new key = new coaching session
     setShowCoaching(true);
-    setShowControls(true);
     api.post(`/coaching/${sessionId}/command`, { action: 'start_coaching' }).catch(() => {});
   }, [sessionId]);
 
   const closeCoaching = useCallback(() => {
     setShowCoaching(false);
-    resetControlsTimer();
     api.post(`/coaching/${sessionId}/command`, { action: 'stop_coaching' }).catch(() => {});
   }, [sessionId]);
 
@@ -161,11 +177,10 @@ export default function VideoCallScreen() {
     coachPollRef.current = setInterval(async () => {
       try {
         const res = await api.get(`/coaching/${sessionId}/state`);
-        const s = res.data;
-        if (typeof s.coaching_active === 'boolean') {
+        if (typeof res.data?.coaching_active === 'boolean') {
           setShowCoaching(prev => {
-            if (s.coaching_active && !prev) return true;
-            if (!s.coaching_active && prev) return false;
+            if (res.data.coaching_active && !prev) { setCoachingKey(k => k + 1); return true; }
+            if (!res.data.coaching_active && prev) return false;
             return prev;
           });
         }
@@ -242,12 +257,12 @@ export default function VideoCallScreen() {
       else setError('La sessione non e ancora attiva');
     } catch {
       if (retryCount.current < 3) { retryCount.current++; setTimeout(loadSession, 2000); return; }
-      setError('Impossibile caricare la sessione. Controlla la connessione.');
+      setError('Impossibile caricare la sessione.');
     } finally { setLoading(false); }
   };
 
   const handleEndCall = useCallback(() => {
-    Alert.alert('Termina lezione', 'Sei sicuro di voler abbandonare la videolezione? Non potrai rientrare.',
+    Alert.alert('Termina lezione', 'Sei sicuro? Non potrai rientrare.',
       [
         { text: 'Annulla', style: 'cancel' },
         { text: 'Termina', style: 'destructive', onPress: async () => {
@@ -265,15 +280,14 @@ export default function VideoCallScreen() {
     router.replace('/(main)/home');
   }, [sessionId, router]);
 
-  const onRatingSkip = useCallback(() => {
-    setShowRating(false);
-    router.replace('/(main)/home');
-  }, [router]);
+  const onRatingSkip = useCallback(() => { setShowRating(false); router.replace('/(main)/home'); }, [router]);
 
   const onWebViewLoadEnd = useCallback(() => {
     setWebViewReady(true);
     if (loadTimer.current) clearTimeout(loadTimer.current);
-    resetControlsTimer();
+    // Re-inject CSS to customize Daily.co
+    setTimeout(() => webViewRef.current?.injectJavaScript(DAILY_INJECT), 2000);
+    setTimeout(() => webViewRef.current?.injectJavaScript(DAILY_INJECT), 5000);
   }, []);
 
   useEffect(() => {
@@ -285,8 +299,7 @@ export default function VideoCallScreen() {
 
   // --- LOADING ---
   if (loading) return (
-    <View style={st.center}>
-      <StatusBar barStyle="light-content" />
+    <View style={st.center}><StatusBar barStyle="light-content" />
       <ActivityIndicator size="large" color={Colors.primary} />
       <Text style={st.statusText}>Connessione alla lezione...</Text>
     </View>
@@ -294,47 +307,45 @@ export default function VideoCallScreen() {
 
   // --- ANDROID BROWSER ---
   if (IS_ANDROID && androidCallActive) return (
-    <View style={st.center}>
-      <StatusBar barStyle="light-content" />
+    <View style={st.center}><StatusBar barStyle="light-content" />
       <Ionicons name="videocam" size={64} color={Colors.primary} />
       <Text style={st.statusText}>Videolezione in corso nel browser</Text>
       <Text style={[st.statusText, { fontSize: 13, color: '#888' }]}>Chiudi il browser quando hai finito</Text>
-      <TouchableOpacity style={st.retryBtn} onPress={handleEndCall}>
-        <Text style={st.retryBtnText}>Termina lezione</Text>
+      <TouchableOpacity style={st.primaryBtn} onPress={handleEndCall}>
+        <Text style={st.primaryBtnText}>Termina lezione</Text>
       </TouchableOpacity>
     </View>
   );
 
   // --- ERROR ---
   if (error || !roomUrl) return (
-    <View style={st.center}>
-      <StatusBar barStyle="light-content" />
+    <View style={st.center}><StatusBar barStyle="light-content" />
       <Ionicons name="videocam-off-outline" size={64} color="#666" />
       <Text style={st.statusText}>{error || 'Stanza non disponibile'}</Text>
-      <TouchableOpacity style={st.retryBtn} onPress={() => { retryCount.current = 0; loadSession(); }}>
-        <Text style={st.retryBtnText}>Riprova</Text>
+      <TouchableOpacity style={st.primaryBtn} onPress={() => { retryCount.current = 0; loadSession(); }}>
+        <Text style={st.primaryBtnText}>Riprova</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={st.backBtn} onPress={() => { clearActiveSession(); router.replace('/(main)/home'); }}>
-        <Text style={st.backBtnText}>Torna alla home</Text>
+      <TouchableOpacity style={st.secondaryBtn} onPress={() => { clearActiveSession(); router.replace('/(main)/home'); }}>
+        <Text style={st.secondaryBtnText}>Torna alla home</Text>
       </TouchableOpacity>
     </View>
   );
 
   // ==============================================================
-  // MAIN RENDER - WhatsApp-like fullscreen video call
-  // KEY ARCHITECTURE:
-  // - WebView is ALWAYS fullscreen (flex:1). NEVER changes layout.
-  // - Coaching opens as a MODAL overlay on top.
-  // - WebView stays mounted and active behind the modal.
-  // - No PiP style change = no crash, no blank view.
+  // MAIN RENDER
+  // Architecture:
+  // - LAYER 1: WebView fullscreen (NEVER changes layout)
+  // - LAYER 2: Our controls at TOP only (no overlap with Daily.co bottom)
+  // - LAYER 3: Coaching modal overlay (WebView untouched behind)
   // ==============================================================
   return (
     <View style={{ flex: 1, backgroundColor: '#000' }}>
       <StatusBar hidden />
 
-      {/* LAYER 1: WebView - ALWAYS fullscreen, NEVER changes */}
-      <View style={StyleSheet.absoluteFill} data-testid="webview-container">
+      {/* LAYER 1: WebView - ALWAYS fullscreen */}
+      <View style={StyleSheet.absoluteFill}>
         <WebView
+          ref={webViewRef}
           source={{ uri: roomUrl }}
           style={{ flex: 1 }}
           javaScriptEnabled
@@ -346,87 +357,63 @@ export default function VideoCallScreen() {
           bounces={false}
           onLoadEnd={onWebViewLoadEnd}
           originWhitelist={['*']}
+          injectedJavaScript={DAILY_INJECT}
         />
       </View>
 
-      {/* LAYER 2: Floating controls (auto-hide) - tap screen to show */}
-      {!showCoaching && (
-        <TouchableOpacity
-          style={StyleSheet.absoluteFill}
-          activeOpacity={1}
-          onPress={resetControlsTimer}
-          data-testid="controls-tap-area"
-        >
-          {showControls && (
-            <>
-              {/* Top bar */}
-              <View style={st.floatingTop}>
-                <Text style={st.topTitle}>Lezione Live</Text>
-                <Text style={st.topSubtitle}>con {teacherName}</Text>
-              </View>
+      {/* LAYER 2: Our controls - TOP ONLY, no overlap with Daily.co bottom */}
+      {!showCoaching && webViewReady && (
+        <View style={st.topControls} pointerEvents="box-none">
+          <TouchableOpacity onPress={openCoaching} style={st.topControlBtn} data-testid="coaching-btn">
+            <Ionicons name="analytics" size={20} color="#FFF" />
+            <Text style={st.topControlLabel}>Coach</Text>
+          </TouchableOpacity>
 
-              {/* Bottom controls */}
-              <View style={st.floatingBottom}>
-                <TouchableOpacity
-                  onPress={openCoaching}
-                  style={st.controlBtn}
-                  data-testid="coaching-toggle-btn"
-                >
-                  <Ionicons name="analytics" size={26} color="#FFF" />
-                  <Text style={st.controlLabel}>Coach</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={handleEndCall}
-                  style={st.endCallBtn}
-                  data-testid="end-call-btn"
-                >
-                  <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
-                </TouchableOpacity>
-
-                <View style={st.controlBtn}>
-                  <Ionicons name="chatbubble-ellipses" size={26} color="rgba(255,255,255,0.3)" />
-                  <Text style={[st.controlLabel, { color: 'rgba(255,255,255,0.3)' }]}>Chat</Text>
-                </View>
-              </View>
-            </>
-          )}
-        </TouchableOpacity>
+          <TouchableOpacity onPress={handleEndCall} style={st.topEndBtn} data-testid="end-call-btn">
+            <Ionicons name="call" size={18} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+          </TouchableOpacity>
+        </View>
       )}
 
-      {/* LAYER 3: Coaching modal - covers screen, WebView stays alive behind */}
+      {/* LAYER 3: Coaching overlay - fullscreen modal, WebView stays alive behind */}
       {showCoaching && (
         <View style={StyleSheet.absoluteFill} data-testid="coaching-modal">
           {/* Coaching content */}
           <CoachingReview
+            key={`coaching-${coachingKey}`}
             sessionId={sessionId || ''}
             isTeacher={isTeacher}
             onClose={closeCoaching}
           />
 
-          {/* Draggable PiP window showing video call info */}
+          {/* Draggable PiP indicator */}
           <Animated.View
             style={[st.pipWindow, { transform: pipPos.getTranslateTransform() }]}
             {...pipPan.panHandlers}
             data-testid="pip-window"
           >
-            <View style={st.pipContent}>
-              <Ionicons name="videocam" size={22} color="#FFF" />
+            <TouchableOpacity style={st.pipContent} onPress={closeCoaching} activeOpacity={0.8}>
+              <Ionicons name="videocam" size={24} color="#FFF" />
               <Text style={st.pipText}>LIVE</Text>
-              <TouchableOpacity onPress={closeCoaching} style={st.pipClose}>
-                <Ionicons name="expand" size={18} color="#FFF" />
-              </TouchableOpacity>
-            </View>
+              <View style={st.pipDot} />
+              <Text style={st.pipExpand}>Tocca per tornare</Text>
+            </TouchableOpacity>
           </Animated.View>
 
-          {/* Coaching controls bar */}
-          <View style={st.coachingBottomBar}>
+          {/* Top bar in coaching mode */}
+          <View style={st.coachingTopBar}>
             <TouchableOpacity onPress={closeCoaching} style={st.coachingBackBtn}>
-              <Ionicons name="videocam" size={20} color="#FFF" />
-              <Text style={st.coachingBackText}>Torna alla videochiamata</Text>
+              <Ionicons name="videocam" size={18} color="#FFF" />
+              <Text style={st.coachingBackText}>Videochiamata</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity onPress={openCoaching} style={st.coachingNewBtn}>
+              <Ionicons name="add" size={18} color="#FFF" />
+              <Text style={st.coachingBackText}>Nuovo</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity onPress={handleEndCall} style={st.coachingEndBtn}>
-              <Ionicons name="call" size={18} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+              <Ionicons name="call" size={16} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
             </TouchableOpacity>
           </View>
         </View>
@@ -448,43 +435,52 @@ export default function VideoCallScreen() {
 const st = StyleSheet.create({
   center: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24 },
   statusText: { color: '#FFF', fontSize: 16, marginTop: 12, textAlign: 'center' },
-  retryBtn: { marginTop: 16, paddingHorizontal: 24, paddingVertical: 12, backgroundColor: Colors.primary, borderRadius: 12 },
-  retryBtnText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
-  backBtn: { marginTop: 8, paddingHorizontal: 24, paddingVertical: 12, borderWidth: 1, borderColor: '#333', borderRadius: 12 },
-  backBtnText: { color: '#FFF', fontSize: 14 },
+  primaryBtn: { marginTop: 16, paddingHorizontal: 24, paddingVertical: 12, backgroundColor: Colors.primary, borderRadius: 12 },
+  primaryBtnText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
+  secondaryBtn: { marginTop: 8, paddingHorizontal: 24, paddingVertical: 12, borderWidth: 1, borderColor: '#333', borderRadius: 12 },
+  secondaryBtnText: { color: '#FFF', fontSize: 14 },
 
-  // Floating top bar (WhatsApp-like)
-  floatingTop: {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    paddingTop: 60, paddingBottom: 20, paddingHorizontal: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+  // TOP controls - positioned at top right, above Daily.co's UI
+  topControls: {
+    position: 'absolute',
+    top: TOP_SAFE,
+    left: 12,
+    right: 12,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 10,
+    zIndex: 20,
   },
-  topTitle: { color: '#FFF', fontSize: 18, fontWeight: '700' },
-  topSubtitle: { color: 'rgba(255,255,255,0.7)', fontSize: 14, marginTop: 2 },
-
-  // Floating bottom controls (WhatsApp-like)
-  floatingBottom: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly',
-    paddingBottom: 50, paddingTop: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+  topControlBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
-  controlBtn: { alignItems: 'center', gap: 6, width: 70 },
-  controlLabel: { color: '#FFF', fontSize: 12, fontWeight: '500' },
-  endCallBtn: {
-    width: 64, height: 64, borderRadius: 32,
+  topControlLabel: { color: '#FFF', fontSize: 13, fontWeight: '600' },
+  topEndBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#FF3B30',
-    alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
-  // Loading overlay
+  // Loading
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#000',
     alignItems: 'center', justifyContent: 'center', zIndex: 10,
   },
 
-  // PiP window during coaching
+  // PiP window
   pipWindow: {
     position: 'absolute',
     width: PIP_W, height: PIP_H,
@@ -494,34 +490,42 @@ const st = StyleSheet.create({
     zIndex: 50,
   },
   pipContent: {
-    flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6,
+    flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4,
   },
-  pipText: {
-    color: Colors.primary, fontSize: 13, fontWeight: '800',
-    letterSpacing: 2,
+  pipText: { color: Colors.primary, fontSize: 14, fontWeight: '800', letterSpacing: 2 },
+  pipDot: {
+    width: 8, height: 8, borderRadius: 4,
+    backgroundColor: '#FF3B30',
   },
-  pipClose: {
-    position: 'absolute', top: 6, right: 6,
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center', justifyContent: 'center',
-  },
+  pipExpand: { color: 'rgba(255,255,255,0.5)', fontSize: 10, marginTop: 4 },
 
-  // Coaching bottom bar
-  coachingBottomBar: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingBottom: 40, paddingTop: 12,
-    backgroundColor: 'rgba(0,0,0,0.9)', gap: 12,
+  // Coaching top bar
+  coachingTopBar: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    paddingTop: TOP_SAFE,
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    zIndex: 60,
   },
   coachingBackBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingVertical: 14, paddingHorizontal: 16,
-    backgroundColor: '#333', borderRadius: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 8,
+    backgroundColor: '#333', borderRadius: 16,
   },
-  coachingBackText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
+  coachingNewBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 12, paddingVertical: 8,
+    backgroundColor: Colors.primary, borderRadius: 16,
+  },
+  coachingBackText: { color: '#FFF', fontSize: 13, fontWeight: '600' },
   coachingEndBtn: {
-    width: 48, height: 48, borderRadius: 24,
+    marginLeft: 'auto',
+    width: 36, height: 36, borderRadius: 18,
     backgroundColor: '#FF3B30',
     alignItems: 'center', justifyContent: 'center',
   },
