@@ -28,6 +28,7 @@ interface DrawPath {
 export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSession, onEndCall }: CoachingReviewProps) {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [remoteUploading, setRemoteUploading] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(20);
   const [speed, setSpeed] = useState(1.0);
@@ -56,43 +57,12 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
         const res = await api.get(`/coaching/${sessionId}/state`);
         const s = res.data;
         if (s.video_url && !videoUrl) setVideoUrl(s.video_url);
+        // Show uploading indicator for other user
+        setRemoteUploading(s.uploading_by || null);
 
-        // NEVER override local state within 5s of a local action
-        const isLocalRecent = (Date.now() - localActionTime.current) < 5000;
-        if (isLocalRecent) {
-          // Only sync drawings during local lock
-          if (Array.isArray(s.drawings) && s.drawings.length > 0) {
-            const parsed = s.drawings.map((d: string) => {
-              try { return JSON.parse(d); } catch { return null; }
-            }).filter(Boolean);
-            setDrawings(parsed);
-          } else if (Array.isArray(s.drawings) && s.drawings.length === 0) {
-            setDrawings([]);
-          }
-          return; // skip play/pause/seek/speed sync
-        }
+        const isLocalRecent = (Date.now() - localActionTime.current) < 2000;
 
-        if (typeof s.is_playing === 'boolean') {
-          setIsPlaying(prev => {
-            if (prev !== s.is_playing) {
-              webRef.current?.injectJavaScript(
-                `var v=document.getElementById('v');if(v){${s.is_playing ? 'v.play()' : 'v.pause()'}}true;`
-              );
-            }
-            return s.is_playing;
-          });
-        }
-        if (typeof s.current_time === 'number') {
-          setCurrentTime(prev => {
-            if (Math.abs(prev - s.current_time) > 1.5) {
-              webRef.current?.injectJavaScript(
-                `var v=document.getElementById('v');if(v)v.currentTime=${s.current_time};true;`
-              );
-              return s.current_time;
-            }
-            return prev;
-          });
-        }
+        // Speed: ALWAYS apply from remote (doesn't cause loops)
         if (typeof s.speed === 'number') {
           setSpeed(prev => {
             if (prev !== s.speed) {
@@ -103,6 +73,34 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
             return s.speed;
           });
         }
+
+        if (!isLocalRecent) {
+          // Play/pause: apply from remote
+          if (typeof s.is_playing === 'boolean') {
+            setIsPlaying(prev => {
+              if (prev !== s.is_playing) {
+                webRef.current?.injectJavaScript(
+                  `var v=document.getElementById('v');if(v){${s.is_playing ? 'v.play()' : 'v.pause()'}}true;`
+                );
+              }
+              return s.is_playing;
+            });
+          }
+          // Seek: apply if diff > 1.5s (indicates deliberate remote seek)
+          if (typeof s.current_time === 'number') {
+            setCurrentTime(prev => {
+              if (Math.abs(prev - s.current_time) > 1.5) {
+                webRef.current?.injectJavaScript(
+                  `var v=document.getElementById('v');if(v)v.currentTime=${s.current_time};true;`
+                );
+                return s.current_time;
+              }
+              return prev;
+            });
+          }
+        }
+
+        // Drawings: ALWAYS sync
         if (Array.isArray(s.drawings) && s.drawings.length > 0) {
           const parsed = s.drawings.map((d: string) => {
             try { return JSON.parse(d); } catch { return null; }
@@ -153,6 +151,7 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
 
   const uploadClip = async (asset: ImagePicker.ImagePickerAsset) => {
     setIsUploading(true);
+    sendCommand('start_uploading');
     try {
       const formData = new FormData();
       formData.append('file', {
@@ -165,11 +164,13 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
         timeout: 120000,
       });
       setVideoUrl(res.data.video_url);
+      setVideoLoaded(false); // reset for new video
       setDuration(asset.duration ? asset.duration / 1000 : 20);
     } catch {
       Alert.alert('Errore', 'Upload del video fallito. Riprova.');
     } finally {
       setIsUploading(false);
+      sendCommand('stop_uploading');
     }
   };
 
@@ -189,7 +190,9 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
     setSpeed(s);
     webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v)v.playbackRate=${s};true;`);
     sendCommand('speed', String(s));
-  }, [sendCommand]);
+    // Also sync current position so backend has correct time for this speed
+    sendCommand('seek', String(currentTime));
+  }, [sendCommand, currentTime]);
 
   const togglePlay = useCallback(() => {
     localActionTime.current = Date.now();
@@ -199,9 +202,11 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
         `var v=document.getElementById('v');if(v){${next ? 'v.play()' : 'v.pause()'}}true;`
       );
       sendCommand(next ? 'play' : 'pause');
+      // Sync current position with backend
+      sendCommand('seek', String(currentTime));
       return next;
     });
-  }, [sendCommand]);
+  }, [sendCommand, currentTime]);
 
   const clearDrawings = useCallback(() => {
     setDrawings([]);
@@ -332,6 +337,12 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
               <Text style={st.emptyText}>Caricamento e compressione video...</Text>
               <Text style={st.emptySubText}>Potrebbe richiedere qualche secondo</Text>
             </>
+          ) : remoteUploading ? (
+            <>
+              <ActivityIndicator size="large" color={Colors.primary} />
+              <Text style={st.emptyText}>{remoteUploading} sta caricando un video...</Text>
+              <Text style={st.emptySubText}>Attendi qualche secondo</Text>
+            </>
           ) : (
             <>
               <Ionicons name="videocam-outline" size={56} color="#555" />
@@ -368,6 +379,11 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
           >
             <Ionicons name="brush" size={16} color="#FFF" />
           </TouchableOpacity>
+          {drawings.length > 0 && (
+            <TouchableOpacity onPress={() => { setDrawings([]); sendCommand('clear_drawings'); }} style={st.headerActionBtn} data-testid="coaching-clear-drawings">
+              <Ionicons name="trash-outline" size={16} color="#FF6978" />
+            </TouchableOpacity>
+          )}
           {onNewSession && (
             <TouchableOpacity onPress={onNewSession} style={st.headerActionBtn}>
               <Ionicons name="add" size={16} color="#FFF" />
@@ -395,23 +411,26 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
             if(v){
               v.preload='auto';
               v.playbackRate=${speed};
-              // Show first frame ONCE only
+              // Show first frame - retry until successful
               var frameShown=false;
-              function showFirst(){
-                if(!frameShown && v.readyState>=2){
+              function tryShowFrame(){
+                if(frameShown) return;
+                if(v.readyState>=2){
                   frameShown=true;
                   v.currentTime=0.01;
                   window.ReactNativeWebView.postMessage('video_loaded');
                   window.ReactNativeWebView.postMessage('duration:'+v.duration);
+                } else {
+                  setTimeout(tryShowFrame, 200);
                 }
               }
-              v.addEventListener('loadeddata', showFirst);
+              v.addEventListener('loadeddata', tryShowFrame);
               v.addEventListener('loadedmetadata', function(){
                 window.ReactNativeWebView.postMessage('duration:'+v.duration);
-                showFirst();
+                tryShowFrame();
               });
-              showFirst();
-              // Time reporting - only when not seeking
+              tryShowFrame();
+              // Time reporting
               var lastReport=0;
               setInterval(function(){
                 var now=Date.now();

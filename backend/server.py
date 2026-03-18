@@ -1328,6 +1328,10 @@ async def send_coaching_command(session_id: str, cmd: CoachingCommand, current_u
         return {"ok": True}
     elif cmd.action == "clear_drawings":
         update["drawings"] = []
+    elif cmd.action == "start_uploading":
+        update["uploading_by"] = current_user.get("username", "Utente")
+    elif cmd.action == "stop_uploading":
+        update["uploading_by"] = None
     
     await db.coaching_sessions.update_one(
         {"session_id": session_id},
