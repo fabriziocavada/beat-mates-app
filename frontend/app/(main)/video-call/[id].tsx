@@ -18,26 +18,86 @@ const { width: SW, height: SH } = Dimensions.get('window');
 const IS_ANDROID = Platform.OS === 'android';
 const TOP_SAFE = Platform.OS === 'ios' ? 54 : 30; // iPhone dynamic island margin
 
-// CSS/JS to inject into Daily.co - MINIMAL: only hide specific UI text elements
+// CSS/JS to inject into Daily.co - Fullscreen video + larger draggable PiP + hide UI
 const DAILY_INJECT = `
 (function() {
   if (window.__injected) return;
   window.__injected = true;
-  function hideUI() {
-    document.querySelectorAll('button, a, span').forEach(function(el) {
+  
+  // 1. INJECT CSS for fullscreen main video
+  var css = document.createElement('style');
+  css.textContent = [
+    'body, html { margin:0 !important; padding:0 !important; background:#000 !important; overflow:hidden !important; }',
+    // Main video tile: fill viewport
+    'video { object-fit:cover !important; }',
+  ].join('\\n');
+  document.head.appendChild(css);
+
+  // 2. Hide specific Daily.co UI elements + fullscreen the main tile
+  function tweakUI() {
+    // Hide "Turn off", "Unmute", "More" tray
+    document.querySelectorAll('[role="toolbar"], [class*="Tray"], [class*="tray"]').forEach(function(el) {
+      el.style.cssText = 'display:none !important;';
+    });
+    // Hide "Home page" / "2 people in call" footer  
+    document.querySelectorAll('a, span, div').forEach(function(el) {
       var t = (el.textContent || '').trim().toLowerCase();
-      if (t === 'leave' || t === 'home page') {
-        el.style.cssText = 'display:none !important; width:0 !important; height:0 !important; overflow:hidden !important;';
+      if (t === 'home page' || t === '2 people in call' || t === '1 person in call' || t.match(/^\\d+ people in call$/)) {
+        el.style.cssText = 'display:none !important;';
       }
     });
-    // Hide only the info footer text (not containers)
+    // Hide daily.co branding links
     document.querySelectorAll('a[href*="daily.co"]').forEach(function(el) {
       el.style.cssText = 'display:none !important;';
     });
+    // Hide camera flip button  
+    document.querySelectorAll('button').forEach(function(btn) {
+      var t = (btn.textContent || '').trim().toLowerCase();
+      if (t === 'leave') btn.style.cssText = 'display:none !important;';
+    });
+    
+    // Make the LOCAL PiP tile larger
+    document.querySelectorAll('[class*="tile"], [data-video]').forEach(function(tile) {
+      // Local tile is usually smaller - find it by size
+      var r = tile.getBoundingClientRect();
+      if (r.width > 0 && r.width < 200) {
+        tile.style.cssText += 'width:120px !important; height:160px !important; z-index:9999 !important; border-radius:12px !important; overflow:hidden !important; border:2px solid rgba(255,255,255,0.3) !important;';
+        tile.querySelectorAll('video').forEach(function(v) {
+          v.style.cssText += 'object-fit:cover !important; width:100% !important; height:100% !important;';
+        });
+        // Make draggable
+        if (!tile.__draggable) {
+          tile.__draggable = true;
+          var startX, startY, origLeft, origTop;
+          tile.style.position = 'fixed';
+          tile.style.top = '60px';
+          tile.style.right = '12px';
+          tile.addEventListener('touchstart', function(e) {
+            var touch = e.touches[0];
+            startX = touch.clientX;
+            startY = touch.clientY;
+            var rect = tile.getBoundingClientRect();
+            origLeft = rect.left;
+            origTop = rect.top;
+            e.stopPropagation();
+          }, { passive: true });
+          tile.addEventListener('touchmove', function(e) {
+            var touch = e.touches[0];
+            var dx = touch.clientX - startX;
+            var dy = touch.clientY - startY;
+            tile.style.left = (origLeft + dx) + 'px';
+            tile.style.top = (origTop + dy) + 'px';
+            tile.style.right = 'auto';
+            e.stopPropagation();
+            e.preventDefault();
+          }, { passive: false });
+        }
+      }
+    });
   }
-  hideUI();
-  [2000, 5000, 10000].forEach(function(t) { setTimeout(hideUI, t); });
-  new MutationObserver(function() { setTimeout(hideUI, 300); }).observe(document.body, { childList: true, subtree: true });
+  tweakUI();
+  [1500, 3000, 5000, 8000].forEach(function(t) { setTimeout(tweakUI, t); });
+  new MutationObserver(function() { setTimeout(tweakUI, 300); }).observe(document.body, { childList: true, subtree: true });
 })();
 true;
 `;

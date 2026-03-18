@@ -374,24 +374,30 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
             if(v){
               v.preload='auto';
               v.playbackRate=${speed};
-              // Show first frame - try multiple events
-              function showFirstFrame(){
-                if(v.readyState>=2){
+              // Show first frame ONCE only
+              var frameShown=false;
+              function showFirst(){
+                if(!frameShown && v.readyState>=2){
+                  frameShown=true;
                   v.currentTime=0.01;
                   window.ReactNativeWebView.postMessage('video_loaded');
+                  window.ReactNativeWebView.postMessage('duration:'+v.duration);
                 }
               }
-              v.addEventListener('loadeddata', showFirstFrame);
-              v.addEventListener('canplay', showFirstFrame);
-              // Check immediately in case already loaded
-              showFirstFrame();
-              v.addEventListener('loadedmetadata',function(){
+              v.addEventListener('loadeddata', showFirst);
+              v.addEventListener('loadedmetadata', function(){
                 window.ReactNativeWebView.postMessage('duration:'+v.duration);
-                v.currentTime=0.01;
+                showFirst();
               });
-              // Report time at 150ms intervals (less frequent = smoother)
+              showFirst();
+              // Time reporting - only when not seeking
+              var lastReport=0;
               setInterval(function(){
-                window.ReactNativeWebView.postMessage('time:'+v.currentTime);
+                var now=Date.now();
+                if(now-lastReport>140){
+                  lastReport=now;
+                  window.ReactNativeWebView.postMessage('time:'+v.currentTime);
+                }
               },150);
             }true;
           `}

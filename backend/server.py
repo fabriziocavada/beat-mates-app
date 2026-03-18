@@ -1770,25 +1770,28 @@ async def video_player_page(filename: str, controls: str = "0", muted: str = "1"
 video{{width:100%;height:100%;object-fit:{obj_fit}}}</style></head>
 <body><video id="v" src="/api/media/{filename}" {ap} {lp} {mt} playsinline webkit-playsinline preload="auto" {ctrl}></video>
 <script>var v=document.getElementById('v');
+var firstFrameShown=false;
+function showFirst(){{
+  if(!firstFrameShown && v.readyState>=1){{
+    firstFrameShown=true;
+    v.currentTime=0.01;
+  }}
+}}
 v.addEventListener('loadedmetadata',function(){{
   var fit='{obj_fit}';
   if(fit==='auto'){{
     v.style.objectFit=(v.videoWidth>v.videoHeight)?'contain':'cover';
   }}
-  // Force show first frame on iOS
-  v.currentTime=0.01;
+  showFirst();
   window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('ready:'+v.videoWidth+'x'+v.videoHeight);
 }});
 v.addEventListener('loadeddata',function(){{
-  v.currentTime=0.01;
+  showFirst();
   window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('ready');
 }});
 v.addEventListener('playing',function(){{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('playing')}});
 v.addEventListener('pause',function(){{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('paused')}});
 v.addEventListener('error',function(){{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('error:'+JSON.stringify(v.error))}});
-v.addEventListener('canplay',function(){{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('ready')}});
-// Fallback: try loading after timeout
-setTimeout(function(){{if(v.readyState<2)v.load();}},2000);
 </script></body></html>"""
     return HTMLResponse(content=html, media_type="text/html")
 
