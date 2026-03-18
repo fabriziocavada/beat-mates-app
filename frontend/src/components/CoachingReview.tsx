@@ -233,8 +233,8 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
     })
   ).current;
 
-  // Build player URL - add poster param for first frame
-  const playerUrl = videoUrl ? getVideoPlayerUrl(videoUrl, { controls: false, muted: true, autoplay: false, fit: 'contain' }) : '';
+  // Build player URL - NO LOOP for coaching review
+  const playerUrl = videoUrl ? getVideoPlayerUrl(videoUrl, { controls: false, muted: true, autoplay: false, fit: 'contain', loop: false }) : '';
 
   // WebView messages
   const handleMessage = useCallback((e: any) => {
@@ -263,6 +263,32 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
     const pct = Math.max(0, Math.min(1, x / width));
     handleSeek(pct * duration);
   }, [duration, handleSeek]);
+
+  // PanResponder for smooth timeline scrubbing
+  const timelineWidth = useRef(SW - 120);
+  const timelinePan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (e) => {
+        const x = e.nativeEvent.locationX;
+        const pct = Math.max(0, Math.min(1, x / timelineWidth.current));
+        handleSeek(pct * duration);
+      },
+      onPanResponderMove: (e) => {
+        const x = e.nativeEvent.locationX;
+        const pct = Math.max(0, Math.min(1, x / timelineWidth.current));
+        seekLock.current = true;
+        setCurrentTime(pct * duration);
+        webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v)v.currentTime=${pct * duration};true;`);
+      },
+      onPanResponderRelease: (e) => {
+        const x = e.nativeEvent.locationX;
+        const pct = Math.max(0, Math.min(1, x / timelineWidth.current));
+        handleSeek(pct * duration);
+      },
+    })
+  ).current;
 
   // ═══ EMPTY STATE: No video yet ═══
   if (!videoUrl) {
@@ -418,12 +444,16 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
             <Ionicons name="remove" size={14} color="#FFF" />
           </TouchableOpacity>
           <Text style={st.timeText}>{currentTime.toFixed(2)}s</Text>
-          <TouchableOpacity activeOpacity={1} style={st.timelineTouch} onPress={onTimelineTap}>
+          <View
+            style={st.timelineTouch}
+            onLayout={(e) => { timelineWidth.current = e.nativeEvent.layout.width; }}
+            {...timelinePan.panHandlers}
+          >
             <View style={st.timelineTrack}>
               <View style={[st.timelineFill, { width: `${Math.min(100, progressPct)}%` }]} />
             </View>
             <View style={[st.timelineThumb, { left: `${Math.min(100, progressPct)}%` }]} />
-          </TouchableOpacity>
+          </View>
           <Text style={st.timeText}>{duration.toFixed(2)}s</Text>
           <TouchableOpacity onPress={() => handleSeek(Math.min(duration, currentTime + 0.033))} style={st.frameBtn}>
             <Ionicons name="add" size={14} color="#FFF" />
