@@ -139,6 +139,7 @@ export default function VideoCallScreen() {
   const [coachingKey, setCoachingKey] = useState(0); // increment to create new coaching session
   const [isTeacher, setIsTeacher] = useState(false);
   const [androidCallActive, setAndroidCallActive] = useState(false);
+  const [webViewError, setWebViewError] = useState<string | null>(null);
   const currentUser = useAuthStore(s => s.user);
   const retryCount = useRef(0);
   const loadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -341,21 +342,44 @@ export default function VideoCallScreen() {
 
       {/* LAYER 1: WebView - ALWAYS fullscreen */}
       <View style={StyleSheet.absoluteFill}>
-        <WebView
-          ref={webViewRef}
-          source={{ uri: roomUrl }}
-          style={{ flex: 1 }}
-          javaScriptEnabled
-          domStorageEnabled
-          mediaPlaybackRequiresUserAction={false}
-          allowsInlineMediaPlayback
-          allowsFullscreenVideo
-          mediaCapturePermissionGrantType="grant"
-          bounces={false}
-          onLoadEnd={onWebViewLoadEnd}
-          originWhitelist={['*']}
-          injectedJavaScript={DAILY_INJECT}
-        />
+        {webViewError ? (
+          <View style={st.center}>
+            <Ionicons name="wifi-outline" size={48} color="#FF6978" />
+            <Text style={[st.statusText, { marginTop: 12 }]}>Errore di connessione</Text>
+            <Text style={{ color: '#888', fontSize: 13, textAlign: 'center', marginTop: 6, marginBottom: 20, paddingHorizontal: 30 }}>{webViewError}</Text>
+            <TouchableOpacity style={st.primaryBtn} onPress={() => { setWebViewError(null); loadSession(); }}>
+              <Text style={st.primaryBtnText}>Riprova</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[st.secondaryBtn, { marginTop: 10 }]} onPress={() => router.back()}>
+              <Text style={st.secondaryBtnText}>Torna indietro</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <WebView
+            ref={webViewRef}
+            source={{ uri: roomUrl }}
+            style={{ flex: 1 }}
+            javaScriptEnabled
+            domStorageEnabled
+            mediaPlaybackRequiresUserAction={false}
+            allowsInlineMediaPlayback
+            allowsFullscreenVideo
+            mediaCapturePermissionGrantType="grant"
+            bounces={false}
+            onLoadEnd={onWebViewLoadEnd}
+            onError={(e) => {
+              const desc = e.nativeEvent.description || 'Connessione fallita';
+              if (retryCount.current < 3) {
+                retryCount.current += 1;
+                setTimeout(() => loadSession(), 2000);
+              } else {
+                setWebViewError(desc);
+              }
+            }}
+            originWhitelist={['*']}
+            injectedJavaScript={DAILY_INJECT}
+          />
+        )}
       </View>
 
       {/* LAYER 2: Our controls - TOP ONLY, no overlap with Daily.co bottom */}
