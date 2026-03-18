@@ -961,19 +961,25 @@ async def get_story(story_id: str, current_user: dict = Depends(get_current_user
 async def get_available_teachers(current_user: dict = Depends(get_current_user)):
     user_categories = current_user.get("dance_categories", [])
     
-    # Get ALL users except current (both available and busy)
-    query = {"id": {"$ne": current_user["id"]}}
+    # Auto-close stale "active" sessions older than 2 hours
+    two_hours_ago = datetime.utcnow() - timedelta(hours=2)
+    await db.live_sessions.update_many(
+        {"status": "active", "created_at": {"$lt": two_hours_ago}},
+        {"$set": {"status": "completed", "ended_at": datetime.utcnow()}}
+    )
+    
+    # Only get users who explicitly set themselves as available
+    query = {"id": {"$ne": current_user["id"]}, "is_available": True}
     if user_categories:
         query["dance_categories"] = {"$in": user_categories}
     
     users = await db.users.find(query).to_list(100)
     
-    # Get active sessions to know who's busy
+    # Get active sessions to know who's currently in a call
     active_sessions = await db.live_sessions.find({"status": "active"}).to_list(100)
     busy_user_ids = {}
     for sess in active_sessions:
-        start = sess.get("created_at", datetime.utcnow())
-        # Estimate 60min lesson duration
+        start = sess.get("started_at") or sess.get("created_at", datetime.utcnow())
         elapsed_minutes = (datetime.utcnow() - start).total_seconds() / 60
         remaining = max(0, int(60 - elapsed_minutes))
         if sess.get("teacher_id"):
@@ -985,29 +991,31 @@ async def get_available_teachers(current_user: dict = Depends(get_current_user))
     for user in users:
         uid = user["id"]
         is_busy = uid in busy_user_ids
-        # Get average rating from completed lessons
-        avg_rating_result = await db.live_sessions.aggregate([
-            {"$match": {"teacher_id": uid, "status": "completed", "rating": {"$exists": True, "$gt": 0}}},
+        
+        # Get average rating from reviews collection
+        avg_rating_result = await db.reviews.aggregate([
+            {"$match": {"reviewee_id": uid, "rating": {"$exists": True, "$gt": 0}}},
             {"$group": {"_id": None, "avg": {"$avg": "$rating"}, "count": {"$sum": 1}}}
         ]).to_list(1)
-        avg_rating = avg_rating_result[0]["avg"] if avg_rating_result else user.get("rating", 0)
+        avg_rating = avg_rating_result[0]["avg"] if avg_rating_result else 0
+        review_count = avg_rating_result[0]["count"] if avg_rating_result else 0
         
         result.append({
             "id": uid,
             "username": user["username"],
-            "name": user["name"],
+            "name": user.get("name", user["username"]),
             "profile_image": user.get("profile_image"),
             "rating": round(avg_rating, 1),
+            "review_count": review_count,
             "hourly_rate": user.get("hourly_rate", 50),
             "dance_categories": user.get("dance_categories", []),
-            "available_since": user.get("available_since", datetime.utcnow()),
-            "is_available": not is_busy and user.get("is_available", False),
+            "is_available": not is_busy,
             "is_busy": is_busy,
             "remaining_minutes": busy_user_ids.get(uid, 0) if is_busy else 0,
         })
     
     # Sort: available first, then busy
-    result.sort(key=lambda x: (not x["is_available"], x["is_busy"]))
+    result.sort(key=lambda x: (x["is_busy"], -(x["rating"] or 0)))
     return result
 
 @api_router.post("/availability-slots", response_model=AvailabilitySlotResponse)

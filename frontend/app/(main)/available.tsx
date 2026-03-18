@@ -21,9 +21,12 @@ interface Teacher {
   name: string;
   profile_image: string | null;
   rating: number;
+  review_count?: number;
   hourly_rate: number;
   dance_categories: string[];
-  available_since: string;
+  is_available?: boolean;
+  is_busy?: boolean;
+  remaining_minutes?: number;
 }
 
 export default function AvailableScreen() {

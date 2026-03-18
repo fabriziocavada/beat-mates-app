@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/colors';
@@ -10,9 +10,9 @@ interface Teacher {
   name: string;
   profile_image: string | null;
   rating: number;
+  review_count?: number;
   hourly_rate: number;
   dance_categories: string[];
-  available_since: string;
   is_available?: boolean;
   is_busy?: boolean;
   remaining_minutes?: number;
@@ -25,54 +25,35 @@ interface AvailableTeacherCardProps {
 }
 
 export default function AvailableTeacherCard({ teacher, onPress, onBookPress }: AvailableTeacherCardProps) {
-  const [minutes, setMinutes] = useState(0);
-  
-  useEffect(() => {
-    // Calculate initial minutes
-    const calcMinutes = () => {
-      if (!teacher.available_since) return 0;
-      const since = new Date(teacher.available_since);
-      const now = new Date();
-      return Math.floor((now.getTime() - since.getTime()) / (1000 * 60));
-    };
-    
-    setMinutes(calcMinutes());
-    
-    // Update every minute
-    const interval = setInterval(() => {
-      setMinutes(calcMinutes());
-    }, 60000);
-    
-    return () => clearInterval(interval);
-  }, [teacher.available_since]);
-  
-  const getTimerColor = () => {
-    if (minutes < 5) return Colors.success;
-    if (minutes < 15) return '#FFA500'; // Orange
-    return Colors.primary;
-  };
-  
   const renderStars = () => {
     const stars = [];
-    const rating = Math.round(teacher.rating);
+    const rating = teacher.rating || 0;
+    const fullStars = Math.floor(rating);
+    const hasHalf = rating - fullStars >= 0.3;
     for (let i = 1; i <= 5; i++) {
+      let name: 'star' | 'star-half' | 'star-outline' = 'star-outline';
+      if (i <= fullStars) name = 'star';
+      else if (i === fullStars + 1 && hasHalf) name = 'star-half';
       stars.push(
         <Ionicons
           key={i}
-          name={i <= rating ? 'star' : 'star-outline'}
+          name={name}
           size={12}
-          color={i <= rating ? '#FFD700' : Colors.textMuted}
+          color={i <= fullStars || (i === fullStars + 1 && hasHalf) ? '#FFD700' : Colors.textMuted}
           style={{ marginRight: 1 }}
         />
       );
     }
     return stars;
   };
-  
+
+  const isBusy = teacher.is_busy === true;
+  const borderColor = isBusy ? '#FF3B30' : Colors.success;
+
   return (
-    <TouchableOpacity style={styles.container} onPress={onPress}>
+    <TouchableOpacity style={styles.container} onPress={onPress} data-testid={`teacher-card-${teacher.id}`}>
       <View style={styles.avatarContainer}>
-        <View style={[styles.avatarBorder, { borderColor: Colors.success }]}>
+        <View style={[styles.avatarBorder, { borderColor }]}>
           {teacher.profile_image ? (
             <Image
               source={{ uri: getMediaUrl(teacher.profile_image) || '' }}
@@ -85,28 +66,32 @@ export default function AvailableTeacherCard({ teacher, onPress, onBookPress }: 
           )}
         </View>
       </View>
-      
+
       <View style={styles.info}>
         <Text style={styles.username}>{teacher.username}</Text>
-        <View style={styles.starsContainer}>
+        <View style={styles.starsRow}>
           {renderStars()}
+          {(teacher.review_count ?? 0) > 0 && (
+            <Text style={styles.reviewCount}>({teacher.review_count})</Text>
+          )}
         </View>
       </View>
-      
-      {onBookPress && (
-        <TouchableOpacity onPress={onBookPress} style={styles.bookButton}>
-          <Text style={styles.bookText}>book</Text>
+
+      {onBookPress && !isBusy && (
+        <TouchableOpacity onPress={onBookPress} style={styles.bookButton} data-testid={`book-btn-${teacher.id}`}>
+          <Ionicons name="videocam" size={16} color="#FFF" />
+          <Text style={styles.bookText}>Prenota</Text>
         </TouchableOpacity>
       )}
-      
-      <View style={[styles.timerContainer, { borderColor: getTimerColor() }]}>
-        {minutes === 0 ? (
-          <Ionicons name="play" size={20} color={Colors.success} />
-        ) : (
+
+      <View style={[styles.statusContainer, { borderColor }]}>
+        {isBusy ? (
           <>
-            <Text style={[styles.timerNumber, { color: getTimerColor() }]}>{minutes}</Text>
-            <Text style={[styles.timerLabel, { color: getTimerColor() }]}>min</Text>
+            <Ionicons name="call" size={14} color="#FF3B30" />
+            <Text style={styles.busyText}>{teacher.remaining_minutes || 0}'</Text>
           </>
+        ) : (
+          <View style={styles.availableDot} />
         )}
       </View>
     </TouchableOpacity>
@@ -154,30 +139,49 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
   },
-  starsContainer: {
+  starsRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 2,
   },
+  reviewCount: {
+    color: Colors.textMuted,
+    fontSize: 11,
+    marginLeft: 4,
+  },
   bookButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     marginRight: 12,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
   },
   bookText: {
-    color: Colors.textSecondary,
-    fontSize: 14,
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
-  timerContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+  statusContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  timerNumber: {
-    fontSize: 16,
-    fontWeight: 'bold',
+  availableDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: Colors.success,
   },
-  timerLabel: {
+  busyText: {
+    color: '#FF3B30',
     fontSize: 10,
+    fontWeight: '700',
+    marginTop: 1,
   },
 });

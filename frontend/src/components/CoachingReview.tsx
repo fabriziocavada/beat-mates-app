@@ -275,7 +275,7 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
   // Build player URL - LOOP enabled for coaching review playback
   const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL || '';
   const fullPoster = posterUrl ? `${baseUrl}${posterUrl}` : undefined;
-  const playerUrl = videoUrl ? getVideoPlayerUrl(videoUrl, { controls: false, muted: true, autoplay: false, fit: 'contain', loop: true, poster: fullPoster }) : '';
+  const playerUrl = videoUrl ? getVideoPlayerUrl(videoUrl, { controls: false, muted: true, autoplay: true, fit: 'contain', loop: true, poster: fullPoster }) : '';
 
   // WebView messages
   const handleMessage = useCallback((e: any) => {
@@ -285,8 +285,12 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
       if (!seekLock.current && !isDragging.current) setCurrentTime(parseFloat(msg.split(':')[1]) || 0);
     }
     else if (msg.startsWith('duration:')) setDuration(parseFloat(msg.split(':')[1]) || 20);
-    else if (msg.startsWith('ready')) setVideoLoaded(true);
-    else if (msg === 'video_loaded') setVideoLoaded(true);
+    else if (msg.startsWith('ready') || msg === 'video_loaded') {
+      setVideoLoaded(true);
+      // Autoplay is on → mark as playing
+      setIsPlaying(true);
+      isPlayingRef.current = true;
+    }
   }, []);
 
   // Fallback: dismiss loading after 4 seconds even if event didn't fire
@@ -435,25 +439,27 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
             if(v){
               v.preload='auto';
               v.playbackRate=${speed};
-              // Show first frame - retry until successful
-              var frameShown=false;
-              function tryShowFrame(){
-                if(frameShown) return;
+              v.muted=true;
+              // Autoplay immediately when ready
+              var started=false;
+              function tryAutoplay(){
+                if(started) return;
                 if(v.readyState>=2){
-                  frameShown=true;
-                  v.currentTime=0.01;
+                  started=true;
+                  v.play().catch(function(){});
                   window.ReactNativeWebView.postMessage('video_loaded');
                   window.ReactNativeWebView.postMessage('duration:'+v.duration);
                 } else {
-                  setTimeout(tryShowFrame, 200);
+                  setTimeout(tryAutoplay, 200);
                 }
               }
-              v.addEventListener('loadeddata', tryShowFrame);
+              v.addEventListener('loadeddata', tryAutoplay);
               v.addEventListener('loadedmetadata', function(){
                 window.ReactNativeWebView.postMessage('duration:'+v.duration);
-                tryShowFrame();
+                tryAutoplay();
               });
-              tryShowFrame();
+              v.addEventListener('canplay', tryAutoplay);
+              tryAutoplay();
               // Time reporting
               var lastReport=0;
               setInterval(function(){
@@ -479,12 +485,7 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
           ))}
           {liveStroke ? <Path d={liveStroke} stroke={drawColor} strokeWidth={3} fill="none" strokeLinecap="round" /> : null}
         </Svg>
-        {toolActive && (
-          <View style={st.drawIndicator}>
-            <View style={[st.drawDot, { backgroundColor: drawColor }]} />
-            <Text style={st.drawLabel}>Disegno attivo</Text>
-          </View>
-        )}
+        {/* Draw indicator removed per user request - trash button in toolbar is sufficient */}
       </View>
 
       {/* Controls */}
@@ -586,9 +587,6 @@ const st = StyleSheet.create({
   playerArea: { flex: 1, backgroundColor: '#000', position: 'relative' },
   webview: { flex: 1 },
   videoLoadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#0a0a1a', alignItems: 'center', justifyContent: 'center', zIndex: 5 },
-  drawIndicator: { position: 'absolute', top: 8, left: 8, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  drawDot: { width: 10, height: 10, borderRadius: 5 },
-  drawLabel: { color: '#FFF', fontSize: 11, fontWeight: '600' },
   controls: { backgroundColor: '#0a0a1a', paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4 },
   controlRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
   ctrlBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#1c1c2e', alignItems: 'center', justifyContent: 'center' },
