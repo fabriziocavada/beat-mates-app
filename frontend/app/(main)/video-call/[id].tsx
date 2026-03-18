@@ -18,44 +18,26 @@ const { width: SW, height: SH } = Dimensions.get('window');
 const IS_ANDROID = Platform.OS === 'android';
 const TOP_SAFE = Platform.OS === 'ios' ? 54 : 30; // iPhone dynamic island margin
 
-// CSS/JS to inject into Daily.co - LIGHT TOUCH: only hide UI elements, don't break layout
+// CSS/JS to inject into Daily.co - MINIMAL: only hide specific UI text elements
 const DAILY_INJECT = `
 (function() {
   if (window.__injected) return;
   window.__injected = true;
-  var css = document.createElement('style');
-  css.textContent = \`
-    /* Hide Daily.co Leave button, bottom tray, branding, footer */
-    button[class*="leave" i], button[class*="Leave" i],
-    [data-testid*="leave"], [aria-label*="Leave"], [aria-label*="leave"] { display:none !important; }
-    [class*="Tray" i], [class*="tray" i], [class*="toolbar" i], [class*="Toolbar" i] { display:none !important; }
-    [class*="info-footer" i], [class*="InfoFooter" i] { display:none !important; }
-    a[href*="daily.co"], [class*="branding" i] { display:none !important; }
-    /* Make background black */
-    body, html { background:#000 !important; }
-  \`;
-  document.head.appendChild(css);
-
   function hideUI() {
-    document.querySelectorAll('button, a, div, span').forEach(function(el) {
+    document.querySelectorAll('button, a, span').forEach(function(el) {
       var t = (el.textContent || '').trim().toLowerCase();
-      if (t === 'leave' || t === 'home page' || t.includes('people in call') || t.includes('daily.co')) {
-        el.style.display = 'none';
-        var p = el.closest('div');
-        if (p && (t === 'leave' || t === 'home page' || t.includes('people in call'))) {
-          p.style.display = 'none';
-        }
+      if (t === 'leave' || t === 'home page') {
+        el.style.cssText = 'display:none !important; width:0 !important; height:0 !important; overflow:hidden !important;';
       }
     });
-    // Hide bottom tray by matching common toolbar patterns
-    document.querySelectorAll('[class*="Tray"], [class*="tray"], [role="toolbar"]').forEach(function(el) {
-      el.style.display = 'none';
+    // Hide only the info footer text (not containers)
+    document.querySelectorAll('a[href*="daily.co"]').forEach(function(el) {
+      el.style.cssText = 'display:none !important;';
     });
   }
   hideUI();
-  [1000, 2000, 4000, 8000].forEach(function(t) { setTimeout(hideUI, t); });
-  var obs = new MutationObserver(function() { setTimeout(hideUI, 200); });
-  obs.observe(document.body, { childList: true, subtree: true });
+  [2000, 5000, 10000].forEach(function(t) { setTimeout(hideUI, t); });
+  new MutationObserver(function() { setTimeout(hideUI, 300); }).observe(document.body, { childList: true, subtree: true });
 })();
 true;
 `;
