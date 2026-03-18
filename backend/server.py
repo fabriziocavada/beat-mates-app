@@ -959,30 +959,55 @@ async def get_story(story_id: str, current_user: dict = Depends(get_current_user
 
 @api_router.get("/available-teachers", response_model=List[dict])
 async def get_available_teachers(current_user: dict = Depends(get_current_user)):
-    # Get users who are available now AND share at least one category with current user
     user_categories = current_user.get("dance_categories", [])
     
-    query = {"is_available": True, "id": {"$ne": current_user["id"]}}
-    
-    # If user has categories, filter by matching categories
+    # Get ALL users except current (both available and busy)
+    query = {"id": {"$ne": current_user["id"]}}
     if user_categories:
         query["dance_categories"] = {"$in": user_categories}
     
     users = await db.users.find(query).to_list(100)
     
+    # Get active sessions to know who's busy
+    active_sessions = await db.live_sessions.find({"status": "active"}).to_list(100)
+    busy_user_ids = {}
+    for sess in active_sessions:
+        start = sess.get("created_at", datetime.utcnow())
+        # Estimate 60min lesson duration
+        elapsed_minutes = (datetime.utcnow() - start).total_seconds() / 60
+        remaining = max(0, int(60 - elapsed_minutes))
+        if sess.get("teacher_id"):
+            busy_user_ids[sess["teacher_id"]] = remaining
+        if sess.get("student_id"):
+            busy_user_ids[sess["student_id"]] = remaining
+    
     result = []
     for user in users:
+        uid = user["id"]
+        is_busy = uid in busy_user_ids
+        # Get average rating from completed lessons
+        avg_rating_result = await db.live_sessions.aggregate([
+            {"$match": {"teacher_id": uid, "status": "completed", "rating": {"$exists": True, "$gt": 0}}},
+            {"$group": {"_id": None, "avg": {"$avg": "$rating"}, "count": {"$sum": 1}}}
+        ]).to_list(1)
+        avg_rating = avg_rating_result[0]["avg"] if avg_rating_result else user.get("rating", 0)
+        
         result.append({
-            "id": user["id"],
+            "id": uid,
             "username": user["username"],
             "name": user["name"],
             "profile_image": user.get("profile_image"),
-            "rating": user.get("rating", 0),
+            "rating": round(avg_rating, 1),
             "hourly_rate": user.get("hourly_rate", 50),
             "dance_categories": user.get("dance_categories", []),
-            "available_since": user.get("available_since", datetime.utcnow())
+            "available_since": user.get("available_since", datetime.utcnow()),
+            "is_available": not is_busy and user.get("is_available", False),
+            "is_busy": is_busy,
+            "remaining_minutes": busy_user_ids.get(uid, 0) if is_busy else 0,
         })
     
+    # Sort: available first, then busy
+    result.sort(key=lambda x: (not x["is_available"], x["is_busy"]))
     return result
 
 @api_router.post("/availability-slots", response_model=AvailabilitySlotResponse)

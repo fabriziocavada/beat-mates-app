@@ -39,8 +39,9 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
   const [toolActive, setToolActive] = useState(false);
   const [liveStroke, setLiveStroke] = useState('');
   const [videoLoaded, setVideoLoaded] = useState(false);
-  const seekLock = useRef(false); // prevent polling from overwriting seek
-  const localActionTime = useRef(0); // timestamp of last local action - blocks remote polling
+  const seekLock = useRef(false);
+  const localActionTime = useRef(0);
+  const isPlayingRef = useRef(false); // ALWAYS current value - fixes stale closure in setInterval
 
   const webRef = useRef<WebView>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -63,8 +64,8 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
         setRemoteUploading(s.uploading_by || null);
 
         const isLocalRecent = (Date.now() - localActionTime.current) < 2000;
-        // CRITICAL: When playing locally, NEVER let remote override seek or play state
-        const isPlayingLocally = isPlaying;
+        // Use REF (always current) not closure variable (stale!)
+        const isPlayingLocally = isPlayingRef.current;
 
         // Speed: ALWAYS apply from remote (doesn't cause loops)
         if (typeof s.speed === 'number') {
@@ -214,11 +215,11 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
     localActionTime.current = Date.now();
     setIsPlaying(prev => {
       const next = !prev;
+      isPlayingRef.current = next; // keep ref in sync
       webRef.current?.injectJavaScript(
         `var v=document.getElementById('v');if(v){${next ? 'v.play()' : 'v.pause()'}}true;`
       );
       sendCommand(next ? 'play' : 'pause');
-      // Sync current position with backend
       sendCommand('seek', String(currentTime));
       return next;
     });
@@ -387,8 +388,12 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
   return (
     <View style={st.container}>
       <View style={st.header}>
-        <Text style={st.title} numberOfLines={1}>Coaching Review</Text>
         <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+          <TouchableOpacity onPress={onClose} style={st.liveHeaderBtn} data-testid="coaching-back-live">
+            <View style={st.liveHeaderDot} />
+            <Ionicons name="videocam" size={14} color="#FFF" />
+            <Text style={st.liveHeaderText}>LIVE</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setToolActive(!toolActive)}
             style={[st.toolToggle, toolActive && { backgroundColor: Colors.primary }]}
@@ -401,6 +406,8 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
               <Ionicons name="trash-outline" size={16} color="#FF6978" />
             </TouchableOpacity>
           )}
+        </View>
+        <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
           {onNewSession && (
             <TouchableOpacity onPress={onNewSession} style={st.headerActionBtn}>
               <Ionicons name="add" size={16} color="#FFF" />
@@ -565,6 +572,9 @@ const st = StyleSheet.create({
   headerBackBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#333', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 },
   headerBackText: { color: '#FFF', fontSize: 11, fontWeight: '600' },
   headerEndBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center' },
+  liveHeaderBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,59,48,0.2)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#FF3B30' },
+  liveHeaderDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#FF3B30' },
+  liveHeaderText: { color: '#FF3B30', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
   toolToggle: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, padding: 32 },
   emptyText: { color: '#999', fontSize: 14, textAlign: 'center', lineHeight: 20 },

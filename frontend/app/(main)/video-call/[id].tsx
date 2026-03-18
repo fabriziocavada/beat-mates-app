@@ -441,19 +441,6 @@ export default function VideoCallScreen() {
             onNewSession={openCoaching}
             onEndCall={handleEndCall}
           />
-          {/* PiP-style LIVE indicator - shows call is still active */}
-          <TouchableOpacity
-            onPress={closeCoaching}
-            style={st.pipIndicator}
-            activeOpacity={0.8}
-            data-testid="live-indicator"
-          >
-            <View style={st.pipInner}>
-              <View style={st.pipLiveDot} />
-              <Ionicons name="videocam" size={16} color="#FFF" />
-              <Text style={st.pipLiveText}>LIVE</Text>
-            </View>
-          </TouchableOpacity>
         </View>
       )}
 

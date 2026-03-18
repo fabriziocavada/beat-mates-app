@@ -13,6 +13,9 @@ interface Teacher {
   hourly_rate: number;
   dance_categories: string[];
   available_since: string;
+  is_available?: boolean;
+  is_busy?: boolean;
+  remaining_minutes?: number;
 }
 
 interface AvailableTeacherCardProps {
