@@ -27,6 +27,7 @@ interface DrawPath {
 
 export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSession, onEndCall }: CoachingReviewProps) {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [remoteUploading, setRemoteUploading] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
@@ -57,6 +58,7 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
         const res = await api.get(`/coaching/${sessionId}/state`);
         const s = res.data;
         if (s.video_url && !videoUrl) setVideoUrl(s.video_url);
+        if (s.poster_url && !posterUrl) setPosterUrl(s.poster_url);
         // Show uploading indicator for other user
         setRemoteUploading(s.uploading_by || null);
 
@@ -255,8 +257,10 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
     })
   ).current;
 
-  // Build player URL - NO LOOP for coaching review
-  const playerUrl = videoUrl ? getVideoPlayerUrl(videoUrl, { controls: false, muted: true, autoplay: false, fit: 'contain', loop: false }) : '';
+  // Build player URL - LOOP enabled for coaching review playback
+  const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+  const fullPoster = posterUrl ? `${baseUrl}${posterUrl}` : undefined;
+  const playerUrl = videoUrl ? getVideoPlayerUrl(videoUrl, { controls: false, muted: true, autoplay: false, fit: 'contain', loop: true, poster: fullPoster }) : '';
 
   // WebView messages
   const handleMessage = useCallback((e: any) => {

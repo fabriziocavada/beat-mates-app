@@ -522,7 +522,7 @@ const st = StyleSheet.create({
   pipIndicator: {
     position: 'absolute',
     top: 50,
-    right: 16,
+    left: 16,
     zIndex: 30,
   },
   pipInner: {

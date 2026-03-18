@@ -1281,12 +1281,28 @@ async def upload_coaching_clip(session_id: str, file: UploadFile = File(...), cu
     compressed = await asyncio.to_thread(compress_video, str(filepath))
     media_url = f"/api/uploads/{compressed}"
     
+    # Generate poster thumbnail from first frame
+    poster_name = f"poster_{compressed.replace('.mp4', '.jpg')}"
+    poster_path = UPLOADS_DIR / poster_name
+    try:
+        await asyncio.to_thread(
+            lambda: subprocess.run(
+                ["ffmpeg", "-i", str(UPLOADS_DIR / compressed), "-vframes", "1", "-an", "-ss", "0.01", "-update", "1", str(poster_path), "-y"],
+                capture_output=True, timeout=15
+            )
+        )
+    except Exception as e:
+        logger.warning(f"Poster generation failed: {e}")
+    
+    poster_url = f"/api/uploads/{poster_name}" if poster_path.exists() else None
+    
     # Store coaching state
     await db.coaching_sessions.update_one(
         {"session_id": session_id},
         {"$set": {
             "session_id": session_id,
             "video_url": media_url,
+            "poster_url": poster_url,
             "current_time": 0,
             "speed": 1.0,
             "is_playing": False,
@@ -1758,7 +1774,7 @@ async def get_video_thumbnail(filename: str):
     raise HTTPException(status_code=500, detail="Failed to generate thumbnail")
 
 @api_router.get("/video-player/{filename}")
-async def video_player_page(filename: str, controls: str = "0", muted: str = "1", autoplay: str = "1", fit: str = "cover", loop: str = "1"):
+async def video_player_page(filename: str, controls: str = "0", muted: str = "1", autoplay: str = "1", fit: str = "cover", loop: str = "1", poster: str = ""):
     """Serve an HTML page with a video player for the given filename."""
     filepath = UPLOADS_DIR / filename
     if not filepath.exists():
@@ -1767,12 +1783,13 @@ async def video_player_page(filename: str, controls: str = "0", muted: str = "1"
     mt = "muted" if muted == "1" else ""
     ap = "autoplay" if autoplay == "1" else ""
     lp = "loop" if loop == "1" else ""
+    poster_attr = f'poster="{poster}"' if poster else ""
     obj_fit = fit if fit in ("cover", "contain", "auto") else "cover"
     html = f"""<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <style>*{{margin:0;padding:0;overflow:hidden}}body{{background:#000;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center}}
 video{{width:100%;height:100%;object-fit:{obj_fit}}}</style></head>
-<body><video id="v" src="/api/media/{filename}" {ap} {lp} {mt} playsinline webkit-playsinline preload="auto" {ctrl} style="background:#000"></video>
+<body><video id="v" src="/api/media/{filename}" {ap} {lp} {mt} playsinline webkit-playsinline preload="auto" {ctrl} {poster_attr} style="background:#000"></video>
 <script>var v=document.getElementById('v');
 v.addEventListener('loadedmetadata',function(){{
   var fit='{obj_fit}';
