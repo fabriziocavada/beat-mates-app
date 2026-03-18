@@ -24,38 +24,54 @@ const DAILY_INJECT = `
   if (window.__injected) return;
   window.__injected = true;
   var css = document.createElement('style');
-  css.textContent = [
-    '* { box-sizing: border-box !important; }',
-    'body, html { margin:0 !important; padding:0 !important; overflow:hidden !important; background:#000 !important; width:100vw !important; height:100vh !important; }',
-    // Force all video containers to fill viewport
-    'video { object-fit:cover !important; width:100vw !important; height:100vh !important; position:fixed !important; top:0 !important; left:0 !important; }',
-    // Hide Daily.co branding and UI chrome
-    'a[href*="daily.co"], [class*="branding"], [class*="Brand"]  { display:none !important; }',
-    // Force main container to fill screen
-    '[class*="call-container"], [class*="videoContainer"], [class*="tile"], [data-cam-id] { width:100vw !important; height:100vh !important; position:fixed !important; top:0 !important; left:0 !important; }',
-  ].join('\\n');
+  css.textContent = \`
+    * { box-sizing: border-box !important; }
+    body, html { margin:0 !important; padding:0 !important; overflow:hidden !important; background:#000 !important; width:100vw !important; height:100vh !important; }
+    video { object-fit:cover !important; width:100vw !important; height:100vh !important; position:fixed !important; top:0 !important; left:0 !important; z-index:1 !important; }
+    /* Hide ALL Daily.co UI: Leave btn, bottom bar, branding */
+    button[class*="leave" i], button[class*="Leave" i], 
+    [data-testid*="leave"], [aria-label*="Leave"], [aria-label*="leave"],
+    a[href*="daily.co"], [class*="branding" i], [class*="Brand" i] { display:none !important; visibility:hidden !important; }
+    /* Hide bottom toolbar completely */
+    [class*="Tray" i], [class*="tray" i], [class*="toolbar" i], [class*="Toolbar" i],
+    [class*="controls-bar"], [class*="ControlBar"], [class*="bottom-bar"] { display:none !important; }
+    /* Hide "Home page" footer and participant count */
+    [class*="info-footer"], [class*="InfoFooter"], [class*="call-info"] { display:none !important; }
+    /* Force ALL containers to be fullscreen */
+    [class*="call"], [class*="Call"], [class*="video" i], [data-cam-id],
+    [class*="tile" i], [class*="Tile"], [class*="participant" i],
+    [class*="Stage"], [class*="stage"] {
+      width:100vw !important; height:100vh !important; 
+      position:fixed !important; top:0 !important; left:0 !important;
+      max-width:none !important; max-height:none !important;
+      border-radius:0 !important; margin:0 !important; padding:0 !important;
+    }
+  \`;
   document.head.appendChild(css);
 
   function hideUI() {
-    document.querySelectorAll('a').forEach(function(l) {
-      var t = l.textContent || '';
-      if (t.includes('Home page') || t.includes('daily.co') || t.includes('people in call')) {
-        var p = l.closest('div');
-        if (p) p.style.display = 'none';
-        l.style.display = 'none';
+    // Hide by text content
+    document.querySelectorAll('button, a, div, span').forEach(function(el) {
+      var t = (el.textContent || '').trim().toLowerCase();
+      if (t === 'leave' || t === 'home page' || t.includes('people in call') || t.includes('daily.co') || t.includes('turn off') || t.includes('mute') || t.includes('more')) {
+        el.style.display = 'none';
+        el.style.visibility = 'hidden';
+        var p = el.closest('div');
+        if (p && (t === 'leave' || t === 'home page' || t.includes('people in call') || t.includes('turn off'))) {
+          p.style.display = 'none';
+        }
       }
     });
+    // Force black bg on all containers
     document.querySelectorAll('div').forEach(function(d) {
       var bg = window.getComputedStyle(d).backgroundColor;
-      if (bg && (bg.includes('26, 26') || bg.includes('29, 32') || bg.includes('31, 35'))) {
+      if (bg && (bg.includes('26, 26') || bg.includes('29, 32') || bg.includes('31, 35') || bg.includes('18, 26'))) {
         d.style.backgroundColor = '#000';
       }
     });
   }
   hideUI();
-  setTimeout(hideUI, 2000);
-  setTimeout(hideUI, 5000);
-  setTimeout(hideUI, 10000);
+  [1000, 2000, 3000, 5000, 8000, 12000].forEach(function(t) { setTimeout(hideUI, t); });
   var obs = new MutationObserver(function() { setTimeout(hideUI, 100); });
   obs.observe(document.body, { childList: true, subtree: true });
 })();

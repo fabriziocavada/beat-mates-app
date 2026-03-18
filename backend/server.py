@@ -1774,12 +1774,20 @@ v.addEventListener('loadedmetadata',function(){{
   if(fit==='auto'){{
     v.style.objectFit=(v.videoWidth>v.videoHeight)?'contain':'cover';
   }}
+  // Force show first frame on iOS
+  v.currentTime=0.01;
   window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('ready:'+v.videoWidth+'x'+v.videoHeight);
+}});
+v.addEventListener('loadeddata',function(){{
+  v.currentTime=0.01;
+  window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('ready');
 }});
 v.addEventListener('playing',function(){{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('playing')}});
 v.addEventListener('pause',function(){{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('paused')}});
 v.addEventListener('error',function(){{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('error:'+JSON.stringify(v.error))}});
 v.addEventListener('canplay',function(){{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('ready')}});
+// Fallback: try loading after timeout
+setTimeout(function(){{if(v.readyState<2)v.load();}},2000);
 </script></body></html>"""
     return HTMLResponse(content=html, media_type="text/html")
 

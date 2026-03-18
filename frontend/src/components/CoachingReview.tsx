@@ -37,6 +37,7 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
   const [toolActive, setToolActive] = useState(false);
   const [liveStroke, setLiveStroke] = useState('');
   const [videoLoaded, setVideoLoaded] = useState(false);
+  const seekLock = useRef(false); // prevent polling from overwriting seek
 
   const webRef = useRef<WebView>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -160,9 +161,12 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
   // ─── Controls (BOTH users can use ALL controls) ───
   const handleSeek = useCallback((time: number) => {
     const clamped = Math.max(0, Math.min(duration, time));
+    seekLock.current = true;
     setCurrentTime(clamped);
     webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v)v.currentTime=${clamped};true;`);
     sendCommand('seek', String(clamped));
+    // Release lock after WebView catches up
+    setTimeout(() => { seekLock.current = false; }, 300);
   }, [duration, sendCommand]);
 
   const handleSpeed = useCallback((s: number) => {
@@ -235,7 +239,10 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
   // WebView messages
   const handleMessage = useCallback((e: any) => {
     const msg = e.nativeEvent.data;
-    if (msg.startsWith('time:')) setCurrentTime(parseFloat(msg.split(':')[1]) || 0);
+    if (msg.startsWith('time:')) {
+      // Ignore time updates while seeking (prevents jerkiness)
+      if (!seekLock.current) setCurrentTime(parseFloat(msg.split(':')[1]) || 0);
+    }
     else if (msg.startsWith('duration:')) setDuration(parseFloat(msg.split(':')[1]) || 20);
     // Video player HTML sends 'ready' on canplay and 'ready:WxH' on loadedmetadata
     else if (msg.startsWith('ready')) setVideoLoaded(true);
@@ -269,10 +276,6 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
                 <Ionicons name="add" size={16} color="#FFF" />
               </TouchableOpacity>
             )}
-            <TouchableOpacity onPress={onClose} style={st.headerBackBtn} data-testid="coaching-back-btn">
-              <Ionicons name="videocam" size={14} color="#FFF" />
-              <Text style={st.headerBackText}>Videochiamata</Text>
-            </TouchableOpacity>
           </View>
         </View>
         <View style={st.emptyState}>
@@ -323,10 +326,6 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
               <Ionicons name="add" size={16} color="#FFF" />
             </TouchableOpacity>
           )}
-          <TouchableOpacity onPress={onClose} style={st.headerBackBtn} data-testid="coaching-back-btn">
-            <Ionicons name="videocam" size={14} color="#FFF" />
-            <Text style={st.headerBackText}>Videochiamata</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -349,17 +348,25 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
             if(v){
               v.preload='auto';
               v.playbackRate=${speed};
-              // Show first frame
-              v.addEventListener('loadeddata',function(){
-                v.currentTime=0.01;
-                window.ReactNativeWebView.postMessage('video_loaded');
-              });
+              // Show first frame - try multiple events
+              function showFirstFrame(){
+                if(v.readyState>=2){
+                  v.currentTime=0.01;
+                  window.ReactNativeWebView.postMessage('video_loaded');
+                }
+              }
+              v.addEventListener('loadeddata', showFirstFrame);
+              v.addEventListener('canplay', showFirstFrame);
+              // Check immediately in case already loaded
+              showFirstFrame();
               v.addEventListener('loadedmetadata',function(){
                 window.ReactNativeWebView.postMessage('duration:'+v.duration);
+                v.currentTime=0.01;
               });
+              // Report time at 150ms intervals (less frequent = smoother)
               setInterval(function(){
                 window.ReactNativeWebView.postMessage('time:'+v.currentTime);
-              },50);
+              },150);
             }true;
           `}
         />
