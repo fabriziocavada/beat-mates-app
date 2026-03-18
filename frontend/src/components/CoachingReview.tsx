@@ -57,10 +57,22 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
         const s = res.data;
         if (s.video_url && !videoUrl) setVideoUrl(s.video_url);
 
-        // SKIP play/pause/seek sync if user just did a local action (prevents loop)
-        const isLocalRecent = (Date.now() - localActionTime.current) < 2000;
+        // NEVER override local state within 5s of a local action
+        const isLocalRecent = (Date.now() - localActionTime.current) < 5000;
+        if (isLocalRecent) {
+          // Only sync drawings during local lock
+          if (Array.isArray(s.drawings) && s.drawings.length > 0) {
+            const parsed = s.drawings.map((d: string) => {
+              try { return JSON.parse(d); } catch { return null; }
+            }).filter(Boolean);
+            setDrawings(parsed);
+          } else if (Array.isArray(s.drawings) && s.drawings.length === 0) {
+            setDrawings([]);
+          }
+          return; // skip play/pause/seek/speed sync
+        }
 
-        if (!isLocalRecent && typeof s.is_playing === 'boolean') {
+        if (typeof s.is_playing === 'boolean') {
           setIsPlaying(prev => {
             if (prev !== s.is_playing) {
               webRef.current?.injectJavaScript(
@@ -70,9 +82,9 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
             return s.is_playing;
           });
         }
-        if (!isLocalRecent && typeof s.current_time === 'number') {
+        if (typeof s.current_time === 'number') {
           setCurrentTime(prev => {
-            if (Math.abs(prev - s.current_time) > 0.8) {
+            if (Math.abs(prev - s.current_time) > 1.5) {
               webRef.current?.injectJavaScript(
                 `var v=document.getElementById('v');if(v)v.currentTime=${s.current_time};true;`
               );
@@ -91,7 +103,6 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
             return s.speed;
           });
         }
-        // Drawings: backend is source of truth (both users' drawings combined)
         if (Array.isArray(s.drawings) && s.drawings.length > 0) {
           const parsed = s.drawings.map((d: string) => {
             try { return JSON.parse(d); } catch { return null; }
@@ -270,31 +281,35 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
     handleSeek(pct * duration);
   }, [duration, handleSeek]);
 
-  // PanResponder for smooth timeline scrubbing
+  // Refs for latest values (avoid stale closures in touch handlers)
+  const durationRef = useRef(duration);
+  durationRef.current = duration;
+  const handleSeekRef = useRef(handleSeek);
+  handleSeekRef.current = handleSeek;
   const timelineWidth = useRef(SW - 120);
-  const timelinePan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (e) => {
-        const x = e.nativeEvent.locationX;
-        const pct = Math.max(0, Math.min(1, x / timelineWidth.current));
-        handleSeek(pct * duration);
-      },
-      onPanResponderMove: (e) => {
-        const x = e.nativeEvent.locationX;
-        const pct = Math.max(0, Math.min(1, x / timelineWidth.current));
-        seekLock.current = true;
-        setCurrentTime(pct * duration);
-        webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v)v.currentTime=${pct * duration};true;`);
-      },
-      onPanResponderRelease: (e) => {
-        const x = e.nativeEvent.locationX;
-        const pct = Math.max(0, Math.min(1, x / timelineWidth.current));
-        handleSeek(pct * duration);
-      },
-    })
-  ).current;
+  const isDragging = useRef(false);
+
+  const onTimelineTouch = useCallback((evt: GestureResponderEvent, type: 'start' | 'move' | 'end') => {
+    const x = evt.nativeEvent.locationX;
+    const pct = Math.max(0, Math.min(1, x / timelineWidth.current));
+    const time = pct * durationRef.current;
+    
+    if (type === 'start') {
+      isDragging.current = true;
+      localActionTime.current = Date.now();
+      seekLock.current = true;
+      setCurrentTime(time);
+      webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v){v.pause();v.currentTime=${time};}true;`);
+    } else if (type === 'move' && isDragging.current) {
+      localActionTime.current = Date.now();
+      seekLock.current = true;
+      setCurrentTime(time);
+      webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v)v.currentTime=${time};true;`);
+    } else if (type === 'end') {
+      isDragging.current = false;
+      handleSeekRef.current(time);
+    }
+  }, []);
 
   // ═══ EMPTY STATE: No video yet ═══
   if (!videoUrl) {
@@ -459,7 +474,11 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
           <View
             style={st.timelineTouch}
             onLayout={(e) => { timelineWidth.current = e.nativeEvent.layout.width; }}
-            {...timelinePan.panHandlers}
+            onStartShouldSetResponder={() => true}
+            onMoveShouldSetResponder={() => true}
+            onResponderGrant={(e) => onTimelineTouch(e, 'start')}
+            onResponderMove={(e) => onTimelineTouch(e, 'move')}
+            onResponderRelease={(e) => onTimelineTouch(e, 'end')}
           >
             <View style={st.timelineTrack}>
               <View style={[st.timelineFill, { width: `${Math.min(100, progressPct)}%` }]} />
@@ -533,10 +552,10 @@ const st = StyleSheet.create({
   speedText: { color: '#777', fontSize: 11, fontWeight: '700' },
   timelineRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   timeText: { color: '#777', fontSize: 10, width: 34, textAlign: 'center', fontVariant: ['tabular-nums'] },
-  timelineTouch: { flex: 1, height: 24, justifyContent: 'center', position: 'relative' },
+  timelineTouch: { flex: 1, height: 40, justifyContent: 'center', position: 'relative' },
   timelineTrack: { height: 4, backgroundColor: '#222', borderRadius: 2, overflow: 'hidden' },
   timelineFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 2 },
-  timelineThumb: { position: 'absolute', top: 4, width: 14, height: 14, borderRadius: 7, backgroundColor: '#FFF', marginLeft: -7 },
+  timelineThumb: { position: 'absolute', top: 10, width: 20, height: 20, borderRadius: 10, backgroundColor: '#FFF', marginLeft: -10, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.3, shadowRadius: 2 },
   drawTools: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#1a1a2e' },
   colorBtn: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: 'transparent' },
   colorActive: { borderColor: '#FFF', transform: [{ scale: 1.15 }] },

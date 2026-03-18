@@ -68,16 +68,14 @@ const DAILY_INJECT = `
       }
     }
     
-    // Hide specific UI elements by text content
+    // Hide specific UI elements by text content - KEEP Mute/Unmute button!
     document.querySelectorAll('button, a, span').forEach(function(el) {
       var t = (el.textContent || '').trim().toLowerCase();
       if (t === 'leave' || t === 'home page' || t.match(/^\\d+ (person|people) in call$/)) {
         el.style.cssText = 'display:none!important;';
       }
     });
-    document.querySelectorAll('[role="toolbar"],[class*="Tray"],[class*="tray"]').forEach(function(el) {
-      el.style.cssText = 'display:none!important;';
-    });
+    // Do NOT hide toolbar - keep Mute button accessible
     document.querySelectorAll('a[href*="daily.co"]').forEach(function(el) {
       el.style.cssText = 'display:none!important;';
     });
