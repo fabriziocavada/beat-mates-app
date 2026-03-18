@@ -38,6 +38,7 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
   const [liveStroke, setLiveStroke] = useState('');
   const [videoLoaded, setVideoLoaded] = useState(false);
   const seekLock = useRef(false); // prevent polling from overwriting seek
+  const localActionTime = useRef(0); // timestamp of last local action - blocks remote polling
 
   const webRef = useRef<WebView>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -56,7 +57,10 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
         const s = res.data;
         if (s.video_url && !videoUrl) setVideoUrl(s.video_url);
 
-        if (typeof s.is_playing === 'boolean') {
+        // SKIP play/pause/seek sync if user just did a local action (prevents loop)
+        const isLocalRecent = (Date.now() - localActionTime.current) < 2000;
+
+        if (!isLocalRecent && typeof s.is_playing === 'boolean') {
           setIsPlaying(prev => {
             if (prev !== s.is_playing) {
               webRef.current?.injectJavaScript(
@@ -66,7 +70,7 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
             return s.is_playing;
           });
         }
-        if (typeof s.current_time === 'number') {
+        if (!isLocalRecent && typeof s.current_time === 'number') {
           setCurrentTime(prev => {
             if (Math.abs(prev - s.current_time) > 0.8) {
               webRef.current?.injectJavaScript(
@@ -161,21 +165,23 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
   // ─── Controls (BOTH users can use ALL controls) ───
   const handleSeek = useCallback((time: number) => {
     const clamped = Math.max(0, Math.min(duration, time));
+    localActionTime.current = Date.now();
     seekLock.current = true;
     setCurrentTime(clamped);
     webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v)v.currentTime=${clamped};true;`);
     sendCommand('seek', String(clamped));
-    // Release lock after WebView catches up
     setTimeout(() => { seekLock.current = false; }, 300);
   }, [duration, sendCommand]);
 
   const handleSpeed = useCallback((s: number) => {
+    localActionTime.current = Date.now();
     setSpeed(s);
     webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v)v.playbackRate=${s};true;`);
     sendCommand('speed', String(s));
   }, [sendCommand]);
 
   const togglePlay = useCallback(() => {
+    localActionTime.current = Date.now();
     setIsPlaying(prev => {
       const next = !prev;
       webRef.current?.injectJavaScript(

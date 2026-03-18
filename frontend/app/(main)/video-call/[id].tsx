@@ -24,79 +24,67 @@ const DAILY_INJECT = `
   if (window.__injected) return;
   window.__injected = true;
   
-  // 1. INJECT CSS for fullscreen main video
   var css = document.createElement('style');
-  css.textContent = [
-    'body, html { margin:0 !important; padding:0 !important; background:#000 !important; overflow:hidden !important; }',
-    // Main video tile: fill viewport
-    'video { object-fit:cover !important; }',
-  ].join('\\n');
+  css.textContent = 'body,html{margin:0!important;padding:0!important;background:#000!important;overflow:hidden!important}';
   document.head.appendChild(css);
 
-  // 2. Hide specific Daily.co UI elements + fullscreen the main tile
   function tweakUI() {
-    // Hide "Turn off", "Unmute", "More" tray
-    document.querySelectorAll('[role="toolbar"], [class*="Tray"], [class*="tray"]').forEach(function(el) {
-      el.style.cssText = 'display:none !important;';
-    });
-    // Hide "Home page" / "2 people in call" footer  
-    document.querySelectorAll('a, span, div').forEach(function(el) {
-      var t = (el.textContent || '').trim().toLowerCase();
-      if (t === 'home page' || t === '2 people in call' || t === '1 person in call' || t.match(/^\\d+ people in call$/)) {
-        el.style.cssText = 'display:none !important;';
+    // Find ALL video elements
+    var videos = document.querySelectorAll('video');
+    var mainVideo = null;
+    var pipVideo = null;
+    
+    videos.forEach(function(v) {
+      var r = v.getBoundingClientRect();
+      if (r.width > 150) {
+        mainVideo = v;
+      } else if (r.width > 0 && r.width <= 150) {
+        pipVideo = v;
       }
-    });
-    // Hide daily.co branding links
-    document.querySelectorAll('a[href*="daily.co"]').forEach(function(el) {
-      el.style.cssText = 'display:none !important;';
-    });
-    // Hide camera flip button  
-    document.querySelectorAll('button').forEach(function(btn) {
-      var t = (btn.textContent || '').trim().toLowerCase();
-      if (t === 'leave') btn.style.cssText = 'display:none !important;';
     });
     
-    // Make the LOCAL PiP tile larger
-    document.querySelectorAll('[class*="tile"], [data-video]').forEach(function(tile) {
-      // Local tile is usually smaller - find it by size
-      var r = tile.getBoundingClientRect();
-      if (r.width > 0 && r.width < 200) {
-        tile.style.cssText += 'width:120px !important; height:160px !important; z-index:9999 !important; border-radius:12px !important; overflow:hidden !important; border:2px solid rgba(255,255,255,0.3) !important;';
-        tile.querySelectorAll('video').forEach(function(v) {
-          v.style.cssText += 'object-fit:cover !important; width:100% !important; height:100% !important;';
-        });
-        // Make draggable
-        if (!tile.__draggable) {
-          tile.__draggable = true;
-          var startX, startY, origLeft, origTop;
-          tile.style.position = 'fixed';
-          tile.style.top = '60px';
-          tile.style.right = '12px';
-          tile.addEventListener('touchstart', function(e) {
-            var touch = e.touches[0];
-            startX = touch.clientX;
-            startY = touch.clientY;
-            var rect = tile.getBoundingClientRect();
-            origLeft = rect.left;
-            origTop = rect.top;
-            e.stopPropagation();
-          }, { passive: true });
-          tile.addEventListener('touchmove', function(e) {
-            var touch = e.touches[0];
-            var dx = touch.clientX - startX;
-            var dy = touch.clientY - startY;
-            tile.style.left = (origLeft + dx) + 'px';
-            tile.style.top = (origTop + dy) + 'px';
-            tile.style.right = 'auto';
-            e.stopPropagation();
-            e.preventDefault();
-          }, { passive: false });
-        }
+    // Force MAIN video and ALL its parent containers to be fullscreen
+    if (mainVideo) {
+      mainVideo.style.cssText += 'object-fit:cover!important;width:100vw!important;height:100vh!important;';
+      var parent = mainVideo.parentElement;
+      var depth = 0;
+      while (parent && parent !== document.body && depth < 10) {
+        parent.style.cssText += 'width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important;padding:0!important;margin:0!important;overflow:hidden!important;';
+        parent = parent.parentElement;
+        depth++;
+      }
+    }
+    
+    // Make PiP larger and draggable
+    if (pipVideo) {
+      var pipTile = pipVideo.closest('[class*="tile"]') || pipVideo.parentElement;
+      if (pipTile && !pipTile.__dragSetup) {
+        pipTile.__dragSetup = true;
+        pipTile.style.cssText += 'position:fixed!important;top:60px!important;right:12px!important;width:120px!important;height:160px!important;z-index:9999!important;border-radius:12px!important;overflow:hidden!important;border:2px solid rgba(255,255,255,0.3)!important;';
+        pipVideo.style.cssText += 'object-fit:cover!important;width:100%!important;height:100%!important;';
+        var sx,sy,ol,ot;
+        pipTile.addEventListener('touchstart',function(e){var t=e.touches[0];sx=t.clientX;sy=t.clientY;var r=pipTile.getBoundingClientRect();ol=r.left;ot=r.top;e.stopPropagation();},{passive:true});
+        pipTile.addEventListener('touchmove',function(e){var t=e.touches[0];pipTile.style.left=(ol+t.clientX-sx)+'px';pipTile.style.top=(ot+t.clientY-sy)+'px';pipTile.style.right='auto';e.stopPropagation();e.preventDefault();},{passive:false});
+      }
+    }
+    
+    // Hide specific UI elements by text content
+    document.querySelectorAll('button, a, span').forEach(function(el) {
+      var t = (el.textContent || '').trim().toLowerCase();
+      if (t === 'leave' || t === 'home page' || t.match(/^\\d+ (person|people) in call$/)) {
+        el.style.cssText = 'display:none!important;';
       }
     });
+    document.querySelectorAll('[role="toolbar"],[class*="Tray"],[class*="tray"]').forEach(function(el) {
+      el.style.cssText = 'display:none!important;';
+    });
+    document.querySelectorAll('a[href*="daily.co"]').forEach(function(el) {
+      el.style.cssText = 'display:none!important;';
+    });
   }
+  
   tweakUI();
-  [1500, 3000, 5000, 8000].forEach(function(t) { setTimeout(tweakUI, t); });
+  [1500, 3000, 5000, 8000, 15000].forEach(function(t) { setTimeout(tweakUI, t); });
   new MutationObserver(function() { setTimeout(tweakUI, 300); }).observe(document.body, { childList: true, subtree: true });
 })();
 true;
