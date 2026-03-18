@@ -521,7 +521,7 @@ const st = StyleSheet.create({
   // PiP LIVE indicator - floating badge when coaching is open
   pipIndicator: {
     position: 'absolute',
-    top: 50,
+    bottom: 30,
     left: 16,
     zIndex: 30,
   },

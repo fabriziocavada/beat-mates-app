@@ -63,6 +63,8 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
         setRemoteUploading(s.uploading_by || null);
 
         const isLocalRecent = (Date.now() - localActionTime.current) < 2000;
+        // CRITICAL: When playing locally, NEVER let remote override seek or play state
+        const isPlayingLocally = isPlaying;
 
         // Speed: ALWAYS apply from remote (doesn't cause loops)
         if (typeof s.speed === 'number') {
@@ -76,8 +78,8 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
           });
         }
 
-        if (!isLocalRecent) {
-          // Play/pause: apply from remote
+        if (!isLocalRecent && !isPlayingLocally) {
+          // Play/pause: apply from remote ONLY when we're paused
           if (typeof s.is_playing === 'boolean') {
             setIsPlaying(prev => {
               if (prev !== s.is_playing) {
@@ -130,30 +132,42 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
       Alert.alert('Permesso necessario', 'Serve accesso alla fotocamera.');
       return;
     }
+    // Notify OTHER user immediately that we're recording
+    sendCommand('start_uploading');
+    setIsUploading(true);
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['videos'],
       videoMaxDuration: 20,
       videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
       allowsEditing: false,
     });
-    if (result.canceled || !result.assets?.[0]) return;
+    if (result.canceled || !result.assets?.[0]) {
+      sendCommand('stop_uploading');
+      setIsUploading(false);
+      return;
+    }
     await uploadClip(result.assets[0]);
   };
 
   // ─── Upload from gallery (BOTH users) ───
   const handleUpload = async () => {
+    // Notify OTHER user immediately
+    sendCommand('start_uploading');
+    setIsUploading(true);
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['videos'],
       videoMaxDuration: 30,
       allowsEditing: false,
     });
-    if (result.canceled || !result.assets?.[0]) return;
+    if (result.canceled || !result.assets?.[0]) {
+      sendCommand('stop_uploading');
+      setIsUploading(false);
+      return;
+    }
     await uploadClip(result.assets[0]);
   };
 
   const uploadClip = async (asset: ImagePicker.ImagePickerAsset) => {
-    setIsUploading(true);
-    sendCommand('start_uploading');
     try {
       const formData = new FormData();
       formData.append('file', {
@@ -266,11 +280,10 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
   const handleMessage = useCallback((e: any) => {
     const msg = e.nativeEvent.data;
     if (msg.startsWith('time:')) {
-      // Ignore time updates while seeking (prevents jerkiness)
-      if (!seekLock.current) setCurrentTime(parseFloat(msg.split(':')[1]) || 0);
+      // Ignore time updates while seeking or dragging (prevents flicker)
+      if (!seekLock.current && !isDragging.current) setCurrentTime(parseFloat(msg.split(':')[1]) || 0);
     }
     else if (msg.startsWith('duration:')) setDuration(parseFloat(msg.split(':')[1]) || 20);
-    // Video player HTML sends 'ready' on canplay and 'ready:WxH' on loadedmetadata
     else if (msg.startsWith('ready')) setVideoLoaded(true);
     else if (msg === 'video_loaded') setVideoLoaded(true);
   }, []);
