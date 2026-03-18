@@ -27,14 +27,24 @@ Social media mobile app for dancers called "BEAT MATES". Instagram-like experien
 - Premium playlists (mock payments)
 - Automatic video compression (ffmpeg, H.264 8-bit web-compatible)
 - Server-side video player endpoint (`/api/video-player/{filename}`) with auto object-fit detection
-- **Live Coaching Tool** (NEW - March 2026):
-  - Teacher records/uploads 20s clip during live lesson
+- **Live Coaching Tool** (March 2026):
+  - Teacher/student records/uploads 20s clip during live lesson
   - Shared review interface with video player (WebView-based)
-  - Teacher controls: play/pause, seek, slow-motion (0.25x/0.5x/0.75x/1x)
-  - SVG drawing overlay on video (teacher draws, student sees synced)
+  - Both users control: play/pause, seek, slow-motion (0.25x/0.5x/0.75x/1x)
+  - SVG drawing overlay (bidirectional sync)
   - Color picker (5 colors), undo, clear drawings
-  - State sync via polling (student polls every 600ms)
+  - State sync via polling (700ms)
   - Backend: 3 endpoints (upload, command, state) with MongoDB state store
+  - Autoplay on video load (no black first frame)
+
+## Available Teachers Feature
+- Endpoint: GET /api/available-teachers
+- Only returns users with `is_available: True`
+- Real ratings from `reviews` collection (aggregation on reviewee_id)
+- Includes review_count
+- Busy teachers show `is_busy: true` with `remaining_minutes`
+- Auto-closes stale sessions (>2 hours)
+- Sorted: available first, then busy, rating descending
 
 ## VIDEOBUG Resolution (Critical Reference)
 **Problem:** Videos from iPhones appeared black/unplayable in the app.
@@ -43,7 +53,7 @@ Social media mobile app for dancers called "BEAT MATES". Instagram-like experien
 2. iPhone HDR videos (H.264 High 10, 10-bit, yuv420p10le) incompatible with WebView `<video>`
 3. Inline HTML WebView (`source={{ html }}`) had CORS/origin issues loading external video URLs
 **Solution:**
-1. Install `ffmpeg` CLI binary (`apt-get install ffmpeg`)
+1. Install `ffmpeg` CLI binary (`sudo apt-get install -y ffmpeg`)
 2. Always re-encode ALL uploaded videos to H.264 Main profile, 8-bit, yuv420p (web-compatible)
 3. Created server-side `/api/video-player/{filename}` endpoint that serves HTML page (same origin as video)
 4. Frontend WebView loads `source={{ uri: playerUrl }}` instead of inline HTML
@@ -57,8 +67,7 @@ Social media mobile app for dancers called "BEAT MATES". Instagram-like experien
 ### P0 - CRITICAL (Blocking - Must fix before launch)
 
 #### 1. MongoDB Indexes
-- **Status:** NOT DONE
-- **Impact:** App will freeze at ~500 users without indexes
+- **Status:** DONE (46 indexes added)
 
 #### 2. Cloud Storage (S3 + CDN)
 - **Status:** NOT DONE
@@ -81,7 +90,7 @@ Social media mobile app for dancers called "BEAT MATES". Instagram-like experien
 - Password Recovery
 - Report & Block System
 - Push Notifications
-- Backend Refactoring (server.py is 2300+ lines monolith)
+- Backend Refactoring (server.py is 2400+ lines monolith)
 - CORS Restriction
 
 ### P2 - SPONSORSHIP SYSTEM
@@ -93,6 +102,7 @@ Social media mobile app for dancers called "BEAT MATES". Instagram-like experien
 - Admin Dashboard
 - Automatic Database Backups
 - Production Deployment
+- Development Build migration (Expo Go -> native builds)
 
 ---
 
@@ -105,34 +115,43 @@ availability_slots, bookings, coaching_sessions, comments, conversations, follow
 - Posts: CRUD, like, save, comments
 - Stories: create, list, view
 - Live Lessons: request, accept, reject, end, review
-- **Coaching: upload clip, send command, poll state** (NEW)
+- **Coaching: upload clip, send command, poll state**
 - Music: playlists, songs, upload, genres
 - Video Lessons: CRUD, reviews, purchase
 - Chat: conversations, messages
 - Media: upload, serve, thumbnail, video-player
+- **Available Teachers: filtered, rated, with busy status**
 
 ## Credentials
 - Teacher: tutor@test.com / password123
 - Student: mario@test.com / password123
+- Other: f.totti@roma.it / password123
 - DB: test_database on localhost:27017
 
 ## Known Issues
 - Carousel swipe on home feed: fix applied but USER VERIFICATION PENDING
 - ffmpeg needs reinstall after environment restart (`sudo apt-get install -y ffmpeg`)
 - Daily.co tunnel may disconnect intermittently (preview environment limitation)
+- iPhone video autoplay regression in home feed (not addressed yet)
+- One device shows a pause button at video call start (likely Daily.co rendering quirk)
 
-## Recent Changes (March 10, 2026 - Session 2)
-- Fixed video call UX issues:
-  1. Session persistence: active session saved to AsyncStorage, TV tab verifies session is active + <2h before reconnecting
-  2. Coaching button: bigger (44x44), round, well-spaced from end-call button
-  3. Post-call: navigates to home (not back to random chat screen)
-  4. WebView loading: 15s auto-timeout instead of infinite loading
-  5. Auto-retry: 3 retries on network errors
-  6. PiP layout: Animated dimensions (WebView NEVER remounts), draggable with edge-snapping
-  7. Drawing for BOTH users: teacher AND student can draw AND see each other's drawings (bidirectional sync)
-  8. Recording for BOTH users: teacher AND student can record/upload clips
-  9. All playback controls accessible to BOTH users (play/pause/seek/speed)
-  10. End-call confirmation dialog: "Sei sicuro di voler abbandonare?"
-  11. Fixed compress_video blocking event loop (asyncio.to_thread)
-- Added 46 MongoDB indexes for performance
+## Recent Changes (Feb 2026 - Current Session)
+- Coaching: Removed pink draw indicator dot (kept trash button in toolbar only)
+- Coaching: Enabled video autoplay (no more black first frame)
+- Coaching: isPlayingRef synced on autoplay start
+- Available Teachers: Fixed to only show users with is_available=True
+- Available Teachers: Real ratings from reviews collection
+- Available Teachers: Auto-close stale sessions (>2h)
+- Available Teachers: Removed nonsensical timer, added proper busy/available status
 - Installed ffmpeg for video compression
+
+## Previous Session Changes (March 10, 2026)
+- Fixed video call UX issues (session persistence, coaching button, post-call navigation)
+- WebView loading: 15s auto-timeout
+- Auto-retry: 3 retries on network errors
+- PiP layout: Animated dimensions, draggable with edge-snapping
+- Drawing for BOTH users (bidirectional sync)
+- Recording for BOTH users
+- End-call confirmation dialog
+- Fixed compress_video blocking event loop
+- Added 46 MongoDB indexes
