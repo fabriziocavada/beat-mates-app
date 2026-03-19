@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
   Image,
   Dimensions,
 } from 'react-native';
-import { ScrollView, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/colors';
 import { getMediaUrl } from '../services/api';
@@ -50,12 +49,12 @@ function timeAgo(dateStr: string): string {
 export default function ReviewsPopup({ visible, onClose, userId, username }: ReviewsPopupProps) {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeIdx, setActiveIdx] = useState(0);
+  const [idx, setIdx] = useState(0);
 
   useEffect(() => {
     if (visible && userId) {
       setLoading(true);
-      setActiveIdx(0);
+      setIdx(0);
       api.get(`/users/${userId}/reviews`)
         .then(res => setReviews(res.data))
         .catch(() => setReviews([]))
@@ -63,190 +62,140 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
     }
   }, [visible, userId]);
 
-  const renderStars = (rating: number) =>
+  const stars = (n: number) =>
     Array.from({ length: 5 }, (_, i) => (
-      <Ionicons key={i} name={i < rating ? 'star' : 'star-outline'} size={16} color={i < rating ? '#FFD700' : '#444'} />
+      <Ionicons key={i} name={i < n ? 'star' : 'star-outline'} size={16} color={i < n ? '#FFD700' : '#444'} />
     ));
 
-  const avgRating = reviews.length > 0
-    ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
+  const avg = reviews.length > 0
+    ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1)
     : '0';
 
-  const handleCarouselScroll = (e: any) => {
-    const x = e.nativeEvent.contentOffset.x;
-    const idx = Math.round(x / POPUP_W);
-    if (idx !== activeIdx) setActiveIdx(idx);
-  };
+  const r = reviews[idx];
+  const hasPrev = idx > 0;
+  const hasNext = idx < reviews.length - 1;
 
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
-      <GestureHandlerRootView style={styles.overlay}>
-        <View style={styles.container}>
-          <View style={styles.handleBar} />
+      <View style={s.overlay}>
+        <View style={s.popup}>
+          <View style={s.handleBar} />
 
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <Text style={styles.headerTitle}>Recensioni</Text>
-              <Text style={styles.headerSubtitle}>{username}</Text>
+          <View style={s.header}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.title}>Recensioni</Text>
+              <Text style={s.subtitle}>{username}</Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} data-testid="close-reviews-popup">
+            <TouchableOpacity onPress={onClose} style={s.xBtn} data-testid="close-reviews-popup">
               <Ionicons name="close" size={22} color="#FFF" />
             </TouchableOpacity>
           </View>
 
-          {/* Average */}
-          <View style={styles.summary}>
-            <Text style={styles.avgNumber}>{avgRating}</Text>
-            <View style={styles.summaryRight}>
-              <View style={styles.starsRow}>{renderStars(Math.round(Number(avgRating)))}</View>
-              <Text style={styles.reviewCountText}>{reviews.length} recension{reviews.length === 1 ? 'e' : 'i'}</Text>
+          <View style={s.avgRow}>
+            <Text style={s.avgNum}>{avg}</Text>
+            <View>
+              <View style={s.row}>{stars(Math.round(Number(avg)))}</View>
+              <Text style={s.countTxt}>{reviews.length} recension{reviews.length === 1 ? 'e' : 'i'}</Text>
             </View>
           </View>
 
-          {/* Content */}
           {loading ? (
             <ActivityIndicator color={Colors.primary} style={{ marginVertical: 40 }} />
           ) : reviews.length === 0 ? (
-            <View style={styles.emptyWrap}>
+            <View style={s.empty}>
               <Ionicons name="chatbubble-ellipses-outline" size={40} color="#444" />
-              <Text style={styles.emptyText}>Nessuna recensione ancora</Text>
+              <Text style={s.emptyTxt}>Nessuna recensione ancora</Text>
             </View>
           ) : (
-            <>
-              {/* Carousel using gesture-handler ScrollView */}
-              <ScrollView
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onMomentumScrollEnd={handleCarouselScroll}
-                decelerationRate="fast"
-                bounces={false}
-                nestedScrollEnabled
-                scrollEventThrottle={16}
-              >
-                {reviews.map((item) => (
-                  <View key={item.id} style={styles.page}>
-                    <View style={styles.card} data-testid={`review-card-${item.id}`}>
-                      <View style={styles.cardHeader}>
-                        {item.reviewer_image ? (
-                          <Image source={{ uri: getMediaUrl(item.reviewer_image) || '' }} style={styles.avatar} />
-                        ) : (
-                          <View style={styles.avatarPlaceholder}>
-                            <Ionicons name="person" size={22} color="#777" />
-                          </View>
-                        )}
-                        <View style={styles.cardHeaderInfo}>
-                          <Text style={styles.reviewerName} numberOfLines={1}>{item.reviewer_username}</Text>
-                          <Text style={styles.dateText}>{timeAgo(item.created_at)}</Text>
-                        </View>
-                      </View>
-                      <View style={styles.starsRow}>{renderStars(item.rating)}</View>
-                      {item.text ? (
-                        <Text style={styles.commentText}>{item.text}</Text>
-                      ) : (
-                        <Text style={styles.noCommentText}>Nessun commento</Text>
-                      )}
+            <View style={s.body}>
+              {/* Card */}
+              <View style={s.card}>
+                <View style={s.cardTop}>
+                  {r.reviewer_image ? (
+                    <Image source={{ uri: getMediaUrl(r.reviewer_image) || '' }} style={s.avatar} />
+                  ) : (
+                    <View style={s.avatarPh}>
+                      <Ionicons name="person" size={22} color="#777" />
                     </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.name} numberOfLines={1}>{r.reviewer_username}</Text>
+                    <Text style={s.date}>{timeAgo(r.created_at)}</Text>
                   </View>
-                ))}
-              </ScrollView>
+                </View>
+                <View style={s.row}>{stars(r.rating)}</View>
+                {r.text ? (
+                  <Text style={s.comment}>{r.text}</Text>
+                ) : (
+                  <Text style={s.noComment}>Nessun commento</Text>
+                )}
+              </View>
 
-              {/* Dots + counter */}
+              {/* Navigation */}
               {reviews.length > 1 && (
-                <View style={styles.footer}>
-                  <View style={styles.dotsRow}>
+                <View style={s.nav}>
+                  <TouchableOpacity
+                    onPress={() => setIdx(i => i - 1)}
+                    disabled={!hasPrev}
+                    style={[s.arrow, !hasPrev && s.arrowOff]}
+                    data-testid="reviews-prev-btn"
+                  >
+                    <Ionicons name="chevron-back" size={24} color={hasPrev ? '#FFF' : '#333'} />
+                  </TouchableOpacity>
+
+                  <View style={s.dots}>
                     {reviews.map((_, i) => (
-                      <View key={i} style={[styles.dot, i === activeIdx && styles.dotActive]} />
+                      <TouchableOpacity key={i} onPress={() => setIdx(i)} data-testid={`review-dot-${i}`}>
+                        <View style={[s.dot, i === idx && s.dotOn]} />
+                      </TouchableOpacity>
                     ))}
                   </View>
-                  <Text style={styles.pageCounter}>{activeIdx + 1} / {reviews.length}</Text>
+
+                  <TouchableOpacity
+                    onPress={() => setIdx(i => i + 1)}
+                    disabled={!hasNext}
+                    style={[s.arrow, !hasNext && s.arrowOff]}
+                    data-testid="reviews-next-btn"
+                  >
+                    <Ionicons name="chevron-forward" size={24} color={hasNext ? '#FFF' : '#333'} />
+                  </TouchableOpacity>
                 </View>
               )}
-            </>
+            </View>
           )}
         </View>
-      </GestureHandlerRootView>
+      </View>
     </Modal>
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  container: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 20,
-    width: POPUP_W,
-  },
-  handleBar: {
-    width: 36, height: 4, borderRadius: 2,
-    backgroundColor: '#444', alignSelf: 'center', marginTop: 10,
-  },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 18, paddingTop: 12, paddingBottom: 10,
-  },
-  headerLeft: { flex: 1 },
-  headerTitle: { color: '#FFF', fontSize: 18, fontWeight: '700' },
-  headerSubtitle: { color: '#888', fontSize: 13, marginTop: 1 },
-  closeBtn: {
-    width: 34, height: 34, borderRadius: 17,
-    backgroundColor: '#333', alignItems: 'center', justifyContent: 'center',
-  },
-  summary: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 18, paddingBottom: 14,
-    borderBottomWidth: 1, borderBottomColor: '#282848',
-  },
-  avgNumber: { color: '#FFF', fontSize: 40, fontWeight: '800', marginRight: 12 },
-  summaryRight: { flex: 1 },
-  starsRow: { flexDirection: 'row', gap: 2 },
-  reviewCountText: { color: '#888', fontSize: 12, marginTop: 3 },
-  page: {
-    width: POPUP_W,
-    padding: 18,
-  },
-  card: {
-    backgroundColor: '#222244',
-    borderRadius: 14,
-    padding: 16,
-  },
-  cardHeader: {
-    flexDirection: 'row', alignItems: 'center', marginBottom: 10,
-  },
-  avatar: {
-    width: 44, height: 44, borderRadius: 22, marginRight: 10,
-    borderWidth: 1, borderColor: '#333',
-  },
-  avatarPlaceholder: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: '#333', alignItems: 'center', justifyContent: 'center', marginRight: 10,
-  },
-  cardHeaderInfo: { flex: 1 },
-  reviewerName: { color: '#FFF', fontSize: 15, fontWeight: '600' },
-  dateText: { color: '#666', fontSize: 11, marginTop: 2 },
-  commentText: { color: '#CCC', fontSize: 14, lineHeight: 20, marginTop: 10 },
-  noCommentText: { color: '#555', fontSize: 13, fontStyle: 'italic', marginTop: 10 },
-  footer: {
-    alignItems: 'center', paddingBottom: 16, gap: 6,
-  },
-  dotsRow: {
-    flexDirection: 'row', justifyContent: 'center', gap: 8,
-  },
-  dot: {
-    width: 8, height: 8, borderRadius: 4, backgroundColor: '#333',
-  },
-  dotActive: {
-    backgroundColor: Colors.primary, width: 20,
-  },
-  pageCounter: { color: '#555', fontSize: 11 },
-  emptyWrap: {
-    alignItems: 'center', paddingVertical: 36, gap: 10,
-  },
-  emptyText: { color: '#666', fontSize: 14, textAlign: 'center' },
+const s = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center' },
+  popup: { backgroundColor: '#1a1a2e', borderRadius: 20, width: POPUP_W },
+  handleBar: { width: 36, height: 4, borderRadius: 2, backgroundColor: '#444', alignSelf: 'center', marginTop: 10 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingTop: 12, paddingBottom: 10 },
+  title: { color: '#FFF', fontSize: 18, fontWeight: '700' },
+  subtitle: { color: '#888', fontSize: 13, marginTop: 1 },
+  xBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
+  avgRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#282848' },
+  avgNum: { color: '#FFF', fontSize: 40, fontWeight: '800', marginRight: 12 },
+  row: { flexDirection: 'row', gap: 2 },
+  countTxt: { color: '#888', fontSize: 12, marginTop: 3 },
+  body: { padding: 18 },
+  card: { backgroundColor: '#222244', borderRadius: 14, padding: 16 },
+  cardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  avatar: { width: 44, height: 44, borderRadius: 22, marginRight: 10, borderWidth: 1, borderColor: '#333' },
+  avatarPh: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  name: { color: '#FFF', fontSize: 15, fontWeight: '600' },
+  date: { color: '#666', fontSize: 11, marginTop: 2 },
+  comment: { color: '#CCC', fontSize: 14, lineHeight: 20, marginTop: 10 },
+  noComment: { color: '#555', fontSize: 13, fontStyle: 'italic', marginTop: 10 },
+  nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 },
+  arrow: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#282848', alignItems: 'center', justifyContent: 'center' },
+  arrowOff: { backgroundColor: '#1a1a2e' },
+  dots: { flexDirection: 'row', gap: 8 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#333' },
+  dotOn: { backgroundColor: Colors.primary, width: 20 },
+  empty: { alignItems: 'center', paddingVertical: 36, gap: 10 },
+  emptyTxt: { color: '#666', fontSize: 14 },
 });
