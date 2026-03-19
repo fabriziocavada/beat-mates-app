@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -51,6 +51,7 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIdx, setActiveIdx] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     if (visible && userId) {
@@ -62,6 +63,18 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
         .finally(() => setLoading(false));
     }
   }, [visible, userId]);
+
+  // Wake up ScrollView gesture system on open
+  useEffect(() => {
+    if (visible && reviews.length > 1 && !loading) {
+      setTimeout(() => {
+        scrollRef.current?.scrollTo({ x: 1, animated: false });
+        setTimeout(() => {
+          scrollRef.current?.scrollTo({ x: 0, animated: false });
+        }, 50);
+      }, 150);
+    }
+  }, [visible, reviews.length, loading]);
 
   const renderStars = (rating: number) =>
     Array.from({ length: 5 }, (_, i) => (
@@ -116,6 +129,7 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
             <>
               {/* Carousel - same pattern as PostCard home feed */}
               <ScrollView
+                ref={scrollRef}
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
