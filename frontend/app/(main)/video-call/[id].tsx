@@ -84,6 +84,16 @@ const DAILY_INJECT = `
   tweakUI();
   [1500, 3000, 5000, 8000, 15000].forEach(function(t) { setTimeout(tweakUI, t); });
   new MutationObserver(function() { setTimeout(tweakUI, 300); }).observe(document.body, { childList: true, subtree: true });
+  
+  // Auto-play any paused video elements (fixes play button appearing on accepting device)
+  function autoPlayVideos() {
+    document.querySelectorAll('video').forEach(function(v) {
+      if (v.paused && !v.ended && v.readyState >= 2) {
+        v.play().catch(function(){});
+      }
+    });
+  }
+  [2000, 4000, 6000, 10000].forEach(function(t) { setTimeout(autoPlayVideos, t); });
 })();
 true;
 `;

@@ -65,6 +65,7 @@ export default function AvailableTeacherCard({ teacher, onPress, onBookPress }: 
             </View>
           )}
         </View>
+        <View style={[styles.statusDot, { backgroundColor: isBusy ? '#FF3B30' : Colors.success }]} />
       </View>
 
       <View style={styles.info}>
@@ -108,6 +109,7 @@ const styles = StyleSheet.create({
   },
   avatarContainer: {
     marginRight: 12,
+    position: 'relative',
   },
   avatarBorder: {
     width: 54,
@@ -183,5 +185,15 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     marginTop: 1,
+  },
+  statusDot: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: Colors.background,
   },
 });

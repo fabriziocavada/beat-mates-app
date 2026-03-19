@@ -84,6 +84,7 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
           if (typeof s.is_playing === 'boolean') {
             setIsPlaying(prev => {
               if (prev !== s.is_playing) {
+                isPlayingRef.current = s.is_playing; // CRITICAL: keep ref in sync
                 webRef.current?.injectJavaScript(
                   `var v=document.getElementById('v');if(v){${s.is_playing ? 'v.play()' : 'v.pause()'}}true;`
                 );
@@ -287,11 +288,14 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
     else if (msg.startsWith('duration:')) setDuration(parseFloat(msg.split(':')[1]) || 20);
     else if (msg.startsWith('ready') || msg === 'video_loaded') {
       setVideoLoaded(true);
-      // Autoplay is on → mark as playing
+      // Autoplay is on → mark as playing AND sync to backend for other user
       setIsPlaying(true);
       isPlayingRef.current = true;
+      localActionTime.current = Date.now();
+      sendCommand('play');
+      sendCommand('seek', '0');
     }
-  }, []);
+  }, [sendCommand]);
 
   // Fallback: dismiss loading after 4 seconds even if event didn't fire
   useEffect(() => {

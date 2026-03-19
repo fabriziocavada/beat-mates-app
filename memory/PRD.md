@@ -138,11 +138,15 @@ availability_slots, bookings, coaching_sessions, comments, conversations, follow
 ## Recent Changes (Feb 2026 - Current Session)
 - Coaching: Removed pink draw indicator dot (kept trash button in toolbar only)
 - Coaching: Enabled video autoplay (no more black first frame)
+- Coaching: **SYNC FIX** - Autoplay now sends `play` + `seek:0` to backend so other user auto-starts too
+- Coaching: **CRITICAL FIX** - `isPlayingRef` now updated when remote state is applied via polling (was causing desync)
 - Coaching: isPlayingRef synced on autoplay start
 - Available Teachers: Fixed to only show users with is_available=True
 - Available Teachers: Real ratings from reviews collection
 - Available Teachers: Auto-close stale sessions (>2h)
 - Available Teachers: Removed nonsensical timer, added proper busy/available status
+- Available Teachers: Added status dot on avatar (green=available, red=busy)
+- Video Call: Added auto-play for paused videos in Daily.co WebView (fixes play button on accepting device)
 - Installed ffmpeg for video compression
 
 ## Previous Session Changes (March 10, 2026)
