@@ -7,6 +7,11 @@ import {
   TouchableOpacity,
   TextInput,
   Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/colors';
@@ -56,8 +61,17 @@ export default function CallRatingModal({
       animationType="fade"
       statusBarTranslucent
     >
-      <View style={styles.overlay}>
-        <View style={styles.container}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <KeyboardAvoidingView
+          style={styles.overlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            bounces={false}
+          >
+            <View style={styles.container}>
           {/* Header icon */}
           <View style={styles.iconContainer}>
             <Ionicons name="videocam" size={40} color="#FFF" />
@@ -96,15 +110,26 @@ export default function CallRatingModal({
 
           {/* Comment input */}
           {rating > 0 && (
-            <TextInput
-              style={styles.commentInput}
-              placeholder="Aggiungi un commento (opzionale)"
-              placeholderTextColor="#666"
-              value={comment}
-              onChangeText={setComment}
-              multiline
-              maxLength={500}
-            />
+            <View>
+              <TextInput
+                style={styles.commentInput}
+                placeholder="Aggiungi un commento (opzionale)"
+                placeholderTextColor="#666"
+                value={comment}
+                onChangeText={setComment}
+                multiline
+                maxLength={500}
+                returnKeyType="done"
+                blurOnSubmit={true}
+                onSubmitEditing={Keyboard.dismiss}
+              />
+              <TouchableOpacity
+                style={styles.doneKeyboardBtn}
+                onPress={Keyboard.dismiss}
+              >
+                <Text style={styles.doneKeyboardText}>Chiudi tastiera</Text>
+              </TouchableOpacity>
+            </View>
           )}
 
           {/* Buttons */}
@@ -136,6 +161,9 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.9)',
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -232,5 +260,16 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: '700',
+  },
+  doneKeyboardBtn: {
+    alignSelf: 'flex-end',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginBottom: 16,
+  },
+  doneKeyboardText: {
+    color: Colors.primary,
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

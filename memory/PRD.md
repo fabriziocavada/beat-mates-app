@@ -136,10 +136,12 @@ availability_slots, bookings, coaching_sessions, comments, conversations, follow
 - One device shows a pause button at video call start (likely Daily.co rendering quirk)
 
 ## Recent Changes (Feb 2026 - Current Session)
-- Coaching: **SYNC FIX v3 (DEFINITIVE)** - Reverted HTML5 autoplay (unreliable across devices). Added `justUploadedRef` to auto-play only on uploader's device. Other device gets play via polling after `videoLoadedRef` is set. Removed broken `!isPlayingLocally` condition that blocked remote pause reception.
-- Coaching: Removed pink button from header (was `headerActionBtn` with invisible icon - same color as background)
-- Available Teachers: Added `last_active` tracking on EVERY authenticated API call. Filter shows only users active in last 15 minutes AND with `is_available=True`.
-- Video Call: Added auto-play for paused videos in Daily.co WebView (fixes play button on accepting device)
+- Coaching: **SYNC v4 (ROBUST)** - window._syncState global variable + 150ms internal WebView polling loop. No more direct v.play()/v.pause() calls via injectJavaScript. justUploadedRef for auto-play on uploader's device. videoLoadedRef gates sync.
+- Coaching: Removed pink button from header
+- Review Modal: Added KeyboardAvoidingView, ScrollView, "Chiudi tastiera" button. Keyboard no longer covers input.
+- Available Teachers: Shows ALL users with green/red indicators. Online = is_available + last_active < 15min + not busy. Both circles (avatar border + status dot) colored. Sort: online first, then offline by rating.
+- Backend: last_active updated on every authenticated call
+- Video Call: Auto-play for paused videos in Daily.co WebView
 - Installed ffmpeg for video compression
 
 ## Previous Session Changes (March 10, 2026)

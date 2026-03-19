@@ -976,13 +976,11 @@ async def get_available_teachers(current_user: dict = Depends(get_current_user))
         {"$set": {"status": "completed", "ended_at": datetime.utcnow()}}
     )
     
-    # Only get users who are both available AND were active in the last 15 min
+    # Show ALL users (not just available), mark online status
     fifteen_min_ago = datetime.utcnow() - timedelta(minutes=15)
-    query = {
-        "id": {"$ne": current_user["id"]},
-        "is_available": True,
-        "last_active": {"$gte": fifteen_min_ago}
-    }
+    query = {"id": {"$ne": current_user["id"]}}
+    if user_categories:
+        query["dance_categories"] = {"$in": user_categories}
     if user_categories:
         query["dance_categories"] = {"$in": user_categories}
     
@@ -1004,6 +1002,9 @@ async def get_available_teachers(current_user: dict = Depends(get_current_user))
     for user in users:
         uid = user["id"]
         is_busy = uid in busy_user_ids
+        is_recently_active = user.get("last_active") and user["last_active"] >= fifteen_min_ago
+        is_set_available = user.get("is_available", False)
+        is_online = is_set_available and is_recently_active and not is_busy
         
         # Get average rating from reviews collection
         avg_rating_result = await db.reviews.aggregate([
@@ -1022,13 +1023,13 @@ async def get_available_teachers(current_user: dict = Depends(get_current_user))
             "review_count": review_count,
             "hourly_rate": user.get("hourly_rate", 50),
             "dance_categories": user.get("dance_categories", []),
-            "is_available": not is_busy,
+            "is_available": is_online,
             "is_busy": is_busy,
             "remaining_minutes": busy_user_ids.get(uid, 0) if is_busy else 0,
         })
     
-    # Sort: available first, then busy
-    result.sort(key=lambda x: (x["is_busy"], -(x["rating"] or 0)))
+    # Sort: online first, then busy, then offline
+    result.sort(key=lambda x: (not x["is_available"], x["is_busy"], -(x["rating"] or 0)))
     return result
 
 @api_router.post("/availability-slots", response_model=AvailabilitySlotResponse)

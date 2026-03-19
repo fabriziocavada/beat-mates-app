@@ -80,24 +80,20 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
         }
 
         if (!isLocalRecent && videoLoadedRef.current) {
-          // Play/pause: apply from remote when video is loaded
+          // Play/pause: set _syncState variable (internal WebView loop applies it)
           if (typeof s.is_playing === 'boolean') {
             const currentlyPlaying = isPlayingRef.current;
             if (currentlyPlaying !== s.is_playing) {
               isPlayingRef.current = s.is_playing;
               setIsPlaying(s.is_playing);
-              webRef.current?.injectJavaScript(
-                `var v=document.getElementById('v');if(v){${s.is_playing ? 'v.play()' : 'v.pause()'}}true;`
-              );
+              webRef.current?.injectJavaScript(`window._syncState.playing=${s.is_playing};true;`);
             }
           }
-          // Seek: apply if diff > 1.5s (indicates deliberate remote seek)
+          // Seek: apply if diff > 1.5s
           if (typeof s.current_time === 'number') {
             setCurrentTime(prev => {
               if (Math.abs(prev - s.current_time) > 1.5) {
-                webRef.current?.injectJavaScript(
-                  `var v=document.getElementById('v');if(v)v.currentTime=${s.current_time};true;`
-                );
+                webRef.current?.injectJavaScript(`window._syncState.seekTo=${s.current_time};true;`);
                 return s.current_time;
               }
               return prev;
@@ -199,7 +195,7 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
     localActionTime.current = Date.now();
     seekLock.current = true;
     setCurrentTime(clamped);
-    webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v)v.currentTime=${clamped};true;`);
+    webRef.current?.injectJavaScript(`window._syncState.seekTo=${clamped};true;`);
     sendCommand('seek', String(clamped));
     setTimeout(() => { seekLock.current = false; }, 300);
   }, [duration, sendCommand]);
@@ -207,9 +203,8 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
   const handleSpeed = useCallback((s: number) => {
     localActionTime.current = Date.now();
     setSpeed(s);
-    webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v)v.playbackRate=${s};true;`);
+    webRef.current?.injectJavaScript(`window._syncState.speed=${s};true;`);
     sendCommand('speed', String(s));
-    // Also sync current position so backend has correct time for this speed
     sendCommand('seek', String(currentTime));
   }, [sendCommand, currentTime]);
 
@@ -217,10 +212,9 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
     localActionTime.current = Date.now();
     setIsPlaying(prev => {
       const next = !prev;
-      isPlayingRef.current = next; // keep ref in sync
-      webRef.current?.injectJavaScript(
-        `var v=document.getElementById('v');if(v){${next ? 'v.play()' : 'v.pause()'}}true;`
-      );
+      isPlayingRef.current = next;
+      // Set global _syncState in WebView (internal loop will apply it)
+      webRef.current?.injectJavaScript(`window._syncState.playing=${next};true;`);
       sendCommand(next ? 'play' : 'pause');
       sendCommand('seek', String(currentTime));
       return next;
@@ -290,17 +284,16 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
     else if (msg.startsWith('ready') || msg === 'video_loaded') {
       setVideoLoaded(true);
       videoLoadedRef.current = true;
-      // If THIS device uploaded the clip, auto-play and sync
+      // If THIS device uploaded, auto-play via _syncState
       if (justUploadedRef.current) {
         justUploadedRef.current = false;
         setIsPlaying(true);
         isPlayingRef.current = true;
         localActionTime.current = Date.now();
-        webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v)v.play();true;`);
+        webRef.current?.injectJavaScript(`window._syncState.playing=true;true;`);
         sendCommand('play');
         sendCommand('seek', '0');
       }
-      // Otherwise: do nothing, polling will apply remote play state
     }
   }, [sendCommand]);
 
@@ -449,7 +442,18 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
               v.preload='auto';
               v.playbackRate=${speed};
               v.muted=true;
-              // NO autoplay - wait for video_loaded, then code controls play
+              // ROBUST SYNC: global state variable + internal polling loop
+              window._syncState = { playing: false, seekTo: -1, speed: ${speed} };
+              // Internal loop checks _syncState every 150ms and syncs video
+              setInterval(function(){
+                var vs = window._syncState;
+                if (!v) return;
+                if (vs.playing && v.paused) { v.play().catch(function(){}); }
+                if (!vs.playing && !v.paused) { v.pause(); }
+                if (vs.seekTo >= 0) { v.currentTime = vs.seekTo; vs.seekTo = -1; }
+                if (v.playbackRate !== vs.speed) { v.playbackRate = vs.speed; }
+              }, 150);
+              // Report when video is ready
               var loaded=false;
               function onReady(){
                 if(loaded) return;

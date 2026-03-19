@@ -48,7 +48,8 @@ export default function AvailableTeacherCard({ teacher, onPress, onBookPress }: 
   };
 
   const isBusy = teacher.is_busy === true;
-  const borderColor = isBusy ? '#FF3B30' : Colors.success;
+  const isOnline = teacher.is_available === true;
+  const borderColor = isOnline ? Colors.success : '#FF3B30';
 
   return (
     <TouchableOpacity style={styles.container} onPress={onPress} data-testid={`teacher-card-${teacher.id}`}>
@@ -65,7 +66,7 @@ export default function AvailableTeacherCard({ teacher, onPress, onBookPress }: 
             </View>
           )}
         </View>
-        <View style={[styles.statusDot, { backgroundColor: isBusy ? '#FF3B30' : Colors.success }]} />
+        <View style={[styles.statusDot, { backgroundColor: isOnline ? Colors.success : '#FF3B30' }]} />
       </View>
 
       <View style={styles.info}>
@@ -78,7 +79,7 @@ export default function AvailableTeacherCard({ teacher, onPress, onBookPress }: 
         </View>
       </View>
 
-      {onBookPress && !isBusy && (
+      {onBookPress && isOnline && !isBusy && (
         <TouchableOpacity onPress={onBookPress} style={styles.bookButton} data-testid={`book-btn-${teacher.id}`}>
           <Ionicons name="videocam" size={16} color="#FFF" />
           <Text style={styles.bookText}>Prenota</Text>
@@ -92,7 +93,7 @@ export default function AvailableTeacherCard({ teacher, onPress, onBookPress }: 
             <Text style={styles.busyText}>{teacher.remaining_minutes || 0}'</Text>
           </>
         ) : (
-          <View style={styles.availableDot} />
+          <View style={[styles.availableDot, { backgroundColor: isOnline ? Colors.success : '#FF3B30' }]} />
         )}
       </View>
     </TouchableOpacity>
