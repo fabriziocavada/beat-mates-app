@@ -333,12 +333,12 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
       localActionTime.current = Date.now();
       seekLock.current = true;
       setCurrentTime(time);
-      webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v){v.pause();v.currentTime=${time};}true;`);
+      webRef.current?.injectJavaScript(`window._syncState.playing=false;window._syncState.seekTo=${time};true;`);
     } else if (type === 'move' && isDragging.current) {
       localActionTime.current = Date.now();
       seekLock.current = true;
       setCurrentTime(time);
-      webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v)v.currentTime=${time};true;`);
+      webRef.current?.injectJavaScript(`window._syncState.seekTo=${time};true;`);
     } else if (type === 'end') {
       isDragging.current = false;
       handleSeekRef.current(time);

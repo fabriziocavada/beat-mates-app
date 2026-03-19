@@ -6,41 +6,44 @@ import {
   Modal,
   TouchableOpacity,
   TextInput,
-  Dimensions,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
   ScrollView,
-  TouchableWithoutFeedback,
-  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/colors';
 
-const { width, height } = Dimensions.get('window');
-
 interface CallRatingModalProps {
   visible: boolean;
-  teacherName: string;
-  sessionId: string;
   onSubmit: (rating: number, comment: string) => void;
   onSkip: () => void;
+  teacherName: string;
 }
 
 export default function CallRatingModal({
   visible,
-  teacherName,
-  sessionId,
   onSubmit,
   onSkip,
+  teacherName,
 }: CallRatingModalProps) {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [hoveredStar, setHoveredStar] = useState(0);
 
   const handleSubmit = () => {
+    Keyboard.dismiss();
     if (rating > 0) {
       onSubmit(rating, comment);
+      setRating(0);
+      setComment('');
     }
+  };
+
+  const handleSkip = () => {
+    Keyboard.dismiss();
+    setRating(0);
+    setComment('');
+    onSkip();
   };
 
   const getRatingText = (r: number) => {
@@ -55,62 +58,53 @@ export default function CallRatingModal({
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-    >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <KeyboardAvoidingView
-          style={styles.overlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
+      <View style={styles.overlay}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          bounces={false}
+          showsVerticalScrollIndicator={false}
         >
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            bounces={false}
-          >
-            <View style={styles.container}>
-          {/* Header icon */}
-          <View style={styles.iconContainer}>
-            <Ionicons name="videocam" size={40} color="#FFF" />
-          </View>
+          <View style={styles.container}>
+            {/* Header icon */}
+            <View style={styles.iconContainer}>
+              <Ionicons name="videocam" size={40} color="#FFF" />
+            </View>
 
-          {/* Title */}
-          <Text style={styles.title}>Com'è andata la lezione?</Text>
-          <Text style={styles.subtitle}>
-            Valuta la tua esperienza con {teacherName}
-          </Text>
+            {/* Title */}
+            <Text style={styles.title}>Com'e andata la lezione?</Text>
+            <Text style={styles.subtitle}>
+              Valuta la tua esperienza con {teacherName}
+            </Text>
 
-          {/* Stars */}
-          <View style={styles.starsContainer}>
-            {[1, 2, 3, 4, 5].map((star) => (
-              <TouchableOpacity
-                key={star}
-                onPress={() => setRating(star)}
-                onPressIn={() => setHoveredStar(star)}
-                onPressOut={() => setHoveredStar(0)}
-                style={styles.starButton}
-                data-testid={`rating-star-${star}`}
-              >
-                <Ionicons
-                  name={star <= (hoveredStar || rating) ? 'star' : 'star-outline'}
-                  size={48}
-                  color={star <= (hoveredStar || rating) ? '#FFD700' : '#444'}
-                />
-              </TouchableOpacity>
-            ))}
-          </View>
+            {/* Stars */}
+            <View style={styles.starsContainer}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <TouchableOpacity
+                  key={star}
+                  onPress={() => setRating(star)}
+                  onPressIn={() => setHoveredStar(star)}
+                  onPressOut={() => setHoveredStar(0)}
+                  style={styles.starButton}
+                  data-testid={`rating-star-${star}`}
+                >
+                  <Ionicons
+                    name={star <= (hoveredStar || rating) ? 'star' : 'star-outline'}
+                    size={44}
+                    color={star <= (hoveredStar || rating) ? '#FFD700' : '#444'}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
 
-          {/* Rating text */}
-          <Text style={[styles.ratingText, rating > 0 && styles.ratingTextActive]}>
-            {getRatingText(rating)}
-          </Text>
+            {/* Rating text */}
+            <Text style={[styles.ratingText, rating > 0 && styles.ratingTextActive]}>
+              {getRatingText(rating)}
+            </Text>
 
-          {/* Comment input */}
-          {rating > 0 && (
-            <View>
+            {/* Comment input - only show when rated */}
+            {rating > 0 && (
               <TextInput
                 style={styles.commentInput}
                 placeholder="Aggiungi un commento (opzionale)"
@@ -118,40 +112,34 @@ export default function CallRatingModal({
                 value={comment}
                 onChangeText={setComment}
                 multiline
+                numberOfLines={3}
                 maxLength={500}
-                returnKeyType="done"
-                blurOnSubmit={true}
-                onSubmitEditing={Keyboard.dismiss}
+                textAlignVertical="top"
               />
+            )}
+
+            {/* BUTTONS - always visible, inside scrollable area */}
+            <View style={styles.buttonsRow}>
               <TouchableOpacity
-                style={styles.doneKeyboardBtn}
-                onPress={Keyboard.dismiss}
+                style={styles.skipButton}
+                onPress={handleSkip}
+                data-testid="skip-rating-btn"
               >
-                <Text style={styles.doneKeyboardText}>Chiudi tastiera</Text>
+                <Text style={styles.skipButtonText}>Salta</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.submitButton, !rating && styles.submitButtonDisabled]}
+                onPress={handleSubmit}
+                disabled={!rating}
+                data-testid="submit-rating-btn"
+              >
+                <Ionicons name="send" size={16} color="#FFF" style={{ marginRight: 6 }} />
+                <Text style={styles.submitButtonText}>Invia</Text>
               </TouchableOpacity>
             </View>
-          )}
-
-          {/* Buttons */}
-          <View style={styles.buttonsContainer}>
-            <TouchableOpacity
-              style={styles.skipButton}
-              onPress={onSkip}
-              data-testid="skip-rating-btn"
-            >
-              <Text style={styles.skipButtonText}>Salta</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.submitButton, rating === 0 && styles.submitButtonDisabled]}
-              onPress={handleSubmit}
-              disabled={rating === 0}
-              data-testid="submit-rating-btn"
-            >
-              <Text style={styles.submitButtonText}>Invia valutazione</Text>
-            </TouchableOpacity>
           </View>
-        </View>
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -166,110 +154,104 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 40,
   },
   container: {
     width: '100%',
     maxWidth: 400,
     backgroundColor: Colors.surface,
     borderRadius: 24,
-    padding: 32,
+    padding: 24,
     alignItems: 'center',
   },
   iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   title: {
     color: '#FFF',
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
+    marginBottom: 6,
     textAlign: 'center',
-    marginBottom: 8,
   },
   subtitle: {
     color: '#888',
-    fontSize: 15,
+    fontSize: 14,
+    marginBottom: 20,
     textAlign: 'center',
-    marginBottom: 32,
   },
   starsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
+    marginBottom: 8,
     gap: 8,
-    marginBottom: 16,
   },
   starButton: {
     padding: 4,
   },
   ratingText: {
     color: '#666',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   ratingTextActive: {
-    color: '#FFD700',
+    color: Colors.primary,
   },
   commentInput: {
     width: '100%',
-    backgroundColor: '#1C1C1E',
+    backgroundColor: '#1a1a2e',
     borderRadius: 12,
-    padding: 16,
+    padding: 14,
     color: '#FFF',
     fontSize: 15,
     minHeight: 80,
-    textAlignVertical: 'top',
-    marginBottom: 24,
+    maxHeight: 120,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#333',
   },
-  buttonsContainer: {
+  buttonsRow: {
     flexDirection: 'row',
-    gap: 12,
     width: '100%',
+    gap: 12,
+    marginTop: 4,
   },
   skipButton: {
     flex: 1,
-    paddingVertical: 16,
-    borderRadius: 12,
-    backgroundColor: '#2C2C2E',
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#1a1a2e',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   skipButtonText: {
-    color: '#888',
-    fontSize: 16,
+    color: '#999',
+    fontSize: 15,
     fontWeight: '600',
   },
   submitButton: {
-    flex: 2,
-    paddingVertical: 16,
-    borderRadius: 12,
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
     backgroundColor: Colors.primary,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   submitButtonDisabled: {
-    backgroundColor: '#333',
+    opacity: 0.4,
   },
   submitButtonText: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-  },
-  doneKeyboardBtn: {
-    alignSelf: 'flex-end',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    marginBottom: 16,
-  },
-  doneKeyboardText: {
-    color: Colors.primary,
-    fontSize: 13,
-    fontWeight: '600',
   },
 });
