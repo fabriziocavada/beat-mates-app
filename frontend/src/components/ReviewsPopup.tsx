@@ -9,6 +9,7 @@ import {
   Image,
   Dimensions,
   FlatList,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/colors';
@@ -16,8 +17,9 @@ import { getMediaUrl } from '../services/api';
 import api from '../services/api';
 
 const SCREEN_W = Dimensions.get('window').width;
-const CARD_W = SCREEN_W * 0.78;
-const CARD_GAP = 12;
+const POPUP_W = SCREEN_W - 32;
+const CARD_PADDING = 18;
+const ITEM_W = POPUP_W; // full-width pages
 
 interface Review {
   id: string;
@@ -52,7 +54,6 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIdx, setActiveIdx] = useState(0);
-  const flatRef = useRef<FlatList>(null);
 
   useEffect(() => {
     if (visible && userId) {
@@ -79,41 +80,45 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
     ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
     : '0';
 
-  const onViewableChanged = useRef(({ viewableItems }: any) => {
-    if (viewableItems.length > 0) setActiveIdx(viewableItems[0].index ?? 0);
+  const onScroll = useRef((e: any) => {
+    const x = e.nativeEvent.contentOffset.x;
+    const idx = Math.round(x / ITEM_W);
+    setActiveIdx(idx);
   }).current;
 
   const renderCard = ({ item }: { item: Review }) => (
-    <View style={styles.card} data-testid={`review-card-${item.id}`}>
-      {/* Reviewer row */}
-      <View style={styles.cardHeader}>
-        {item.reviewer_image ? (
-          <Image source={{ uri: getMediaUrl(item.reviewer_image) || '' }} style={styles.avatar} />
-        ) : (
-          <View style={styles.avatarPlaceholder}>
-            <Ionicons name="person" size={20} color="#777" />
+    <View style={styles.page}>
+      <View style={styles.card} data-testid={`review-card-${item.id}`}>
+        {/* Reviewer row */}
+        <View style={styles.cardHeader}>
+          {item.reviewer_image ? (
+            <Image source={{ uri: getMediaUrl(item.reviewer_image) || '' }} style={styles.avatar} />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Ionicons name="person" size={20} color="#777" />
+            </View>
+          )}
+          <View style={styles.cardHeaderInfo}>
+            <Text style={styles.reviewerName} numberOfLines={1}>{item.reviewer_username}</Text>
+            <Text style={styles.dateText}>{timeAgo(item.created_at)}</Text>
           </View>
-        )}
-        <View style={styles.cardHeaderInfo}>
-          <Text style={styles.reviewerName} numberOfLines={1}>{item.reviewer_username}</Text>
-          <Text style={styles.dateText}>{timeAgo(item.created_at)}</Text>
         </View>
+        {/* Stars */}
+        <View style={styles.starsRow}>{renderStars(item.rating)}</View>
+        {/* Comment text */}
+        {item.text ? (
+          <Text style={styles.commentText} numberOfLines={6}>{item.text}</Text>
+        ) : (
+          <Text style={styles.noCommentText}>Nessun commento</Text>
+        )}
       </View>
-      {/* Stars */}
-      <View style={styles.starsRow}>{renderStars(item.rating)}</View>
-      {/* Comment text */}
-      {item.text ? (
-        <Text style={styles.commentText} numberOfLines={4}>{item.text}</Text>
-      ) : (
-        <Text style={styles.noCommentText}>Nessun commento</Text>
-      )}
     </View>
   );
 
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
-      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
-        <TouchableOpacity activeOpacity={1} style={styles.container}>
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable style={styles.container} onPress={() => {}}>
           {/* Handle bar */}
           <View style={styles.handleBar} />
 
@@ -147,20 +152,21 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
             </View>
           ) : (
             <>
-              {/* Horizontal carousel */}
+              {/* Full-width paging carousel */}
               <FlatList
-                ref={flatRef}
                 data={reviews}
                 renderItem={renderCard}
                 keyExtractor={(item) => item.id}
                 horizontal
-                pagingEnabled={false}
-                snapToInterval={CARD_W + CARD_GAP}
-                decelerationRate="fast"
+                pagingEnabled
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.carouselContent}
-                onViewableItemsChanged={onViewableChanged}
-                viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
+                onScroll={onScroll}
+                scrollEventThrottle={16}
+                getItemLayout={(_, index) => ({
+                  length: ITEM_W,
+                  offset: ITEM_W * index,
+                  index,
+                })}
               />
               {/* Dots indicator */}
               {reviews.length > 1 && (
@@ -170,10 +176,14 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
                   ))}
                 </View>
               )}
+              {/* Page counter */}
+              {reviews.length > 1 && (
+                <Text style={styles.pageCounter}>{activeIdx + 1} / {reviews.length}</Text>
+              )}
             </>
           )}
-        </TouchableOpacity>
-      </TouchableOpacity>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
@@ -188,8 +198,8 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: '#1a1a2e',
     borderRadius: 20,
-    width: SCREEN_W - 32,
-    maxHeight: '75%',
+    width: POPUP_W,
+    maxHeight: '70%',
     overflow: 'hidden',
   },
   handleBar: {
@@ -231,16 +241,16 @@ const styles = StyleSheet.create({
   summaryRight: { flex: 1 },
   starsRow: { flexDirection: 'row', gap: 2 },
   reviewCountText: { color: '#888', fontSize: 12, marginTop: 3 },
-  carouselContent: {
-    paddingHorizontal: 18,
+  // Each page is full popup width
+  page: {
+    width: ITEM_W,
+    paddingHorizontal: CARD_PADDING,
     paddingVertical: 16,
   },
   card: {
-    width: CARD_W,
     backgroundColor: '#222244',
     borderRadius: 14,
     padding: 16,
-    marginRight: CARD_GAP,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -273,7 +283,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 6,
-    paddingBottom: 16,
+    paddingBottom: 6,
   },
   dot: {
     width: 7,
@@ -284,6 +294,12 @@ const styles = StyleSheet.create({
   dotActive: {
     backgroundColor: Colors.primary,
     width: 18,
+  },
+  pageCounter: {
+    color: '#666',
+    fontSize: 11,
+    textAlign: 'center',
+    paddingBottom: 14,
   },
   emptyWrap: {
     alignItems: 'center',

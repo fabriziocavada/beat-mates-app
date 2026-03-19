@@ -79,7 +79,9 @@ export default function AvailableTeacherCard({ teacher, onPress, onBookPress, on
               {(teacher.review_count ?? 0) > 0 && (
                 <Text style={styles.reviewCount}>({teacher.review_count})</Text>
               )}
-              <Ionicons name="information-circle-outline" size={16} color={Colors.primary} style={{ marginLeft: 4 }} />
+              <View style={styles.infoBtnCircle}>
+                <Ionicons name="information-circle" size={22} color={Colors.primary} />
+              </View>
             </TouchableOpacity>
           )}
         </View>
@@ -161,8 +163,16 @@ const styles = StyleSheet.create({
   infoBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 2,
-    paddingHorizontal: 2,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    marginLeft: 4,
+  },
+  infoBtnCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bookButton: {
     flexDirection: 'row',
