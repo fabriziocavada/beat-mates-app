@@ -39,12 +39,27 @@ Social media mobile app for dancers called "BEAT MATES". Instagram-like experien
 
 ## Available Teachers Feature
 - Endpoint: GET /api/available-teachers
-- Only returns users with `is_available: True`
+- Returns all users with `is_available` boolean field
 - Real ratings from `reviews` collection (aggregation on reviewee_id)
 - Includes review_count
 - Busy teachers show `is_busy: true` with `remaining_minutes`
 - Auto-closes stale sessions (>2 hours)
 - Sorted: available first, then busy, rating descending
+- "i" icon next to stars opens Reviews Popup for each teacher
+
+## Reviews Popup Feature (Feb 2026)
+- **Backend:** GET /api/users/{user_id}/reviews - returns reviews with text, rating, reviewer info, timestamps
+- **Frontend:** Google-style horizontal carousel popup with:
+  - Average rating summary
+  - Swipeable cards with avatar, username, relative date, stars, comment text
+  - Dot indicators for navigation
+  - Closable via X button or overlay tap
+
+## Review Modal Keyboard Fix (Feb 2026)
+- Replaced `KeyboardAvoidingView` with `Keyboard API` + `Animated.View`
+- Modal shifts up automatically when keyboard opens (-(keyboardHeight/2 + 20))
+- "Chiudi tastiera" dismiss button appears when keyboard is open
+- Buttons (Salta/Invia) always accessible
 
 ## VIDEOBUG Resolution (Critical Reference)
 **Problem:** Videos from iPhones appeared black/unplayable in the app.
@@ -121,6 +136,7 @@ availability_slots, bookings, coaching_sessions, comments, conversations, follow
 - Chat: conversations, messages
 - Media: upload, serve, thumbnail, video-player
 - **Available Teachers: filtered, rated, with busy status**
+- **User Reviews: GET /api/users/{user_id}/reviews**
 
 ## Credentials
 - Teacher: tutor@test.com / password123
@@ -134,23 +150,10 @@ availability_slots, bookings, coaching_sessions, comments, conversations, follow
 - Daily.co tunnel may disconnect intermittently (preview environment limitation)
 - iPhone video autoplay regression in home feed (not addressed yet)
 - One device shows a pause button at video call start (likely Daily.co rendering quirk)
+- Coaching sync may have issues on some devices (architectural limitation of WebView state sync)
 
 ## Recent Changes (Feb 2026 - Current Session)
-- Coaching: **SYNC v4 (ROBUST)** - window._syncState global variable + 150ms internal WebView polling loop. No more direct v.play()/v.pause() calls via injectJavaScript. justUploadedRef for auto-play on uploader's device. videoLoadedRef gates sync.
-- Coaching: Removed pink button from header
-- Review Modal: Added KeyboardAvoidingView, ScrollView, "Chiudi tastiera" button. Keyboard no longer covers input.
-- Available Teachers: Shows ALL users with green/red indicators. Online = is_available + last_active < 15min + not busy. Both circles (avatar border + status dot) colored. Sort: online first, then offline by rating.
-- Backend: last_active updated on every authenticated call
-- Video Call: Auto-play for paused videos in Daily.co WebView
-- Installed ffmpeg for video compression
-
-## Previous Session Changes (March 10, 2026)
-- Fixed video call UX issues (session persistence, coaching button, post-call navigation)
-- WebView loading: 15s auto-timeout
-- Auto-retry: 3 retries on network errors
-- PiP layout: Animated dimensions, draggable with edge-snapping
-- Drawing for BOTH users (bidirectional sync)
-- Recording for BOTH users
-- End-call confirmation dialog
-- Fixed compress_video blocking event loop
-- Added 46 MongoDB indexes
+- CallRatingModal: Keyboard fix using Animated.View + Keyboard API (replaces broken KeyboardAvoidingView)
+- ReviewsPopup: Google-style horizontal carousel with avatars, comments, dot indicators
+- AvailableTeacherCard: Simplified "i" button logic - always visible for all teachers
+- available.tsx: Added ReviewsPopup rendering (was imported but never rendered)
