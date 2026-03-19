@@ -89,10 +89,10 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
               webRef.current?.injectJavaScript(`window._syncState.playing=${s.is_playing};true;`);
             }
           }
-          // Seek: apply if diff > 1.5s
-          if (typeof s.current_time === 'number') {
+          // Seek: apply ONLY when paused (prevents loop during normal playback)
+          if (typeof s.current_time === 'number' && !isPlayingRef.current) {
             setCurrentTime(prev => {
-              if (Math.abs(prev - s.current_time) > 1.5) {
+              if (Math.abs(prev - s.current_time) > 0.5) {
                 webRef.current?.injectJavaScript(`window._syncState.seekTo=${s.current_time};true;`);
                 return s.current_time;
               }
@@ -332,8 +332,11 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
       isDragging.current = true;
       localActionTime.current = Date.now();
       seekLock.current = true;
+      isPlayingRef.current = false;
+      setIsPlaying(false);
       setCurrentTime(time);
       webRef.current?.injectJavaScript(`window._syncState.playing=false;window._syncState.seekTo=${time};true;`);
+      sendCommand('pause');
     } else if (type === 'move' && isDragging.current) {
       localActionTime.current = Date.now();
       seekLock.current = true;

@@ -60,6 +60,17 @@ export default function CallRatingModal({
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
       <View style={styles.overlay}>
+        {/* Fixed OK button at top - always visible above keyboard */}
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            style={styles.topOkButton}
+            onPress={handleSubmit}
+            data-testid="review-top-ok"
+          >
+            <Text style={styles.topOkText}>{rating > 0 ? 'Invia' : 'Salta'}</Text>
+          </TouchableOpacity>
+        </View>
+
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
@@ -149,6 +160,22 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.9)',
+  },
+  topBar: {
+    paddingTop: Platform.OS === 'ios' ? 56 : 40,
+    paddingHorizontal: 20,
+    alignItems: 'flex-end',
+  },
+  topOkButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: Colors.primary,
+    borderRadius: 16,
+  },
+  topOkText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
   scrollContent: {
     flexGrow: 1,
