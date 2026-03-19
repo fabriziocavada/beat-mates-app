@@ -1525,6 +1525,25 @@ async def create_review(data: ReviewCreate, current_user: dict = Depends(get_cur
     
     return {"success": True}
 
+@api_router.get("/users/{user_id}/reviews")
+async def get_user_reviews(user_id: str, current_user: dict = Depends(get_current_user)):
+    reviews = await db.reviews.find(
+        {"reviewee_id": user_id},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    
+    # Enrich with reviewer username
+    for r in reviews:
+        reviewer = await db.users.find_one({"id": r.get("reviewer_id")}, {"_id": 0, "username": 1, "profile_image": 1})
+        r["reviewer_username"] = reviewer["username"] if reviewer else "Utente"
+        r["reviewer_image"] = reviewer.get("profile_image") if reviewer else None
+        # Convert datetime to string
+        if "created_at" in r and hasattr(r["created_at"], "isoformat"):
+            r["created_at"] = r["created_at"].isoformat()
+    
+    return reviews
+
+
 # ==================== PRE-RECORDED LESSONS ====================
 
 @api_router.post("/pre-recorded-lessons", response_model=PreRecordedLessonResponse)

@@ -14,7 +14,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://beat-mates-coaching.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://beat-mates-app-1.preview.emergentagent.com')
 BASE_URL = BASE_URL.rstrip('/')
 
 # Test credentials

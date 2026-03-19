@@ -5,192 +5,277 @@ The user wants to create a social media mobile app called BEAT MATES for dancers
 - **User System:** Registration/login with email/password and Google social login.
 - **Dance Disciplines:** Users select dance disciplines to filter their feed.
 - **Social Feed:** Instagram-like feed for photos, videos (autoplay), and text. Posts can have multiple images (carousel).
-- **Likes & Comments:** Standard like/comment functionality, with an Instagram-style UI for viewing comments.
-- **Stories:** Instagram-like stories (vertical, rectangular) with sequential viewing and swipe navigation. Video stories must have thumbnails.
-- **Profile:** User profile with picture/info, a grid of their posts, stories, and a hamburger menu (Saved, Archive, Activity, Notifications).
-- **E-commerce:** A dedicated shop tab on the profile where users can upload and sell their own paid video dance lessons.
-- **Reviews:** Users who purchase a lesson or complete a live call can leave a star rating (1-5).
+- **Likes & Comments:** Standard like/comment functionality.
+- **Stories:** Instagram-like stories (vertical, rectangular).
+- **Profile:** User profile with picture/info, a grid of their posts, stories, and a hamburger menu.
+- **E-commerce:** A shop tab on the profile for selling video dance lessons.
+- **Reviews:** Star rating system for purchased lessons.
 - **Live Lessons:** A system for students to book and pay for live video lessons with available teachers using Daily.co.
-- **Music Page:** A page for users to upload music, create playlists, and use a player with speed controls. Paid playlists are also required.
-- **Video & Camera:** The app must support vertical, full-screen video recording and allow custom thumbnail selection for video posts.
+- **Music Page:** For uploading music, creating playlists, and a player with speed controls.
+- **Video & Camera:** Support for vertical, full-screen video recording.
+- **Sponsored Posts:** A dashboard for users to boost their posts.
 - **Design:** Dark theme with a coral accent ().
-- **Notifications:** Push notifications for lesson requests (accetta/rifiuta).
+- **Notifications:** Push notifications.
 - **Chat:** Direct messaging between users.
-- **Search:** User search with fuzzy matching to handle typos.
+- **Search:** Fuzzy user search.
+- **Live Coaching Tool:** During a live lesson, the teacher/student can initiate a 20-second recording. This recording is then displayed in a shared review tool where either user can control playback (timeline scrub, slow-motion) and draw on the video frames, with all actions synced live for the other user.
+- **Teacher Reviews Popup (New):** An i icon on the teacher list to open a popup with a carousel of their reviews.
 
-**User's preferred language**: The user's primary language is Italian. The next agent MUST respond in Italian.
+**User's preferred language**: Italian
 
 **what currently exists?**
-A full-stack application using Expo (React Native) for the frontend and FastAPI/MongoDB for the backend.
-- **Core Functionality:** User authentication, social feed, stories, profiles, a music page, and e-commerce for video lessons are implemented. Live video calls via Daily.co are functional.
-- **Video Playback Strategy:** After experimenting with native  caused player conflicts (e.g., watching a story would freeze videos in the home feed), all video players in the app (Feed, Reels, Stories) have been reverted to using . This provides stability at the cost of performance.
-- **Performance Optimizations:**
-    - **Automatic Video Compression:** The backend now uses  to automatically compress all newly uploaded videos, drastically reducing file sizes and improving load times. Existing large videos have also been manually compressed.
-    - **Loading Indicators:** To mitigate the slow start times of , visible loading spinners have been added to all video players to improve the user experience, preventing a black screen effect during buffering.
-- **Recent Features & Fixes:**
-    - A post-video-call rating modal has been implemented.
-    - Mockup payment flows have been added for both pre-recorded lessons and new paid audio playlists.
-    - User search has been improved with fuzzy matching.
-    - A bug preventing the Shop tab from working on other users' profiles has been fixed.
-    - Multiple bugs related to video carousels (black screens in Reels, audio leaks) have been resolved.
+A full-stack Expo (React Native) and FastAPI/MongoDB application. The primary features are user authentication, a live coaching tool built on Daily.co (which is the source of many critical bugs), and a list of available teachers. The backend has logic to track user availability via a  timestamp and serve user reviews. The frontend consists of the main app screens, the video call UI, the coaching modal, the teacher list, and a newly added (but not fully integrated) reviews popup.
 
 **Last working item**:
-    - Last item agent was working: The agent was attempting to fix a critical regression on the home feed where videos lack a play/pause button and do not open in fullscreen when clicked. The user also reported that horizontal videos still have black bars (not responsive). The agent's last fix for this was unsuccessful.
+    - Last item agent was working: Addressing a bug report from the user with three critical, recurring issues:
+1.  **Coaching Sync Failure:** Play/pause and timeline seeking are not synchronized between the two users' devices, resulting in a loop/stutter.
+2.  **Review Modal Keyboard Issue:** The keyboard covers the Submit and Skip buttons when writing a review, making it impossible to exit.
+3.  **Available Teachers List UI Error:** All teachers are shown as available (green), even though the backend correctly identifies only a few as online.
     - Status: IN PROGRESS
     - Agent Testing Done: N
-    - Which testing method agent to use? Frontend testing agent to verify the UI interactions on the  component, specifically checking for the play/pause button's visibility and function, the fullscreen navigation on click, and the responsive layout of horizontal videos.
-    - User Testing Done: Y (The user confirmed the last fix did not work).
+    - Which testing method agent to use? Manual testing by user. The next agent should use the screenshot tool to verify UI fixes for the Review Modal and the Teachers list. Backend testing can be done via  or .
+    - User Testing Done: Y (The user's latest message is a bug report with screenshots confirming the issues are still present).
 
 **All Pending/In progress Issue list**:
-  Issue 1:  Home feed videos are broken and not responsive (P0 - CRITICAL)
-  Issue 2:  Persistent app slowness and video buffering delays (P1 - HIGH)
+  Issue 1:  Coaching video playback has a recurring desync/loop bug (P0 - CRITICAL BLOCKER)
+  Issue 2:  Review modal is unusable because the keyboard covers action buttons (P0 - CRITICAL BLOCKER)
+  Issue 3:  Available Teachers list UI is not updating correctly (P1 - HIGH)
+  Issue 4:  Live Coaching feature is fundamentally unstable on Android due to Expo Go / WebView limitations (P1 - ARCHITECTURAL)
   
   Issues Detail:
   - Issue 1: 
-     - Attempted fixes: The agent added  handlers for play/pause and fullscreen navigation within  and . These changes did not resolve the issue as confirmed by the user. The agent previously attempted to fix responsiveness with  in the  HTML, but the user reports the problem persists.
+     - Attempted fixes: The agent has tried multiple solutions: direct JS injection,  to avoid stale closures, and most recently, a  object inside the WebView polled by an internal loop. The latest fix attempted to prevent a loop by only applying remote seek commands when the local video is paused. The user reports this introduced a new stuttering/loop problem. The root cause is the unreliable nature of state synchronization between React Native and the WebView across different devices.
      - Next debug checklist: 
-        1. Thoroughly inspect  and .
-        2. Verify why the  overlays for play/pause and fullscreen are not functioning. Check for z-index issues or if another component is capturing the touch events.
-        3. For fullscreen, ensure  is being called with the correct route to the post detail screen.
-        4. For responsiveness, re-examine the HTML/CSS inside the . Ensure the video element has , , and the  attribute applies  correctly.
-     - Why fix this issue and what will be achieved with the fix? This is a core functionality of the app. Fixing it will make the main feed usable again.
+        1. **Re-evaluate the sync logic in **. The current approach ( check before seeking) is flawed.
+        2. When a user drags the timeline, the other user's video should be paused to prevent conflicting state updates. The agent added this, but it may be contributing to the issue.
+        3. The core problem is that the backend state () can conflict with the local video's playback time. Consider a new strategy: the backend state should be the source of truth only when a user explicitly seeks or pauses. During playback, the devices should not fight each other.
+     - Why fix this issue and what will be achieved with the fix? This is the core feature of the app and the user's biggest source of frustration. Fixing it is essential for the app to be usable.
      - Status:  IN PROGRESS
      - Is recurring issue? Y
      - Should Test frontend/backend/both after fix? Frontend
      - Blocked on other issue: None
   - Issue 2: 
-     - Attempted fixes: The agent correctly identified the preview environment (ngrok latency, shared server) as the root cause. Mitigations included server-side video compression and adding loading spinners to all video players.
+     - Attempted fixes: The agent has rewritten the  component multiple times, first by reordering elements, then by replacing it with a new implementation using  with . The user's latest screenshot confirms this is still not working on their iPhone.
      - Next debug checklist: 
-        1. This issue cannot be fully fixed in the current environment. The primary task is to manage user expectations.
-        2. Re-iterate that performance will be significantly better in a production environment.
-        3. Propose and plan the steps for deploying the application to a dedicated server (e.g., AWS, DigitalOcean) with a CDN, as previously discussed with the user.
-     - Why fix this issue and what will be achieved with the fix? While the root cause is environmental, continued user frustration is a project risk. Moving towards a production setup is the only true solution.
+        1. Review the implementation in .  behavior can be inconsistent.
+        2. A more robust solution might be to use the  API from React Native to listen for  and  events and manually adjust the layout or animate the modal's position.
+        3. The user requested an OK button at the top. This was implemented, but the core keyboard issue remains.
+     - Why fix this issue and what will be achieved with the fix? Users cannot submit reviews, which is a key part of the app's feedback loop.
      - Status:  IN PROGRESS
      - Is recurring issue? Y
-     - Should Test frontend/backend/both after fix? Frontend (for UX verification)
+     - Should Test frontend/backend/both after fix? Frontend
      - Blocked on other issue: None
+  - Issue 3: 
+     - Attempted fixes: The agent correctly identified that the backend at  is working as expected (returning only a few online users). The issue is that the user's Expo Go client is showing a cached, outdated version of the frontend code. The agent has restarted the 
+  Usage: expo [command] [options]
+
+  Options:
+  
+    -V, --version                     output the version number
+    --non-interactive                 Fail, if an interactive prompt would be required to continue.
+    -h, --help                        output usage information
+  
+  Commands:
+
+    init [name]                       Create a new Expo project
+    start [path]                      Start a local dev server for the app
+    start:web [path]                  Start a Webpack dev server for the web app
+    export [path]                     Export the static files of the app for hosting it on a web server
+    install [packages...]             Install a module or other package to a project
+    run:android [path]                Run the Android app binary locally
+    run:ios [path]                    Run the iOS app binary locally
+    send [path]                       Share the project's URL to an email address
+
+    login                             Login to an Expo account
+    logout                            Logout of an Expo account
+    register                          Sign up for a new Expo account
+    whoami                            Return the currently authenticated account
+
+    client:install:ios                Install Expo Go for iOS on the simulator
+    client:install:android            Install Expo Go for Android on a connected device or emulator
+
+    config [path]                     Show the project config
+    doctor [path]                     Diagnose issues with the project
+    upgrade [sdk-version]             Upgrade the project packages and config for the given SDK version
+
+    customize:web [path]              Eject the default web files for customization
+    prebuild [path]                   Create native iOS and Android project files before building natively.
+                                      Learn more: https://docs.expo.dev/workflow/customizing/
+
+    build:web [path]                  Build the web app for production
+
+    credentials:manager [path]        Superseded by eas credentials in eas-cli
+
+    url [path]                        Log a URL for opening the project in Expo Go
+    url:ipa [path]                    Log the download URL for the standalone iOS binary
+    url:apk [path]                    Log the download URL for the standalone Android binary
+
+    webhooks [path]                   List all webhooks for a project
+    webhooks:add [path]               Add a webhook to a project
+    webhooks:remove [path]            Delete a webhook
+    webhooks:update [path]            Update an existing webhook
+
+    build:ios [path]                  Superseded by eas build in eas-cli
+    build:android [path]              Superseded by eas build in eas-cli
+    build:status [path]               Superseded by eas build:list in eas-cli
+    eject [path]                      Superseded by expo prebuild
+    fetch:ios:certs [path]            Superseded by eas credentials in eas-cli
+    fetch:android:keystore [path]     Superseded by eas credentials in eas-cli
+    fetch:android:hashes [path]       Superseded by eas credentials in eas-cli
+    fetch:android:upload-cert [path]  Superseded by eas credentials in eas-cli
+    publish [path]                    Superseded by eas update in eas-cli
+    publish:set [path]                Superseded by eas update:republish in eas-cli
+    publish:rollback [path]           Superseded by eas update:republish in eas-cli
+    publish:history [path]            Superseded by eas update:list in eas-cli
+    publish:details [path]            Superseded by eas update:view in eas-cli
+    push:android:upload [path]        Superseded by eas credentials in eas-cli
+    push:android:show [path]          Superseded by eas credentials in eas-cli
+    push:android:clear [path]         Superseded by eas credentials in eas-cli
+    upload:android [path]             Superseded by eas submit in eas-cli
+    upload:ios [path]                 Superseded by eas submit in eas-cli
+    client:ios [path]                 Superseded by Expo Dev Clients
+
+[10:12:25]   Run a command with --help for more info 💡
+[10:12:25]     $ expo start --help
+[10:12:25] supervisor service multiple times to clear the Metro bundler cache.
+     - Next debug checklist: 
+        1. **This is not a code bug.** The next agent must instruct the user clearly and firmly to **force-quit the Expo Go app** on their iPhone (swipe up from the app switcher) and then reopen it. This will force it to download the latest bundle from the newly restarted server.
+        2. Verify the frontend code in  correctly uses the  prop to set the colors for both the avatar border and the status dot.
+     - Why fix this issue and what will be achieved with the fix? The teacher list is misleading, preventing users from starting calls with genuinely available teachers.
+     - Status:  IN PROGRESS
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? Frontend
+     - Blocked on other issue: User action (restarting their app).
+  - Issue 4: 
+     - Attempted fixes: The agent correctly identified that moving to a **Development Build** is the only true long-term solution for the video call instability and explained the process and costs to the user. The user has not yet approved this change.
+     - Next debug checklist: Re-engage the user about this architectural change *after* the current critical bugs are resolved to build trust.
+     - Why fix this issue and what will be achieved with the fix? It will unblock the development of a stable, native-performing video feature.
+     - Status:  BLOCKED
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? Both
+     - Blocked on other issue: User approval for architectural change.
 
 **In progress Task List**:
-- None. All current work is classified as bug fixing.
+  Task 1:  Implement Teacher Reviews Popup
+   - Where to resume: 
+     - Backend: A new endpoint  has been created in .
+     - Frontend: A new component  has been created. The  screen has been updated to include the state management and render this popup when an i icon on the  is pressed.
+   - What will be achieved with this? Fulfills a new user feature request.
+   - Status:  IN PROGRESS
+   - Should Test frontend/backend/both after fix? Both
+   - Blocked on something: The critical bugs (Issue 1, 2, 3) should be fixed first.
 
 **Upcoming and Future Tasks**
  Upcoming Tasks:
-    - (P1) Implement Live Thumbnail Preview: Enhance the existing thumbnail selection feature by showing a live preview as the user scrubs through the video to select a frame.
-    - (P2) Finalize Review System: Connect the post-video-call rating modal to the backend, save the ratings, and display the average rating on teacher profiles.
-    - (P2) Implement Shareable Audio Playlists.
- Future Tasks:
-    - (P3) Implement Stripe Integration: Replace the payment mockups with a real Stripe payment flow.
-    - (P3) Implement Push Notifications for lesson requests.
-    - (P3) Refactor : Break the monolithic server file into modular  files for better organization and scalability.
+    - (P1) Implement Stripe Integration.
+    - (P2) Finalize Review System (connect to backend).
+    - (P3) Implement Shareable Paid Audio Playlists.
+    - (P3) Implement Push Notifications.
     - (P3) Implement Google Social Login.
-    - (P3) Prepare for Production Deployment: Create Dockerfiles and deployment instructions for a service like AWS or DigitalOcean.
+ Future Tasks:
+    - (P3) Prepare for Production Deployment (Dockerfiles, etc.).
+    - (P3) Implement Sponsored Posts feature.
+    - (P3) Refactor  into modular routers.
 
 **Completed work in this session**
-- **Critical Bug Fixes:**
-  - Fixed multiple video carousel issues, including black screens in the Reels tab and audio leaks.
-  - Resolved a bug where the Shop tab was not selectable on other users' profiles.
-  - Fixed a media picker bug that caused multiple random files to be selected.
-  - Fixed a navigation crash ( error) in the story viewer.
-- **Performance & Stability:**
-  - Implemented automatic, server-side video compression () on all uploads, significantly reducing file sizes.
-  - Manually compressed existing large videos to improve load times.
-  - Stabilized video playback by reverting all players to  to resolve player conflicts, and added loading spinners to improve the buffering UX.
-- **New Feature Implementation:**
-  - Implemented fuzzy search for users in the backend.
-  - Added the ability for users to select a custom thumbnail when creating a video post.
-  - Created a post-live-call rating system (UI modal + backend endpoint).
-  - Implemented mockup payment flows for both pre-recorded video lessons and paid audio playlists.
-  - Added a new section for premium audio playlists with a subscription mockup.
+- **Coaching Sync Logic (Multiple Iterations):** Reworked the synchronization logic in  multiple times, culminating in a  pattern within the WebView to make play/pause/seek commands more robust than direct  calls. **(Note: This is still not working correctly).**
+- **Available Teachers Backend Logic:** Reworked the  endpoint to return all users, adding a new  boolean field. This field is true only if the user has  in the DB, is not in an active call, and has a  timestamp within the last 15 minutes. The endpoint also updates the  timestamp on every authenticated request.
+- **Review Modal UI/UX:** Rewrote the  component from scratch to use  with  in an attempt to solve the keyboard overlap issue. Also moved buttons and added an OK button at the user's request. **(Note: This is still not working correctly).**
+- **New Feature - Reviews Popup (Started):**
+  - Created a new backend endpoint  to fetch all reviews for a specific teacher.
+  - Created a new frontend component  to display reviews in a modal.
+  - Updated  and  to include an i icon and the logic to open the new popup.
+- **Environment Management:** Restarted the Expo server (expo: ERROR (not running)
+expo: started) multiple times to clear the Metro bundler cache.
 
 **Earlier issues found/mentioned but not fixed**
-   - All known issues are captured in the pending list.
+   - **iPhone Video Autoplay:** User reported that videos in the home feed are no longer auto-playing on some iPhone devices. This is a regression from a previous fork.
+   - **Carousel Swipe:** The functionality on the home feed post carousel may still be broken.
 
 **Known issue recurrence from previous fork**
-  - **App Performance & Slowness:** This remains the user's biggest pain point. The issue is environmental (preview server, ngrok latency), not strictly code-related. The agent has implemented all possible optimizations within the current constraints (compression, loading spinners).
-  - **Expo Metro Bundler Cache:** This issue persists. If the user reports a fix is not working, the first step is always to force-restart the frontend service to clear the cache.
+  - **Coaching Timeline Loop/Jank:** This is the primary recurring issue. The agent has tried multiple solutions, and the problem persists in different forms, indicating the complexity of syncing state in the current architecture.
+  - **Expo Cache/Environment:** The frontend code not updating on the user's device is a recurring environmental problem, not a code issue.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Frontend:** React Native (Expo), TypeScript,  (primary video player), Zustand.
-- **Backend:** Python, FastAPI, Motor,  (for video compression).
-- **Database:** MongoDB.
-- **Video Calls:** Daily.co.
-- **Critical Strategy:** The app has standardized on  for all video playback to ensure stability and avoid player conflicts. Performance limitations are managed with server-side compression and client-side loading indicators.
+- **React Native WebView State Sync:** The core technical challenge. Direct  calls for real-time actions like play/pause are unreliable. The latest attempt uses a global state object () inside the WebView, which is updated from React Native and read by a  loop within the WebView's JS context. This is more robust but still has bugs.
+- **React Native Keyboard Management:**  is the standard tool, but its behavior (, , ) can be inconsistent across platforms and complex layouts. The failure of this component is the root of the Review Modal bug.
+- **Backend User Presence:** Using a  timestamp, updated on every API call via a FastAPI dependency (), is a common and effective pattern for tracking which users are online.
 
 **key DB schema**
-  - : Added .
-  - : Added , .
-  - **New Collections**:  (for playlists),  (for video lessons), and  will be populated by the new rating system.
+  - : Now contains a  field.
+  - : Queried by the new  endpoint.
+  - : Checked by  to see if a user is .
 
 **changes in tech stack**
-  - **** has been installed on the backend and is now a core part of the video upload pipeline for compression.
-  - **** was tested and removed.  is the confirmed technology for video playback.
+  - None.
 
 **All files of reference**
-- **Files with Bugs:**
-  -  (Broken controls, no fullscreen click, responsiveness issue)
-  -  (Related to  bugs)
-- **Key Modified Files:**
-  -  (Major additions: video compression, fuzzy search, new endpoints for reviews, purchases, premium playlists)
-  - All video player components (, , ) were reverted to use  and now include a loading indicator.
-  -  (Media picker logic fixed, thumbnail selection UI added)
-  -  (Rating modal integrated)
-  -  (New file for paid playlists)
-
-**Areas that need refactoring**:
-- **:** Remains a monolith and is a high-priority candidate for refactoring into modular s.
-- **Video Player Components:** The various -based video players (, , etc.) could be abstracted into a single, reusable, and more robust component to ensure consistency and reduce code duplication.
+- **CRITICAL / UNSTABLE:**
+  - 
+  - 
+- **Modified Backend:**
+  - 
+- **Modified Frontend:**
+  - 
+  - 
+- **New Files:**
+  - 
 
 **key api endpoints**
-- : Now includes automatic video compression using .
-- : Implemented fuzzy matching.
-- : New endpoint for submitting ratings for live lessons.
-- : New mock endpoint for buying pre-recorded lessons.
-- : New endpoint to fetch paid playlists.
-- : New mock endpoint for playlist subscriptions.
+- : Heavily modified to return all users with a calculated  status based on DB flags, active calls, and a  timestamp.
+- : **NEW** endpoint to fetch all reviews for a given user.
+- : The endpoint used to send play/pause/seek commands.
 
 **Critical Info for New Agent**
-- **MANAGE USER EXPECTATIONS ON PERFORMANCE:** The user is extremely frustrated with the app's slowness. This is the most critical issue. You must immediately and clearly reiterate that the preview environment (ngrok, shared server) is the cause and that performance will be dramatically better on a real production server. Do not promise instant load times in the current environment. Frame your work as improving the *user experience* of waiting (e.g., with loaders) rather than eliminating waiting entirely.
-- **VIDEO PLAYBACK IS STABLE BUT FRAGILE:** Do not change the video player technology from . A previous attempt to use  caused major app-breaking conflicts. The current implementation with  and loading spinners is the most stable path forward. Focus on fixing the control/UI bugs within this existing  structure.
-- **PRIORITIZE THE BROKEN HOME FEED:** The user cannot use the main feed properly. Fixing the play/pause button, fullscreen navigation, and responsiveness in  is P0. Do not work on anything else until this is resolved.
-- **CACHE IS ALWAYS A SUSPECT:** If your fix doesn't appear for the user, your first action must be frontend: ERROR (no such process)
-frontend: ERROR (no such process). Then, instruct the user to fully close and reopen the Expo Go app on their device. Do not waste time debugging code until you have cleared the cache.
+- **The user is extremely frustrated, feels their credits are being wasted, and has provided screenshots proving the bugs are real.** Your first message must acknowledge this and be empathetic. Do not be defensive. State clearly that you see the problems and will fix them.
+- **Prioritize the 3 Critical Bugs (P0):**
+    1.  **Coaching Sync:** The latest loop/stutter is likely caused by the polling logic fighting with local playback. The  condition is the prime suspect.
+    2.  **Review Modal:**  has failed. Use the  API to listen for events and manually adjust the modal's  or .
+    3.  **Teachers List:** This is an **environment issue**, not a code issue. The backend is correct. You must guide the user to **FORCE-QUIT and REOPEN Expo Go** on their phone to get the latest frontend code.
+- **Do not start new features** until the three critical bugs are resolved and verified by the user. The user is losing trust with each failed fix.
+- **The pink button bug in the coaching UI was a recurring complaint.** The agent has removed it multiple times. Double-check that  is gone from .
 
 **documents and test reports created in this job**
-  - /app/test_reports/iteration_3.json
-  - /app/test_reports/iteration_4.json
-  - /app/memory/PRD.md (updated)
+  - /app/test_reports/iteration_20.json (Backend tests only)
 
 **Last 10 User Messages and any pending HUMAN messages** 
-- The user is extremely frustrated with ongoing performance issues, describing the app as pitiful and slow.
-- The user reported that switching to  caused a major bug where watching a story would freeze all videos on the home feed.
-- The agent reverted all players to , which fixed the freezing but reintroduced slow start times (2-3 seconds of black screen).
-- The agent added loading spinners to improve the buffering experience.
-- The user's latest and most critical report is that the home feed is now broken: there is **no play/pause button** and **clicking a post does not open it in fullscreen**.
-- The user also asked if they need a better server to fix the slowness. The agent confirmed that deploying to a production server (AWS/OVH) with a CDN is the real solution and will make the app 5-10x faster.
+ -  **10. User:** (LATEST) Extremely frustrated, sends screenshots showing all 3 bugs are still present: coaching sync is broken, keyboard covers review buttons, and all teachers are green. Feels credits are being wasted. (IN PROGRESS)
+ -  **9. User:** Says the sync is not great but better. Reports the review modal buttons are still covered by the text input panel. (IN PROGRESS)
+ -  **8. User:** Reports a new loop/stuttering issue in the coaching timeline. Also says the review modal needs an OK button at the top to exit when the keyboard is open. (IN PROGRESS)
+ -  **7. User:** Confirms the previous fixes are much better. (This was before the loop bug reappeared).
+ -  **6. User:** Reports the sync is completely broken again, the pink button is still there, and the teacher list is wrong. Says nothing was fixed and credits were wasted. (ADDRESSED, BUT REGRESSED)
+ -  **5. User:** Autoplay is not synced, play/pause is broken, and the unavailable teachers should have a red circle. (ADDRESSED, BUT REGRESSED)
+ -  **4. User:** Acknowledges the previous batch of fixes worked. Reports 3 new bugs: pause button in video call, pink circle in coaching, and wants autoplay on coaching video. Teacher list is still wrong. (ADDRESSED, BUT REGRESSED)
+ -  **3. User:** Asks for clarification on moving away from Expo Go to a Development Build.
+ -  **2. User:** Responds to the agent's plan, asking to first understand the process of moving away from Expo Go.
+ -  **1. User:** Asks the agent to present a plan using .
 
 **Project Health Check:**
-- **Broken**: The primary user experience—viewing and interacting with videos on the main feed—is critically broken due to missing controls and navigation.
-- **Mocked**: All payment and subscription flows are mockups and will require real integration with a payment provider like Stripe.
+- **Broken**: The core coaching feature is unusable due to the sync bug. The user review flow is blocked by the keyboard UI bug. The teacher availability list is misleading due to a client-side caching issue.
+- **Mocked**: Stripe integration.
 
 **3rd Party Integrations**
 - **Daily.co:** For live video calls.
 - **Expo Suite:** , , .
-- **:** Now a critical backend dependency for automatic video compression.
+- **:** Backend dependency for video processing (thumbnail generation).
 - **Zustand:** State management.
-- **:** The standard for all video playback in the app.
+- **:** Used for the Daily.co call and the coaching video player. This is the source of the sync problems.
 
 **Testing status**
-  - Testing agent used after significant changes: YES, but it failed to detect the critical UI regressions on the home feed video player, indicating a lack of specific frontend interaction tests.
+  - Testing agent used after significant changes: YES (for backend changes, which passed)
   - Troubleshoot agent used after agent stuck in loop: NO
   - Test files created: None
-  - Known regressions: The home feed video player () is missing its play/pause controls and fullscreen click functionality.
+  - Known regressions: The coaching sync has regressed multiple times. The review modal keyboard bug has persisted through multiple fixes.
 
 **Credentials to test flow:**
 - Teacher:  (password: )
 - Student:  (password: )
+- Other:  (password: )
 
 **What agent forgot to execute**
-- After reverting all video players back to  to solve a stability crisis (player conflicts), the agent failed to adequately test the  component. This led to a major regression where basic functionalities like the play/pause button and fullscreen navigation were broken, which the agent did not catch before handing off to the user.</analysis>
+- The agent failed to provide clear, actionable instructions to the user to resolve the client-side caching issue (force-quitting Expo Go), leading to repeated complaints about a bug that was already fixed on the backend.
+- The agent repeatedly attempted to fix the review modal keyboard issue with the same tool () without trying a different, more robust approach (like the  API).
+- The agent did not successfully resolve the core coaching sync issue, with each fix introducing a new variant of the bug.</analysis>

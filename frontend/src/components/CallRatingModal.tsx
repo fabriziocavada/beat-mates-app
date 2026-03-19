@@ -8,7 +8,8 @@ import {
   TextInput,
   Keyboard,
   Platform,
-  ScrollView,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/colors';
@@ -28,7 +29,6 @@ export default function CallRatingModal({
 }: CallRatingModalProps) {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
-  const [hoveredStar, setHoveredStar] = useState(0);
 
   const handleSubmit = () => {
     Keyboard.dismiss();
@@ -36,6 +36,8 @@ export default function CallRatingModal({
       onSubmit(rating, comment);
       setRating(0);
       setComment('');
+    } else {
+      onSkip();
     }
   };
 
@@ -46,112 +48,66 @@ export default function CallRatingModal({
     onSkip();
   };
 
-  const getRatingText = (r: number) => {
-    switch (r) {
-      case 1: return 'Scarsa';
-      case 2: return 'Sufficiente';
-      case 3: return 'Buona';
-      case 4: return 'Ottima';
-      case 5: return 'Eccellente!';
-      default: return 'Tocca per valutare';
-    }
-  };
-
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
-      <View style={styles.overlay}>
-        {/* Fixed OK button at top - always visible above keyboard */}
-        <View style={styles.topBar}>
-          <TouchableOpacity
-            style={styles.topOkButton}
-            onPress={handleSubmit}
-            data-testid="review-top-ok"
-          >
-            <Text style={styles.topOkText}>{rating > 0 ? 'Invia' : 'Salta'}</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          bounces={false}
-          showsVerticalScrollIndicator={false}
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <KeyboardAvoidingView
+          style={styles.overlay}
+          behavior={Platform.OS === 'ios' ? 'position' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
         >
           <View style={styles.container}>
-            {/* Header icon */}
-            <View style={styles.iconContainer}>
-              <Ionicons name="videocam" size={40} color="#FFF" />
+            {/* Icon */}
+            <View style={styles.iconRow}>
+              <View style={styles.iconCircle}>
+                <Ionicons name="videocam" size={32} color="#FFF" />
+              </View>
             </View>
 
-            {/* Title */}
             <Text style={styles.title}>Com'e andata la lezione?</Text>
-            <Text style={styles.subtitle}>
-              Valuta la tua esperienza con {teacherName}
-            </Text>
+            <Text style={styles.subtitle}>Valuta la tua esperienza con {teacherName}</Text>
 
             {/* Stars */}
-            <View style={styles.starsContainer}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <TouchableOpacity
-                  key={star}
-                  onPress={() => setRating(star)}
-                  onPressIn={() => setHoveredStar(star)}
-                  onPressOut={() => setHoveredStar(0)}
-                  style={styles.starButton}
-                  data-testid={`rating-star-${star}`}
-                >
-                  <Ionicons
-                    name={star <= (hoveredStar || rating) ? 'star' : 'star-outline'}
-                    size={44}
-                    color={star <= (hoveredStar || rating) ? '#FFD700' : '#444'}
-                  />
+            <View style={styles.starsRow}>
+              {[1, 2, 3, 4, 5].map((s) => (
+                <TouchableOpacity key={s} onPress={() => setRating(s)} style={styles.starBtn} data-testid={`rating-star-${s}`}>
+                  <Ionicons name={s <= rating ? 'star' : 'star-outline'} size={38} color={s <= rating ? '#FFD700' : '#444'} />
                 </TouchableOpacity>
               ))}
             </View>
 
-            {/* Rating text */}
-            <Text style={[styles.ratingText, rating > 0 && styles.ratingTextActive]}>
-              {getRatingText(rating)}
-            </Text>
-
-            {/* BUTTONS - right after stars, always visible above keyboard */}
-            <View style={styles.buttonsRow}>
-              <TouchableOpacity
-                style={styles.skipButton}
-                onPress={handleSkip}
-                data-testid="skip-rating-btn"
-              >
-                <Text style={styles.skipButtonText}>Salta</Text>
+            {/* Buttons - RIGHT after stars */}
+            <View style={styles.btnsRow}>
+              <TouchableOpacity style={styles.skipBtn} onPress={handleSkip} data-testid="skip-rating-btn">
+                <Text style={styles.skipText}>Salta</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
-                style={[styles.submitButton, !rating && styles.submitButtonDisabled]}
+                style={[styles.sendBtn, !rating && { opacity: 0.4 }]}
                 onPress={handleSubmit}
                 disabled={!rating}
                 data-testid="submit-rating-btn"
               >
-                <Ionicons name="send" size={16} color="#FFF" style={{ marginRight: 6 }} />
-                <Text style={styles.submitButtonText}>Invia</Text>
+                <Text style={styles.sendText}>Invia</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Comment input - below buttons */}
+            {/* Comment - at bottom, optional */}
             {rating > 0 && (
               <TextInput
-                style={styles.commentInput}
-                placeholder="Aggiungi un commento (opzionale)"
+                style={styles.input}
+                placeholder="Commento (opzionale)"
                 placeholderTextColor="#666"
                 value={comment}
                 onChangeText={setComment}
                 multiline
-                numberOfLines={3}
-                maxLength={500}
+                maxLength={300}
+                numberOfLines={2}
                 textAlignVertical="top"
               />
             )}
           </View>
-        </ScrollView>
-      </View>
+        </KeyboardAvoidingView>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 }
@@ -159,126 +115,56 @@ export default function CallRatingModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
-  },
-  topBar: {
-    paddingTop: Platform.OS === 'ios' ? 56 : 40,
-    paddingHorizontal: 20,
-    alignItems: 'flex-end',
-  },
-  topOkButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: Colors.primary,
-    borderRadius: 16,
-  },
-  topOkText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  scrollContent: {
-    flexGrow: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
     justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 40,
+    paddingHorizontal: 24,
   },
   container: {
-    width: '100%',
-    maxWidth: 400,
     backgroundColor: Colors.surface,
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: 20,
+    padding: 20,
     alignItems: 'center',
   },
-  iconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+  iconRow: { marginBottom: 12 },
+  iconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
   },
-  title: {
-    color: '#FFF',
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 6,
-    textAlign: 'center',
+  title: { color: '#FFF', fontSize: 20, fontWeight: '700', marginBottom: 4, textAlign: 'center' },
+  subtitle: { color: '#888', fontSize: 13, marginBottom: 14, textAlign: 'center' },
+  starsRow: { flexDirection: 'row', gap: 6, marginBottom: 16 },
+  starBtn: { padding: 2 },
+  btnsRow: { flexDirection: 'row', width: '100%', gap: 10, marginBottom: 12 },
+  skipBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#1a1a2e',
+    alignItems: 'center',
   },
-  subtitle: {
-    color: '#888',
-    fontSize: 14,
-    marginBottom: 20,
-    textAlign: 'center',
+  skipText: { color: '#999', fontSize: 15, fontWeight: '600' },
+  sendBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
   },
-  starsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 8,
-    gap: 8,
-  },
-  starButton: {
-    padding: 4,
-  },
-  ratingText: {
-    color: '#666',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  ratingTextActive: {
-    color: Colors.primary,
-  },
-  commentInput: {
+  sendText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+  input: {
     width: '100%',
     backgroundColor: '#1a1a2e',
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 10,
+    padding: 12,
     color: '#FFF',
-    fontSize: 15,
-    minHeight: 80,
-    maxHeight: 120,
-    marginBottom: 16,
+    fontSize: 14,
+    minHeight: 50,
+    maxHeight: 80,
     borderWidth: 1,
     borderColor: '#333',
-  },
-  buttonsRow: {
-    flexDirection: 'row',
-    width: '100%',
-    gap: 12,
-    marginTop: 4,
-  },
-  skipButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: '#1a1a2e',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  skipButtonText: {
-    color: '#999',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  submitButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: Colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitButtonDisabled: {
-    opacity: 0.4,
-  },
-  submitButtonText: {
-    color: '#FFF',
-    fontSize: 15,
-    fontWeight: '700',
   },
 });

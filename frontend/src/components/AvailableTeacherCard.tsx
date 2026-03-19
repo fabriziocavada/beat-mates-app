@@ -22,9 +22,10 @@ interface AvailableTeacherCardProps {
   teacher: Teacher;
   onPress?: () => void;
   onBookPress?: () => void;
+  onInfoPress?: () => void;
 }
 
-export default function AvailableTeacherCard({ teacher, onPress, onBookPress }: AvailableTeacherCardProps) {
+export default function AvailableTeacherCard({ teacher, onPress, onBookPress, onInfoPress }: AvailableTeacherCardProps) {
   const renderStars = () => {
     const stars = [];
     const rating = teacher.rating || 0;
@@ -74,7 +75,15 @@ export default function AvailableTeacherCard({ teacher, onPress, onBookPress }: 
         <View style={styles.starsRow}>
           {renderStars()}
           {(teacher.review_count ?? 0) > 0 && (
-            <Text style={styles.reviewCount}>({teacher.review_count})</Text>
+            <TouchableOpacity onPress={onInfoPress} style={styles.infoBtn} data-testid={`info-btn-${teacher.id}`}>
+              <Text style={styles.reviewCount}>({teacher.review_count})</Text>
+              <Ionicons name="information-circle-outline" size={14} color={Colors.primary} style={{ marginLeft: 2 }} />
+            </TouchableOpacity>
+          )}
+          {(teacher.review_count ?? 0) === 0 && onInfoPress && (
+            <TouchableOpacity onPress={onInfoPress} style={styles.infoBtn} data-testid={`info-btn-${teacher.id}`}>
+              <Ionicons name="information-circle-outline" size={14} color="#666" style={{ marginLeft: 4 }} />
+            </TouchableOpacity>
           )}
         </View>
       </View>
@@ -151,6 +160,12 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: 11,
     marginLeft: 4,
+  },
+  infoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+    paddingHorizontal: 2,
   },
   bookButton: {
     flexDirection: 'row',

@@ -13,6 +13,7 @@ import Colors from '../../src/constants/colors';
 import Header from '../../src/components/Header';
 import TabBar from '../../src/components/TabBar';
 import AvailableTeacherCard from '../../src/components/AvailableTeacherCard';
+import ReviewsPopup from '../../src/components/ReviewsPopup';
 import api from '../../src/services/api';
 
 interface Teacher {
@@ -35,6 +36,7 @@ export default function AvailableScreen() {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [reviewsPopup, setReviewsPopup] = useState<{ visible: boolean; userId: string; username: string }>({ visible: false, userId: '', username: '' });
   
   useEffect(() => {
     loadTeachers();
@@ -81,6 +83,7 @@ export default function AvailableScreen() {
       teacher={item}
       onPress={() => handleTeacherPress(item)}
       onBookPress={() => handleBookPress(item)}
+      onInfoPress={() => setReviewsPopup({ visible: true, userId: item.id, username: item.username })}
     />
   );
   
