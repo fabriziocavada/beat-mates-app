@@ -41,8 +41,9 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
   const [videoLoaded, setVideoLoaded] = useState(false);
   const seekLock = useRef(false);
   const localActionTime = useRef(0);
-  const isPlayingRef = useRef(false); // ALWAYS current value - fixes stale closure in setInterval
-  const videoLoadedRef = useRef(false); // Gate sync: don't inject play before video is loaded
+  const isPlayingRef = useRef(false);
+  const videoLoadedRef = useRef(false);
+  const justUploadedRef = useRef(false); // true when THIS device uploaded the clip
 
   const webRef = useRef<WebView>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -180,7 +181,9 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
         timeout: 120000,
       });
       setVideoUrl(res.data.video_url);
-      setVideoLoaded(false); // reset for new video
+      setVideoLoaded(false);
+      videoLoadedRef.current = false;
+      justUploadedRef.current = true; // THIS device uploaded
       setDuration(asset.duration ? asset.duration / 1000 : 20);
     } catch {
       Alert.alert('Errore', 'Upload del video fallito. Riprova.');
@@ -274,7 +277,7 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
   // Build player URL - LOOP enabled for coaching review playback
   const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL || '';
   const fullPoster = posterUrl ? `${baseUrl}${posterUrl}` : undefined;
-  const playerUrl = videoUrl ? getVideoPlayerUrl(videoUrl, { controls: false, muted: true, autoplay: true, fit: 'contain', loop: true, poster: fullPoster }) : '';
+  const playerUrl = videoUrl ? getVideoPlayerUrl(videoUrl, { controls: false, muted: true, autoplay: false, fit: 'contain', loop: true, poster: fullPoster }) : '';
 
   // WebView messages
   const handleMessage = useCallback((e: any) => {
@@ -284,20 +287,20 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
       if (!seekLock.current && !isDragging.current) setCurrentTime(parseFloat(msg.split(':')[1]) || 0);
     }
     else if (msg.startsWith('duration:')) setDuration(parseFloat(msg.split(':')[1]) || 20);
-    else if (msg === 'video_playing') {
-      // Autoplay actually started successfully
-      setVideoLoaded(true);
-      videoLoadedRef.current = true;
-      setIsPlaying(true);
-      isPlayingRef.current = true;
-      localActionTime.current = Date.now();
-      sendCommand('play');
-      sendCommand('seek', '0');
-    }
     else if (msg.startsWith('ready') || msg === 'video_loaded') {
-      // Video ready but autoplay may have failed - let polling handle play
       setVideoLoaded(true);
       videoLoadedRef.current = true;
+      // If THIS device uploaded the clip, auto-play and sync
+      if (justUploadedRef.current) {
+        justUploadedRef.current = false;
+        setIsPlaying(true);
+        isPlayingRef.current = true;
+        localActionTime.current = Date.now();
+        webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v)v.play();true;`);
+        sendCommand('play');
+        sendCommand('seek', '0');
+      }
+      // Otherwise: do nothing, polling will apply remote play state
     }
   }, [sendCommand]);
 
@@ -446,29 +449,26 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
               v.preload='auto';
               v.playbackRate=${speed};
               v.muted=true;
-              // Autoplay immediately when ready
-              var started=false;
-              function tryAutoplay(){
-                if(started) return;
+              // NO autoplay - wait for video_loaded, then code controls play
+              var loaded=false;
+              function onReady(){
+                if(loaded) return;
                 if(v.readyState>=2){
-                  started=true;
+                  loaded=true;
+                  v.currentTime=0.01;
+                  window.ReactNativeWebView.postMessage('video_loaded');
                   window.ReactNativeWebView.postMessage('duration:'+v.duration);
-                  v.play().then(function(){
-                    window.ReactNativeWebView.postMessage('video_playing');
-                  }).catch(function(){
-                    window.ReactNativeWebView.postMessage('video_loaded');
-                  });
                 } else {
-                  setTimeout(tryAutoplay, 200);
+                  setTimeout(onReady, 200);
                 }
               }
-              v.addEventListener('loadeddata', tryAutoplay);
+              v.addEventListener('loadeddata', onReady);
               v.addEventListener('loadedmetadata', function(){
                 window.ReactNativeWebView.postMessage('duration:'+v.duration);
-                tryAutoplay();
+                onReady();
               });
-              v.addEventListener('canplay', tryAutoplay);
-              tryAutoplay();
+              v.addEventListener('canplay', onReady);
+              onReady();
               // Time reporting
               var lastReport=0;
               setInterval(function(){

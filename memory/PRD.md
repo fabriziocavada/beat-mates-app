@@ -136,16 +136,9 @@ availability_slots, bookings, coaching_sessions, comments, conversations, follow
 - One device shows a pause button at video call start (likely Daily.co rendering quirk)
 
 ## Recent Changes (Feb 2026 - Current Session)
-- Coaching: **SYNC FIX v2 (MAJOR)** - Removed `!isPlayingLocally` condition that blocked remote pause. Added `videoLoadedRef` gate to prevent premature JS injection. JS now distinguishes `video_playing` vs `video_loaded`. Bidirectional play/pause/seek fully synced.
-- Coaching: Removed pink draw indicator dot (kept trash button in toolbar only)
-- Coaching: Removed invisible pink button from header (was `headerActionBtn` with same-color icon)
-- Coaching: Enabled video autoplay (no more black first frame)
-- Coaching: 4-second fallback now also sets videoLoadedRef
-- Available Teachers: Fixed to only show users with is_available=True
-- Available Teachers: Real ratings from reviews collection
-- Available Teachers: Auto-close stale sessions (>2h)
-- Available Teachers: Removed nonsensical timer, added proper busy/available status
-- Available Teachers: Added status dot on avatar (green=available, red=busy)
+- Coaching: **SYNC FIX v3 (DEFINITIVE)** - Reverted HTML5 autoplay (unreliable across devices). Added `justUploadedRef` to auto-play only on uploader's device. Other device gets play via polling after `videoLoadedRef` is set. Removed broken `!isPlayingLocally` condition that blocked remote pause reception.
+- Coaching: Removed pink button from header (was `headerActionBtn` with invisible icon - same color as background)
+- Available Teachers: Added `last_active` tracking on EVERY authenticated API call. Filter shows only users active in last 15 minutes AND with `is_available=True`.
 - Video Call: Added auto-play for paused videos in Daily.co WebView (fixes play button on accepting device)
 - Installed ffmpeg for video compression
 

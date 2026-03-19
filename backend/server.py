@@ -13,6 +13,7 @@ from typing import List, Optional
 import uuid
 from datetime import datetime, timedelta
 import bcrypt
+import asyncio
 import jwt
 import base64
 import json
@@ -307,6 +308,13 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         
         # Strip MongoDB _id to prevent ObjectId serialization issues
         user.pop("_id", None)
+        
+        # Update last_active timestamp (fire and forget)
+        try:
+            await db.users.update_one({"id": user_id}, {"$set": {"last_active": datetime.utcnow()}})
+        except Exception:
+            pass
+        
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
@@ -968,8 +976,13 @@ async def get_available_teachers(current_user: dict = Depends(get_current_user))
         {"$set": {"status": "completed", "ended_at": datetime.utcnow()}}
     )
     
-    # Only get users who explicitly set themselves as available
-    query = {"id": {"$ne": current_user["id"]}, "is_available": True}
+    # Only get users who are both available AND were active in the last 15 min
+    fifteen_min_ago = datetime.utcnow() - timedelta(minutes=15)
+    query = {
+        "id": {"$ne": current_user["id"]},
+        "is_available": True,
+        "last_active": {"$gte": fifteen_min_ago}
+    }
     if user_categories:
         query["dance_categories"] = {"$in": user_categories}
     
