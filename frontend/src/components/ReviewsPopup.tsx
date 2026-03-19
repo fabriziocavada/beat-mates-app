@@ -8,8 +8,8 @@ import {
   ActivityIndicator,
   Image,
   Dimensions,
-  ScrollView,
 } from 'react-native';
+import { ScrollView, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/colors';
 import { getMediaUrl } from '../services/api';
@@ -51,7 +51,6 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIdx, setActiveIdx] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     if (visible && userId) {
@@ -63,18 +62,6 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
         .finally(() => setLoading(false));
     }
   }, [visible, userId]);
-
-  // Wake up ScrollView gesture system on open
-  useEffect(() => {
-    if (visible && reviews.length > 1 && !loading) {
-      setTimeout(() => {
-        scrollRef.current?.scrollTo({ x: 1, animated: false });
-        setTimeout(() => {
-          scrollRef.current?.scrollTo({ x: 0, animated: false });
-        }, 50);
-      }, 150);
-    }
-  }, [visible, reviews.length, loading]);
 
   const renderStars = (rating: number) =>
     Array.from({ length: 5 }, (_, i) => (
@@ -93,7 +80,7 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
 
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
-      <View style={styles.overlay}>
+      <GestureHandlerRootView style={styles.overlay}>
         <View style={styles.container}>
           <View style={styles.handleBar} />
 
@@ -127,16 +114,15 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
             </View>
           ) : (
             <>
-              {/* Carousel - same pattern as PostCard home feed */}
+              {/* Carousel using gesture-handler ScrollView */}
               <ScrollView
-                ref={scrollRef}
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
                 onMomentumScrollEnd={handleCarouselScroll}
                 decelerationRate="fast"
                 bounces={false}
-                nestedScrollEnabled={true}
+                nestedScrollEnabled
                 scrollEventThrottle={16}
               >
                 {reviews.map((item) => (
@@ -180,7 +166,7 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
             </>
           )}
         </View>
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -221,7 +207,6 @@ const styles = StyleSheet.create({
   summaryRight: { flex: 1 },
   starsRow: { flexDirection: 'row', gap: 2 },
   reviewCountText: { color: '#888', fontSize: 12, marginTop: 3 },
-  // Each page is exactly POPUP_W wide (same as ScrollView width) for pagingEnabled
   page: {
     width: POPUP_W,
     padding: 18,
