@@ -105,37 +105,58 @@ async function clearActiveSession() {
   try { await AsyncStorage.removeItem('active_session_id'); } catch {}
 }
 
-// ---- Rating Modal ----
+// ---- Rating Modal (keyboard-safe) ----
 function CallRatingModal({ visible, teacherName, onSubmit, onSkip }: {
   visible: boolean; teacherName: string;
   onSubmit: (r: number, c: string) => void; onSkip: () => void;
 }) {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
+  const [kbOpen, setKbOpen] = useState(false);
   const labels = ['', 'Scarsa', 'Sufficiente', 'Buona', 'Ottima', 'Eccellente!'];
+
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const s1 = require('react-native').Keyboard.addListener(showEvt, () => setKbOpen(true));
+    const s2 = require('react-native').Keyboard.addListener(hideEvt, () => setKbOpen(false));
+    return () => { s1.remove(); s2.remove(); };
+  }, []);
+
+  const dismissKb = () => require('react-native').Keyboard.dismiss();
+
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
-      <View style={rs.overlay}>
-        <View style={rs.box}>
-          <View style={rs.icon}><Ionicons name="videocam" size={36} color="#FFF" /></View>
-          <Text style={rs.title}>Com'e andata la lezione?</Text>
-          <Text style={rs.sub}>Valuta la tua esperienza con {teacherName}</Text>
+      <View style={[rs.overlay, kbOpen && rs.overlayKb]}>
+        <View style={[rs.box, kbOpen && rs.boxKb]}>
+          {/* When keyboard is open: compact layout at top */}
+          {!kbOpen && (
+            <>
+              <View style={rs.icon}><Ionicons name="videocam" size={36} color="#FFF" /></View>
+              <Text style={rs.title}>Com'e andata la lezione?</Text>
+              <Text style={rs.sub}>Valuta la tua esperienza con {teacherName}</Text>
+            </>
+          )}
           <View style={rs.stars}>
             {[1,2,3,4,5].map(s => (
               <TouchableOpacity key={s} onPress={() => setRating(s)} style={rs.starBtn}>
-                <Ionicons name={s <= rating ? 'star' : 'star-outline'} size={42} color={s <= rating ? '#FFD700' : '#444'} />
+                <Ionicons name={s <= rating ? 'star' : 'star-outline'} size={kbOpen ? 30 : 42} color={s <= rating ? '#FFD700' : '#444'} />
               </TouchableOpacity>
             ))}
           </View>
-          <Text style={[rs.label, rating > 0 && { color: '#FFD700' }]}>{labels[rating] || 'Tocca per valutare'}</Text>
+          {!kbOpen && (
+            <Text style={[rs.label, rating > 0 && { color: '#FFD700' }]}>{labels[rating] || 'Tocca per valutare'}</Text>
+          )}
           {rating > 0 && (
             <TextInput style={rs.input} placeholder="Commento (opzionale)" placeholderTextColor="#666"
-              value={comment} onChangeText={setComment} multiline />
+              value={comment} onChangeText={setComment} multiline data-testid="rating-comment-input" />
           )}
           <View style={rs.btns}>
-            <TouchableOpacity style={rs.skip} onPress={onSkip}><Text style={rs.skipT}>Salta</Text></TouchableOpacity>
+            <TouchableOpacity style={rs.skip} onPress={() => { dismissKb(); onSkip(); }} data-testid="skip-rating-btn">
+              <Text style={rs.skipT}>Salta</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={[rs.submit, !rating && { backgroundColor: '#333' }]}
-              onPress={() => rating > 0 && onSubmit(rating, comment)} disabled={!rating}>
+              onPress={() => { dismissKb(); if (rating > 0) onSubmit(rating, comment); }} disabled={!rating} data-testid="submit-rating-btn">
               <Text style={rs.submitT}>Invia</Text>
             </TouchableOpacity>
           </View>
@@ -146,14 +167,16 @@ function CallRatingModal({ visible, teacherName, onSubmit, onSkip }: {
 }
 const rs = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  overlayKb: { justifyContent: 'flex-start', paddingTop: Platform.OS === 'ios' ? 70 : 30 },
   box: { width: '100%', maxWidth: 400, backgroundColor: Colors.surface, borderRadius: 24, padding: 28, alignItems: 'center' },
+  boxKb: { padding: 16 },
   icon: { width: 68, height: 68, borderRadius: 34, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
   title: { color: '#FFF', fontSize: 20, fontWeight: '700', textAlign: 'center', marginBottom: 6 },
   sub: { color: '#888', fontSize: 14, textAlign: 'center', marginBottom: 20 },
   stars: { flexDirection: 'row', gap: 6, marginBottom: 12 },
   starBtn: { padding: 2 },
   label: { color: '#666', fontSize: 15, fontWeight: '600', marginBottom: 18 },
-  input: { width: '100%', backgroundColor: '#1C1C1E', borderRadius: 12, padding: 14, color: '#FFF', fontSize: 14, minHeight: 60, textAlignVertical: 'top', marginBottom: 18, borderWidth: 1, borderColor: '#333' },
+  input: { width: '100%', backgroundColor: '#1C1C1E', borderRadius: 12, padding: 14, color: '#FFF', fontSize: 14, minHeight: 50, maxHeight: 70, textAlignVertical: 'top', marginBottom: 10, borderWidth: 1, borderColor: '#333' },
   btns: { flexDirection: 'row', gap: 12, width: '100%' },
   skip: { flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: '#2C2C2E', alignItems: 'center' },
   skipT: { color: '#888', fontSize: 15, fontWeight: '600' },

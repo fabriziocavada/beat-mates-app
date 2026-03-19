@@ -153,7 +153,8 @@ availability_slots, bookings, coaching_sessions, comments, conversations, follow
 - Coaching sync may have issues on some devices (architectural limitation of WebView state sync)
 
 ## Recent Changes (Feb 2026 - Current Session)
-- CallRatingModal: Keyboard fix using Animated.View + Keyboard API (replaces broken KeyboardAvoidingView)
+- **CRITICAL FIX**: CallRatingModal was an INLINE component in `video-call/[id].tsx` (NOT the separate CallRatingModal.tsx file). Previous agents edited the wrong file multiple times.
+- CallRatingModal keyboard fix: When keyboard opens, modal moves to top of screen, hides icon/title/subtitle, shows compact stars + input + buttons always above keyboard
 - ReviewsPopup: Google-style horizontal carousel with avatars, comments, dot indicators
 - AvailableTeacherCard: Simplified "i" button logic - always visible for all teachers
 - available.tsx: Added ReviewsPopup rendering (was imported but never rendered)
