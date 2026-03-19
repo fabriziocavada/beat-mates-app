@@ -114,22 +114,7 @@ export default function CallRatingModal({
               {getRatingText(rating)}
             </Text>
 
-            {/* Comment input - only show when rated */}
-            {rating > 0 && (
-              <TextInput
-                style={styles.commentInput}
-                placeholder="Aggiungi un commento (opzionale)"
-                placeholderTextColor="#666"
-                value={comment}
-                onChangeText={setComment}
-                multiline
-                numberOfLines={3}
-                maxLength={500}
-                textAlignVertical="top"
-              />
-            )}
-
-            {/* BUTTONS - always visible, inside scrollable area */}
+            {/* BUTTONS - right after stars, always visible above keyboard */}
             <View style={styles.buttonsRow}>
               <TouchableOpacity
                 style={styles.skipButton}
@@ -149,6 +134,21 @@ export default function CallRatingModal({
                 <Text style={styles.submitButtonText}>Invia</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Comment input - below buttons */}
+            {rating > 0 && (
+              <TextInput
+                style={styles.commentInput}
+                placeholder="Aggiungi un commento (opzionale)"
+                placeholderTextColor="#666"
+                value={comment}
+                onChangeText={setComment}
+                multiline
+                numberOfLines={3}
+                maxLength={500}
+                textAlignVertical="top"
+              />
+            )}
           </View>
         </ScrollView>
       </View>
