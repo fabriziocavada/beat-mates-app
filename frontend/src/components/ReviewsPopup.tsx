@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Modal,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   ActivityIndicator,
   Image,
   Dimensions,
@@ -17,7 +18,7 @@ import api from '../services/api';
 
 const SCREEN_W = Dimensions.get('window').width;
 const POPUP_W = SCREEN_W - 32;
-const CARD_W = POPUP_W - 56; // card width with peek of next
+const CARD_W = POPUP_W - 56;
 const CARD_GAP = 12;
 const SNAP = CARD_W + CARD_GAP;
 
@@ -87,22 +88,16 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
 
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
-      {/* Overlay - tap to close */}
-      <TouchableOpacity
-        style={styles.overlay}
-        activeOpacity={1}
-        onPress={onClose}
-      >
-        {/* Container - plain View so touches pass through to ScrollView */}
-        <View
-          style={styles.container}
-          onStartShouldSetResponder={() => true}
-          onResponderRelease={() => {}}
-        >
-          {/* Handle bar */}
+      <View style={styles.overlay}>
+        {/* Background tap to close - BEHIND the popup */}
+        <TouchableWithoutFeedback onPress={onClose}>
+          <View style={StyleSheet.absoluteFill} />
+        </TouchableWithoutFeedback>
+
+        {/* Popup container - plain View, NO touch interception */}
+        <View style={styles.container}>
           <View style={styles.handleBar} />
 
-          {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <Text style={styles.headerTitle}>Recensioni</Text>
@@ -113,7 +108,6 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
             </TouchableOpacity>
           </View>
 
-          {/* Average summary */}
           <View style={styles.summary}>
             <Text style={styles.avgNumber}>{avgRating}</Text>
             <View style={styles.summaryRight}>
@@ -122,7 +116,6 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
             </View>
           </View>
 
-          {/* Content */}
           {loading ? (
             <ActivityIndicator color={Colors.primary} style={{ marginVertical: 40 }} />
           ) : reviews.length === 0 ? (
@@ -132,16 +125,15 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
             </View>
           ) : (
             <>
-              {/* Horizontal ScrollView carousel - swipe works on entire area */}
               <ScrollView
                 horizontal
-                pagingEnabled={false}
                 snapToInterval={SNAP}
                 decelerationRate="fast"
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.carouselContent}
                 onMomentumScrollEnd={handleScroll}
                 scrollEventThrottle={16}
+                nestedScrollEnabled
               >
                 {reviews.map((item, idx) => (
                   <View
@@ -172,7 +164,6 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
                 ))}
               </ScrollView>
 
-              {/* Dots + counter */}
               {reviews.length > 1 && (
                 <View style={styles.footer}>
                   <View style={styles.dotsRow}>
@@ -186,7 +177,7 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
             </>
           )}
         </View>
-      </TouchableOpacity>
+      </View>
     </Modal>
   );
 }
