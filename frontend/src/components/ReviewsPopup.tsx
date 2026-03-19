@@ -8,8 +8,7 @@ import {
   ActivityIndicator,
   Image,
   Dimensions,
-  FlatList,
-  Pressable,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/colors';
@@ -18,8 +17,9 @@ import api from '../services/api';
 
 const SCREEN_W = Dimensions.get('window').width;
 const POPUP_W = SCREEN_W - 32;
-const CARD_PADDING = 18;
-const ITEM_W = POPUP_W; // full-width pages
+const CARD_W = POPUP_W - 56; // card width with peek of next
+const CARD_GAP = 12;
+const SNAP = CARD_W + CARD_GAP;
 
 interface Review {
   id: string;
@@ -80,45 +80,25 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
     ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
     : '0';
 
-  const onScroll = useRef((e: any) => {
+  const handleScroll = (e: any) => {
     const x = e.nativeEvent.contentOffset.x;
-    const idx = Math.round(x / ITEM_W);
-    setActiveIdx(idx);
-  }).current;
-
-  const renderCard = ({ item }: { item: Review }) => (
-    <View style={styles.page}>
-      <View style={styles.card} data-testid={`review-card-${item.id}`}>
-        {/* Reviewer row */}
-        <View style={styles.cardHeader}>
-          {item.reviewer_image ? (
-            <Image source={{ uri: getMediaUrl(item.reviewer_image) || '' }} style={styles.avatar} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Ionicons name="person" size={20} color="#777" />
-            </View>
-          )}
-          <View style={styles.cardHeaderInfo}>
-            <Text style={styles.reviewerName} numberOfLines={1}>{item.reviewer_username}</Text>
-            <Text style={styles.dateText}>{timeAgo(item.created_at)}</Text>
-          </View>
-        </View>
-        {/* Stars */}
-        <View style={styles.starsRow}>{renderStars(item.rating)}</View>
-        {/* Comment text */}
-        {item.text ? (
-          <Text style={styles.commentText} numberOfLines={6}>{item.text}</Text>
-        ) : (
-          <Text style={styles.noCommentText}>Nessun commento</Text>
-        )}
-      </View>
-    </View>
-  );
+    setActiveIdx(Math.round(x / SNAP));
+  };
 
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.container} onPress={() => {}}>
+      {/* Overlay - tap to close */}
+      <TouchableOpacity
+        style={styles.overlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        {/* Container - plain View so touches pass through to ScrollView */}
+        <View
+          style={styles.container}
+          onStartShouldSetResponder={() => true}
+          onResponderRelease={() => {}}
+        >
           {/* Handle bar */}
           <View style={styles.handleBar} />
 
@@ -152,38 +132,61 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
             </View>
           ) : (
             <>
-              {/* Full-width paging carousel */}
-              <FlatList
-                data={reviews}
-                renderItem={renderCard}
-                keyExtractor={(item) => item.id}
+              {/* Horizontal ScrollView carousel - swipe works on entire area */}
+              <ScrollView
                 horizontal
-                pagingEnabled
+                pagingEnabled={false}
+                snapToInterval={SNAP}
+                decelerationRate="fast"
                 showsHorizontalScrollIndicator={false}
-                onScroll={onScroll}
+                contentContainerStyle={styles.carouselContent}
+                onMomentumScrollEnd={handleScroll}
                 scrollEventThrottle={16}
-                getItemLayout={(_, index) => ({
-                  length: ITEM_W,
-                  offset: ITEM_W * index,
-                  index,
-                })}
-              />
-              {/* Dots indicator */}
+              >
+                {reviews.map((item, idx) => (
+                  <View
+                    key={item.id}
+                    style={[styles.card, idx < reviews.length - 1 && { marginRight: CARD_GAP }]}
+                    data-testid={`review-card-${item.id}`}
+                  >
+                    <View style={styles.cardHeader}>
+                      {item.reviewer_image ? (
+                        <Image source={{ uri: getMediaUrl(item.reviewer_image) || '' }} style={styles.avatar} />
+                      ) : (
+                        <View style={styles.avatarPlaceholder}>
+                          <Ionicons name="person" size={20} color="#777" />
+                        </View>
+                      )}
+                      <View style={styles.cardHeaderInfo}>
+                        <Text style={styles.reviewerName} numberOfLines={1}>{item.reviewer_username}</Text>
+                        <Text style={styles.dateText}>{timeAgo(item.created_at)}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.starsRow}>{renderStars(item.rating)}</View>
+                    {item.text ? (
+                      <Text style={styles.commentText} numberOfLines={5}>{item.text}</Text>
+                    ) : (
+                      <Text style={styles.noCommentText}>Nessun commento</Text>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
+
+              {/* Dots + counter */}
               {reviews.length > 1 && (
-                <View style={styles.dotsRow}>
-                  {reviews.map((_, i) => (
-                    <View key={i} style={[styles.dot, i === activeIdx && styles.dotActive]} />
-                  ))}
+                <View style={styles.footer}>
+                  <View style={styles.dotsRow}>
+                    {reviews.map((_, i) => (
+                      <View key={i} style={[styles.dot, i === activeIdx && styles.dotActive]} />
+                    ))}
+                  </View>
+                  <Text style={styles.pageCounter}>{activeIdx + 1} / {reviews.length}</Text>
                 </View>
-              )}
-              {/* Page counter */}
-              {reviews.length > 1 && (
-                <Text style={styles.pageCounter}>{activeIdx + 1} / {reviews.length}</Text>
               )}
             </>
           )}
-        </Pressable>
-      </Pressable>
+        </View>
+      </TouchableOpacity>
     </Modal>
   );
 }
@@ -241,13 +244,12 @@ const styles = StyleSheet.create({
   summaryRight: { flex: 1 },
   starsRow: { flexDirection: 'row', gap: 2 },
   reviewCountText: { color: '#888', fontSize: 12, marginTop: 3 },
-  // Each page is full popup width
-  page: {
-    width: ITEM_W,
-    paddingHorizontal: CARD_PADDING,
+  carouselContent: {
+    paddingHorizontal: 18,
     paddingVertical: 16,
   },
   card: {
+    width: CARD_W,
     backgroundColor: '#222244',
     borderRadius: 14,
     padding: 16,
@@ -279,11 +281,15 @@ const styles = StyleSheet.create({
   dateText: { color: '#666', fontSize: 11, marginTop: 1 },
   commentText: { color: '#CCC', fontSize: 13, lineHeight: 19, marginTop: 8 },
   noCommentText: { color: '#555', fontSize: 12, fontStyle: 'italic', marginTop: 8 },
+  footer: {
+    alignItems: 'center',
+    paddingBottom: 16,
+    gap: 6,
+  },
   dotsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 6,
-    paddingBottom: 6,
   },
   dot: {
     width: 7,
@@ -296,10 +302,8 @@ const styles = StyleSheet.create({
     width: 18,
   },
   pageCounter: {
-    color: '#666',
+    color: '#555',
     fontSize: 11,
-    textAlign: 'center',
-    paddingBottom: 14,
   },
   emptyWrap: {
     alignItems: 'center',
