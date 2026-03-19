@@ -136,11 +136,11 @@ availability_slots, bookings, coaching_sessions, comments, conversations, follow
 - One device shows a pause button at video call start (likely Daily.co rendering quirk)
 
 ## Recent Changes (Feb 2026 - Current Session)
+- Coaching: **SYNC FIX v2 (MAJOR)** - Removed `!isPlayingLocally` condition that blocked remote pause. Added `videoLoadedRef` gate to prevent premature JS injection. JS now distinguishes `video_playing` vs `video_loaded`. Bidirectional play/pause/seek fully synced.
 - Coaching: Removed pink draw indicator dot (kept trash button in toolbar only)
+- Coaching: Removed invisible pink button from header (was `headerActionBtn` with same-color icon)
 - Coaching: Enabled video autoplay (no more black first frame)
-- Coaching: **SYNC FIX** - Autoplay now sends `play` + `seek:0` to backend so other user auto-starts too
-- Coaching: **CRITICAL FIX** - `isPlayingRef` now updated when remote state is applied via polling (was causing desync)
-- Coaching: isPlayingRef synced on autoplay start
+- Coaching: 4-second fallback now also sets videoLoadedRef
 - Available Teachers: Fixed to only show users with is_available=True
 - Available Teachers: Real ratings from reviews collection
 - Available Teachers: Auto-close stale sessions (>2h)

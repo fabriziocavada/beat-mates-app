@@ -42,6 +42,7 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
   const seekLock = useRef(false);
   const localActionTime = useRef(0);
   const isPlayingRef = useRef(false); // ALWAYS current value - fixes stale closure in setInterval
+  const videoLoadedRef = useRef(false); // Gate sync: don't inject play before video is loaded
 
   const webRef = useRef<WebView>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -64,8 +65,6 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
         setRemoteUploading(s.uploading_by || null);
 
         const isLocalRecent = (Date.now() - localActionTime.current) < 2000;
-        // Use REF (always current) not closure variable (stale!)
-        const isPlayingLocally = isPlayingRef.current;
 
         // Speed: ALWAYS apply from remote (doesn't cause loops)
         if (typeof s.speed === 'number') {
@@ -79,18 +78,17 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
           });
         }
 
-        if (!isLocalRecent && !isPlayingLocally) {
-          // Play/pause: apply from remote ONLY when we're paused
+        if (!isLocalRecent && videoLoadedRef.current) {
+          // Play/pause: apply from remote when video is loaded
           if (typeof s.is_playing === 'boolean') {
-            setIsPlaying(prev => {
-              if (prev !== s.is_playing) {
-                isPlayingRef.current = s.is_playing; // CRITICAL: keep ref in sync
-                webRef.current?.injectJavaScript(
-                  `var v=document.getElementById('v');if(v){${s.is_playing ? 'v.play()' : 'v.pause()'}}true;`
-                );
-              }
-              return s.is_playing;
-            });
+            const currentlyPlaying = isPlayingRef.current;
+            if (currentlyPlaying !== s.is_playing) {
+              isPlayingRef.current = s.is_playing;
+              setIsPlaying(s.is_playing);
+              webRef.current?.injectJavaScript(
+                `var v=document.getElementById('v');if(v){${s.is_playing ? 'v.play()' : 'v.pause()'}}true;`
+              );
+            }
           }
           // Seek: apply if diff > 1.5s (indicates deliberate remote seek)
           if (typeof s.current_time === 'number') {
@@ -286,21 +284,30 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
       if (!seekLock.current && !isDragging.current) setCurrentTime(parseFloat(msg.split(':')[1]) || 0);
     }
     else if (msg.startsWith('duration:')) setDuration(parseFloat(msg.split(':')[1]) || 20);
-    else if (msg.startsWith('ready') || msg === 'video_loaded') {
+    else if (msg === 'video_playing') {
+      // Autoplay actually started successfully
       setVideoLoaded(true);
-      // Autoplay is on → mark as playing AND sync to backend for other user
+      videoLoadedRef.current = true;
       setIsPlaying(true);
       isPlayingRef.current = true;
       localActionTime.current = Date.now();
       sendCommand('play');
       sendCommand('seek', '0');
     }
+    else if (msg.startsWith('ready') || msg === 'video_loaded') {
+      // Video ready but autoplay may have failed - let polling handle play
+      setVideoLoaded(true);
+      videoLoadedRef.current = true;
+    }
   }, [sendCommand]);
 
   // Fallback: dismiss loading after 4 seconds even if event didn't fire
   useEffect(() => {
     if (videoUrl && !videoLoaded) {
-      const timer = setTimeout(() => setVideoLoaded(true), 4000);
+      const timer = setTimeout(() => {
+        setVideoLoaded(true);
+        videoLoadedRef.current = true;
+      }, 4000);
       return () => clearTimeout(timer);
     }
   }, [videoUrl, videoLoaded]);
@@ -409,11 +416,6 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
           >
             <Ionicons name="brush" size={16} color="#FFF" />
           </TouchableOpacity>
-          {drawings.length > 0 && (
-            <TouchableOpacity onPress={() => { setDrawings([]); sendCommand('clear_drawings'); }} style={st.headerActionBtn} data-testid="coaching-clear-drawings">
-              <Ionicons name="trash-outline" size={16} color="#FF6978" />
-            </TouchableOpacity>
-          )}
         </View>
         <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
           {onNewSession && (
@@ -450,9 +452,12 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
                 if(started) return;
                 if(v.readyState>=2){
                   started=true;
-                  v.play().catch(function(){});
-                  window.ReactNativeWebView.postMessage('video_loaded');
                   window.ReactNativeWebView.postMessage('duration:'+v.duration);
+                  v.play().then(function(){
+                    window.ReactNativeWebView.postMessage('video_playing');
+                  }).catch(function(){
+                    window.ReactNativeWebView.postMessage('video_loaded');
+                  });
                 } else {
                   setTimeout(tryAutoplay, 200);
                 }
