@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -18,9 +18,6 @@ import api from '../services/api';
 
 const SCREEN_W = Dimensions.get('window').width;
 const POPUP_W = SCREEN_W - 32;
-const CARD_W = POPUP_W - 56;
-const CARD_GAP = 12;
-const SNAP = CARD_W + CARD_GAP;
 
 interface Review {
   id: string;
@@ -81,23 +78,22 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
     ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
     : '0';
 
-  const handleScroll = (e: any) => {
-    const x = e.nativeEvent.contentOffset.x;
-    setActiveIdx(Math.round(x / SNAP));
-  };
+  const goNext = () => setActiveIdx(i => Math.min(i + 1, reviews.length - 1));
+  const goPrev = () => setActiveIdx(i => Math.max(i - 1, 0));
+
+  const current = reviews[activeIdx];
 
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
       <View style={styles.overlay}>
-        {/* Background tap to close - BEHIND the popup */}
         <TouchableWithoutFeedback onPress={onClose}>
           <View style={StyleSheet.absoluteFill} />
         </TouchableWithoutFeedback>
 
-        {/* Popup container - plain View, NO touch interception */}
         <View style={styles.container}>
           <View style={styles.handleBar} />
 
+          {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <Text style={styles.headerTitle}>Recensioni</Text>
@@ -108,6 +104,7 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
             </TouchableOpacity>
           </View>
 
+          {/* Average */}
           <View style={styles.summary}>
             <Text style={styles.avgNumber}>{avgRating}</Text>
             <View style={styles.summaryRight}>
@@ -116,6 +113,7 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
             </View>
           </View>
 
+          {/* Content */}
           {loading ? (
             <ActivityIndicator color={Colors.primary} style={{ marginVertical: 40 }} />
           ) : reviews.length === 0 ? (
@@ -124,57 +122,61 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
               <Text style={styles.emptyText}>Nessuna recensione ancora</Text>
             </View>
           ) : (
-            <>
-              <ScrollView
-                horizontal
-                snapToInterval={SNAP}
-                decelerationRate="fast"
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.carouselContent}
-                onMomentumScrollEnd={handleScroll}
-                scrollEventThrottle={16}
-                nestedScrollEnabled
-              >
-                {reviews.map((item, idx) => (
-                  <View
-                    key={item.id}
-                    style={[styles.card, idx < reviews.length - 1 && { marginRight: CARD_GAP }]}
-                    data-testid={`review-card-${item.id}`}
-                  >
-                    <View style={styles.cardHeader}>
-                      {item.reviewer_image ? (
-                        <Image source={{ uri: getMediaUrl(item.reviewer_image) || '' }} style={styles.avatar} />
-                      ) : (
-                        <View style={styles.avatarPlaceholder}>
-                          <Ionicons name="person" size={20} color="#777" />
-                        </View>
-                      )}
-                      <View style={styles.cardHeaderInfo}>
-                        <Text style={styles.reviewerName} numberOfLines={1}>{item.reviewer_username}</Text>
-                        <Text style={styles.dateText}>{timeAgo(item.created_at)}</Text>
-                      </View>
+            <View style={styles.reviewSection}>
+              {/* Single review card */}
+              <View style={styles.card} data-testid={`review-card-${current.id}`}>
+                <View style={styles.cardHeader}>
+                  {current.reviewer_image ? (
+                    <Image source={{ uri: getMediaUrl(current.reviewer_image) || '' }} style={styles.avatar} />
+                  ) : (
+                    <View style={styles.avatarPlaceholder}>
+                      <Ionicons name="person" size={22} color="#777" />
                     </View>
-                    <View style={styles.starsRow}>{renderStars(item.rating)}</View>
-                    {item.text ? (
-                      <Text style={styles.commentText} numberOfLines={5}>{item.text}</Text>
-                    ) : (
-                      <Text style={styles.noCommentText}>Nessun commento</Text>
-                    )}
+                  )}
+                  <View style={styles.cardHeaderInfo}>
+                    <Text style={styles.reviewerName} numberOfLines={1}>{current.reviewer_username}</Text>
+                    <Text style={styles.dateText}>{timeAgo(current.created_at)}</Text>
                   </View>
-                ))}
-              </ScrollView>
+                </View>
+                <View style={styles.starsRow}>{renderStars(current.rating)}</View>
+                {current.text ? (
+                  <Text style={styles.commentText}>{current.text}</Text>
+                ) : (
+                  <Text style={styles.noCommentText}>Nessun commento</Text>
+                )}
+              </View>
 
+              {/* Navigation arrows + dots */}
               {reviews.length > 1 && (
-                <View style={styles.footer}>
+                <View style={styles.navRow}>
+                  <TouchableOpacity
+                    onPress={goPrev}
+                    style={[styles.arrowBtn, activeIdx === 0 && styles.arrowDisabled]}
+                    disabled={activeIdx === 0}
+                    data-testid="reviews-prev-btn"
+                  >
+                    <Ionicons name="chevron-back" size={22} color={activeIdx === 0 ? '#333' : '#FFF'} />
+                  </TouchableOpacity>
+
                   <View style={styles.dotsRow}>
                     {reviews.map((_, i) => (
-                      <View key={i} style={[styles.dot, i === activeIdx && styles.dotActive]} />
+                      <TouchableOpacity key={i} onPress={() => setActiveIdx(i)}>
+                        <View style={[styles.dot, i === activeIdx && styles.dotActive]} />
+                      </TouchableOpacity>
                     ))}
                   </View>
-                  <Text style={styles.pageCounter}>{activeIdx + 1} / {reviews.length}</Text>
+
+                  <TouchableOpacity
+                    onPress={goNext}
+                    style={[styles.arrowBtn, activeIdx === reviews.length - 1 && styles.arrowDisabled]}
+                    disabled={activeIdx === reviews.length - 1}
+                    data-testid="reviews-next-btn"
+                  >
+                    <Ionicons name="chevron-forward" size={22} color={activeIdx === reviews.length - 1 ? '#333' : '#FFF'} />
+                  </TouchableOpacity>
                 </View>
               )}
-            </>
+            </View>
           )}
         </View>
       </View>
@@ -193,8 +195,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a2e',
     borderRadius: 20,
     width: POPUP_W,
-    maxHeight: '70%',
-    overflow: 'hidden',
   },
   handleBar: {
     width: 36,
@@ -235,12 +235,10 @@ const styles = StyleSheet.create({
   summaryRight: { flex: 1 },
   starsRow: { flexDirection: 'row', gap: 2 },
   reviewCountText: { color: '#888', fontSize: 12, marginTop: 3 },
-  carouselContent: {
-    paddingHorizontal: 18,
-    paddingVertical: 16,
+  reviewSection: {
+    padding: 18,
   },
   card: {
-    width: CARD_W,
     backgroundColor: '#222244',
     borderRadius: 14,
     padding: 16,
@@ -251,50 +249,58 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     marginRight: 10,
     borderWidth: 1,
     borderColor: '#333',
   },
   avatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#333',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
   },
   cardHeaderInfo: { flex: 1 },
-  reviewerName: { color: '#FFF', fontSize: 14, fontWeight: '600' },
-  dateText: { color: '#666', fontSize: 11, marginTop: 1 },
-  commentText: { color: '#CCC', fontSize: 13, lineHeight: 19, marginTop: 8 },
-  noCommentText: { color: '#555', fontSize: 12, fontStyle: 'italic', marginTop: 8 },
-  footer: {
+  reviewerName: { color: '#FFF', fontSize: 15, fontWeight: '600' },
+  dateText: { color: '#666', fontSize: 11, marginTop: 2 },
+  commentText: { color: '#CCC', fontSize: 14, lineHeight: 20, marginTop: 10 },
+  noCommentText: { color: '#555', fontSize: 13, fontStyle: 'italic', marginTop: 10 },
+  navRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: 16,
-    gap: 6,
+    justifyContent: 'space-between',
+    marginTop: 16,
+  },
+  arrowBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#282848',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  arrowDisabled: {
+    backgroundColor: '#1a1a2e',
   },
   dotsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 6,
+    gap: 8,
   },
   dot: {
-    width: 7,
-    height: 7,
+    width: 8,
+    height: 8,
     borderRadius: 4,
     backgroundColor: '#333',
   },
   dotActive: {
     backgroundColor: Colors.primary,
-    width: 18,
-  },
-  pageCounter: {
-    color: '#555',
-    fontSize: 11,
+    width: 20,
   },
   emptyWrap: {
     alignItems: 'center',
