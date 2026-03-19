@@ -74,15 +74,12 @@ export default function AvailableTeacherCard({ teacher, onPress, onBookPress, on
         <Text style={styles.username}>{teacher.username}</Text>
         <View style={styles.starsRow}>
           {renderStars()}
-          {(teacher.review_count ?? 0) > 0 && (
+          {onInfoPress && (
             <TouchableOpacity onPress={onInfoPress} style={styles.infoBtn} data-testid={`info-btn-${teacher.id}`}>
-              <Text style={styles.reviewCount}>({teacher.review_count})</Text>
-              <Ionicons name="information-circle-outline" size={14} color={Colors.primary} style={{ marginLeft: 2 }} />
-            </TouchableOpacity>
-          )}
-          {(teacher.review_count ?? 0) === 0 && onInfoPress && (
-            <TouchableOpacity onPress={onInfoPress} style={styles.infoBtn} data-testid={`info-btn-${teacher.id}`}>
-              <Ionicons name="information-circle-outline" size={14} color="#666" style={{ marginLeft: 4 }} />
+              {(teacher.review_count ?? 0) > 0 && (
+                <Text style={styles.reviewCount}>({teacher.review_count})</Text>
+              )}
+              <Ionicons name="information-circle-outline" size={16} color={Colors.primary} style={{ marginLeft: 4 }} />
             </TouchableOpacity>
           )}
         </View>

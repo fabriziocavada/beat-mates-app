@@ -126,6 +126,12 @@ export default function AvailableScreen() {
       )}
       
       <TabBar activeTab="available" onTabPress={handleTabPress} />
+      <ReviewsPopup
+        visible={reviewsPopup.visible}
+        onClose={() => setReviewsPopup({ visible: false, userId: '', username: '' })}
+        userId={reviewsPopup.userId}
+        username={reviewsPopup.username}
+      />
     </SafeAreaView>
   );
 }

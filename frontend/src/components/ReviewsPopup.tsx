@@ -1,22 +1,28 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Modal,
   TouchableOpacity,
-  FlatList,
   ActivityIndicator,
   Image,
+  Dimensions,
+  FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/colors';
 import { getMediaUrl } from '../services/api';
 import api from '../services/api';
 
+const SCREEN_W = Dimensions.get('window').width;
+const CARD_W = SCREEN_W * 0.78;
+const CARD_GAP = 12;
+
 interface Review {
   id: string;
   rating: number;
+  text?: string;
   reviewer_username: string;
   reviewer_image: string | null;
   created_at: string;
@@ -29,13 +35,29 @@ interface ReviewsPopupProps {
   username: string;
 }
 
+function timeAgo(dateStr: string): string {
+  if (!dateStr) return '';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m fa`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h fa`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}g fa`;
+  const months = Math.floor(days / 30);
+  return `${months} mes${months === 1 ? 'e' : 'i'} fa`;
+}
+
 export default function ReviewsPopup({ visible, onClose, userId, username }: ReviewsPopupProps) {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const flatRef = useRef<FlatList>(null);
 
   useEffect(() => {
     if (visible && userId) {
       setLoading(true);
+      setActiveIdx(0);
       api.get(`/users/${userId}/reviews`)
         .then(res => setReviews(res.data))
         .catch(() => setReviews([]))
@@ -43,74 +65,115 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
     }
   }, [visible, userId]);
 
-  const renderStars = (rating: number) => {
-    return Array.from({ length: 5 }, (_, i) => (
+  const renderStars = (rating: number) =>
+    Array.from({ length: 5 }, (_, i) => (
       <Ionicons
         key={i}
         name={i < rating ? 'star' : 'star-outline'}
-        size={14}
-        color={i < rating ? '#FFD700' : '#555'}
+        size={16}
+        color={i < rating ? '#FFD700' : '#444'}
       />
     ));
-  };
-
-  const renderItem = ({ item }: { item: Review }) => (
-    <View style={styles.reviewCard}>
-      <View style={styles.reviewHeader}>
-        {item.reviewer_image ? (
-          <Image source={{ uri: getMediaUrl(item.reviewer_image) || '' }} style={styles.reviewerAvatar} />
-        ) : (
-          <View style={styles.reviewerAvatarPlaceholder}>
-            <Ionicons name="person" size={14} color="#888" />
-          </View>
-        )}
-        <View style={styles.reviewerInfo}>
-          <Text style={styles.reviewerName}>{item.reviewer_username}</Text>
-          <View style={styles.starsRow}>{renderStars(item.rating)}</View>
-        </View>
-      </View>
-    </View>
-  );
 
   const avgRating = reviews.length > 0
     ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
     : '0';
 
+  const onViewableChanged = useRef(({ viewableItems }: any) => {
+    if (viewableItems.length > 0) setActiveIdx(viewableItems[0].index ?? 0);
+  }).current;
+
+  const renderCard = ({ item }: { item: Review }) => (
+    <View style={styles.card} data-testid={`review-card-${item.id}`}>
+      {/* Reviewer row */}
+      <View style={styles.cardHeader}>
+        {item.reviewer_image ? (
+          <Image source={{ uri: getMediaUrl(item.reviewer_image) || '' }} style={styles.avatar} />
+        ) : (
+          <View style={styles.avatarPlaceholder}>
+            <Ionicons name="person" size={20} color="#777" />
+          </View>
+        )}
+        <View style={styles.cardHeaderInfo}>
+          <Text style={styles.reviewerName} numberOfLines={1}>{item.reviewer_username}</Text>
+          <Text style={styles.dateText}>{timeAgo(item.created_at)}</Text>
+        </View>
+      </View>
+      {/* Stars */}
+      <View style={styles.starsRow}>{renderStars(item.rating)}</View>
+      {/* Comment text */}
+      {item.text ? (
+        <Text style={styles.commentText} numberOfLines={4}>{item.text}</Text>
+      ) : (
+        <Text style={styles.noCommentText}>Nessun commento</Text>
+      )}
+    </View>
+  );
+
   return (
-    <Modal visible={visible} transparent animationType="slide" statusBarTranslucent>
-      <View style={styles.overlay}>
-        <View style={styles.container}>
-          {/* Header with X */}
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
+      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity activeOpacity={1} style={styles.container}>
+          {/* Handle bar */}
+          <View style={styles.handleBar} />
+
+          {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>Recensioni di {username}</Text>
+            <View style={styles.headerLeft}>
+              <Text style={styles.headerTitle}>Recensioni</Text>
+              <Text style={styles.headerSubtitle}>{username}</Text>
+            </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn} data-testid="close-reviews-popup">
-              <Ionicons name="close" size={22} color="#FFF" />
+              <Ionicons name="close" size={20} color="#FFF" />
             </TouchableOpacity>
           </View>
 
-          {/* Summary */}
+          {/* Average summary */}
           <View style={styles.summary}>
-            <Text style={styles.avgRating}>{avgRating}</Text>
-            <View style={styles.starsRow}>{renderStars(Math.round(Number(avgRating)))}</View>
-            <Text style={styles.reviewCount}>{reviews.length} recension{reviews.length === 1 ? 'e' : 'i'}</Text>
+            <Text style={styles.avgNumber}>{avgRating}</Text>
+            <View style={styles.summaryRight}>
+              <View style={styles.starsRow}>{renderStars(Math.round(Number(avgRating)))}</View>
+              <Text style={styles.reviewCountText}>{reviews.length} recension{reviews.length === 1 ? 'e' : 'i'}</Text>
+            </View>
           </View>
 
-          {/* Reviews list */}
+          {/* Content */}
           {loading ? (
-            <ActivityIndicator color={Colors.primary} style={{ marginTop: 30 }} />
+            <ActivityIndicator color={Colors.primary} style={{ marginVertical: 40 }} />
           ) : reviews.length === 0 ? (
-            <Text style={styles.emptyText}>Nessuna recensione ancora</Text>
+            <View style={styles.emptyWrap}>
+              <Ionicons name="chatbubble-ellipses-outline" size={40} color="#444" />
+              <Text style={styles.emptyText}>Nessuna recensione ancora</Text>
+            </View>
           ) : (
-            <FlatList
-              data={reviews}
-              renderItem={renderItem}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.listContent}
-              showsVerticalScrollIndicator={false}
-            />
+            <>
+              {/* Horizontal carousel */}
+              <FlatList
+                ref={flatRef}
+                data={reviews}
+                renderItem={renderCard}
+                keyExtractor={(item) => item.id}
+                horizontal
+                pagingEnabled={false}
+                snapToInterval={CARD_W + CARD_GAP}
+                decelerationRate="fast"
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.carouselContent}
+                onViewableItemsChanged={onViewableChanged}
+                viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
+              />
+              {/* Dots indicator */}
+              {reviews.length > 1 && (
+                <View style={styles.dotsRow}>
+                  {reviews.map((_, i) => (
+                    <View key={i} style={[styles.dot, i === activeIdx && styles.dotActive]} />
+                  ))}
+                </View>
+              )}
+            </>
           )}
-        </View>
-      </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 }
@@ -118,102 +181,118 @@ export default function ReviewsPopup({ visible, onClose, userId, username }: Rev
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   container: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '70%',
-    paddingBottom: 30,
+    backgroundColor: '#1a1a2e',
+    borderRadius: 20,
+    width: SCREEN_W - 32,
+    maxHeight: '75%',
+    overflow: 'hidden',
+  },
+  handleBar: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#444',
+    alignSelf: 'center',
+    marginTop: 10,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#222',
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 10,
   },
-  headerTitle: {
-    color: '#FFF',
-    fontSize: 17,
-    fontWeight: '700',
-    flex: 1,
-  },
+  headerLeft: { flex: 1 },
+  headerTitle: { color: '#FFF', fontSize: 18, fontWeight: '700' },
+  headerSubtitle: { color: '#888', fontSize: 13, marginTop: 1 },
   closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: '#333',
     alignItems: 'center',
     justifyContent: 'center',
   },
   summary: {
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#282848',
+  },
+  avgNumber: { color: '#FFF', fontSize: 40, fontWeight: '800', marginRight: 12 },
+  summaryRight: { flex: 1 },
+  starsRow: { flexDirection: 'row', gap: 2 },
+  reviewCountText: { color: '#888', fontSize: 12, marginTop: 3 },
+  carouselContent: {
+    paddingHorizontal: 18,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#222',
   },
-  avgRating: {
-    color: '#FFF',
-    fontSize: 36,
-    fontWeight: '800',
+  card: {
+    width: CARD_W,
+    backgroundColor: '#222244',
+    borderRadius: 14,
+    padding: 16,
+    marginRight: CARD_GAP,
   },
-  starsRow: {
-    flexDirection: 'row',
-    gap: 2,
-    marginTop: 4,
-  },
-  reviewCount: {
-    color: '#888',
-    fontSize: 13,
-    marginTop: 4,
-  },
-  listContent: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-  },
-  reviewCard: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a1a2e',
-  },
-  reviewHeader: {
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 10,
   },
-  reviewerAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#333',
   },
-  reviewerAvatarPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#1a1a2e',
+  avatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#333',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
   },
-  reviewerInfo: {
-    flex: 1,
+  cardHeaderInfo: { flex: 1 },
+  reviewerName: { color: '#FFF', fontSize: 14, fontWeight: '600' },
+  dateText: { color: '#666', fontSize: 11, marginTop: 1 },
+  commentText: { color: '#CCC', fontSize: 13, lineHeight: 19, marginTop: 8 },
+  noCommentText: { color: '#555', fontSize: 12, fontStyle: 'italic', marginTop: 8 },
+  dotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+    paddingBottom: 16,
   },
-  reviewerName: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 2,
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#333',
+  },
+  dotActive: {
+    backgroundColor: Colors.primary,
+    width: 18,
+  },
+  emptyWrap: {
+    alignItems: 'center',
+    paddingVertical: 36,
+    gap: 10,
   },
   emptyText: {
     color: '#666',
     fontSize: 14,
     textAlign: 'center',
-    marginTop: 30,
   },
 });
