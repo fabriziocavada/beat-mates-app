@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,14 +8,10 @@ import {
   TextInput,
   Keyboard,
   Platform,
-  Animated,
   TouchableWithoutFeedback,
-  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/colors';
-
-const SCREEN_H = Dimensions.get('window').height;
 
 interface CallRatingModalProps {
   visible: boolean;
@@ -32,34 +28,14 @@ export default function CallRatingModal({
 }: CallRatingModalProps) {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
-  const [kbOpen, setKbOpen] = useState(false);
-  const shiftY = useRef(new Animated.Value(0)).current;
+  const [kbVisible, setKbVisible] = useState(false);
 
   useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-
-    const onShow = (e: any) => {
-      const kbH = e.endCoordinates.height;
-      setKbOpen(true);
-      Animated.timing(shiftY, {
-        toValue: -(kbH / 2 + 20),
-        duration: Platform.OS === 'ios' ? 250 : 150,
-        useNativeDriver: true,
-      }).start();
-    };
-    const onHide = () => {
-      setKbOpen(false);
-      Animated.timing(shiftY, {
-        toValue: 0,
-        duration: Platform.OS === 'ios' ? 250 : 150,
-        useNativeDriver: true,
-      }).start();
-    };
-
-    const sub1 = Keyboard.addListener(showEvent, onShow);
-    const sub2 = Keyboard.addListener(hideEvent, onHide);
-    return () => { sub1.remove(); sub2.remove(); };
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const s1 = Keyboard.addListener(showEvt, () => setKbVisible(true));
+    const s2 = Keyboard.addListener(hideEvt, () => setKbVisible(false));
+    return () => { s1.remove(); s2.remove(); };
   }, []);
 
   const handleSubmit = () => {
@@ -68,8 +44,6 @@ export default function CallRatingModal({
       onSubmit(rating, comment);
       setRating(0);
       setComment('');
-    } else {
-      onSkip();
     }
   };
 
@@ -83,70 +57,106 @@ export default function CallRatingModal({
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={styles.overlay}>
-          <Animated.View style={[styles.container, { transform: [{ translateY: shiftY }] }]}>
-            {/* Close keyboard hint when keyboard is open */}
-            {kbOpen && (
-              <TouchableOpacity
-                style={styles.dismissKbBtn}
-                onPress={Keyboard.dismiss}
-                data-testid="dismiss-keyboard-btn"
-              >
-                <Ionicons name="chevron-down" size={16} color="#999" />
-                <Text style={styles.dismissKbText}>Chiudi tastiera</Text>
-              </TouchableOpacity>
+        <View style={[
+          styles.overlay,
+          kbVisible && styles.overlayKbOpen,
+        ]}>
+          <View style={[
+            styles.container,
+            kbVisible && styles.containerKbOpen,
+          ]}>
+            {/* When keyboard open: compact top bar with buttons */}
+            {kbVisible ? (
+              <>
+                {/* Compact: stars + buttons side by side */}
+                <View style={styles.compactRow}>
+                  <View style={styles.compactStars}>
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <TouchableOpacity key={s} onPress={() => setRating(s)} data-testid={`rating-star-${s}`}>
+                        <Ionicons name={s <= rating ? 'star' : 'star-outline'} size={28} color={s <= rating ? '#FFD700' : '#444'} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Commento (opzionale)"
+                  placeholderTextColor="#666"
+                  value={comment}
+                  onChangeText={setComment}
+                  multiline
+                  maxLength={300}
+                  numberOfLines={2}
+                  textAlignVertical="top"
+                  data-testid="rating-comment-input"
+                />
+
+                <View style={styles.btnsRow}>
+                  <TouchableOpacity style={styles.skipBtn} onPress={handleSkip} data-testid="skip-rating-btn">
+                    <Text style={styles.skipText}>Salta</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.sendBtn, !rating && { opacity: 0.4 }]}
+                    onPress={handleSubmit}
+                    disabled={!rating}
+                    data-testid="submit-rating-btn"
+                  >
+                    <Text style={styles.sendText}>Invia</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                {/* Normal layout: centered, full */}
+                <View style={styles.iconRow}>
+                  <View style={styles.iconCircle}>
+                    <Ionicons name="videocam" size={28} color="#FFF" />
+                  </View>
+                </View>
+
+                <Text style={styles.title}>Com'e andata la lezione?</Text>
+                <Text style={styles.subtitle}>Valuta la tua esperienza con {teacherName}</Text>
+
+                <View style={styles.starsRow}>
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <TouchableOpacity key={s} onPress={() => setRating(s)} style={styles.starBtn} data-testid={`rating-star-${s}`}>
+                      <Ionicons name={s <= rating ? 'star' : 'star-outline'} size={36} color={s <= rating ? '#FFD700' : '#444'} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {rating > 0 && (
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Commento (opzionale)"
+                    placeholderTextColor="#666"
+                    value={comment}
+                    onChangeText={setComment}
+                    multiline
+                    maxLength={300}
+                    numberOfLines={2}
+                    textAlignVertical="top"
+                    data-testid="rating-comment-input"
+                  />
+                )}
+
+                <View style={styles.btnsRow}>
+                  <TouchableOpacity style={styles.skipBtn} onPress={handleSkip} data-testid="skip-rating-btn">
+                    <Text style={styles.skipText}>Salta</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.sendBtn, !rating && { opacity: 0.4 }]}
+                    onPress={handleSubmit}
+                    disabled={!rating}
+                    data-testid="submit-rating-btn"
+                  >
+                    <Text style={styles.sendText}>Invia</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
             )}
-
-            {/* Icon */}
-            <View style={styles.iconRow}>
-              <View style={styles.iconCircle}>
-                <Ionicons name="videocam" size={28} color="#FFF" />
-              </View>
-            </View>
-
-            <Text style={styles.title}>Com'e andata la lezione?</Text>
-            <Text style={styles.subtitle}>Valuta la tua esperienza con {teacherName}</Text>
-
-            {/* Stars */}
-            <View style={styles.starsRow}>
-              {[1, 2, 3, 4, 5].map((s) => (
-                <TouchableOpacity key={s} onPress={() => setRating(s)} style={styles.starBtn} data-testid={`rating-star-${s}`}>
-                  <Ionicons name={s <= rating ? 'star' : 'star-outline'} size={36} color={s <= rating ? '#FFD700' : '#444'} />
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Comment - optional, appears when rating selected */}
-            {rating > 0 && (
-              <TextInput
-                style={styles.input}
-                placeholder="Commento (opzionale)"
-                placeholderTextColor="#666"
-                value={comment}
-                onChangeText={setComment}
-                multiline
-                maxLength={300}
-                numberOfLines={2}
-                textAlignVertical="top"
-                data-testid="rating-comment-input"
-              />
-            )}
-
-            {/* Buttons - always visible */}
-            <View style={styles.btnsRow}>
-              <TouchableOpacity style={styles.skipBtn} onPress={handleSkip} data-testid="skip-rating-btn">
-                <Text style={styles.skipText}>Salta</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.sendBtn, !rating && { opacity: 0.4 }]}
-                onPress={handleSubmit}
-                disabled={!rating}
-                data-testid="submit-rating-btn"
-              >
-                <Text style={styles.sendText}>Invia</Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
+          </View>
         </View>
       </TouchableWithoutFeedback>
     </Modal>
@@ -160,24 +170,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
+  overlayKbOpen: {
+    justifyContent: 'flex-start',
+    paddingTop: Platform.OS === 'ios' ? 60 : 30,
+  },
   container: {
     backgroundColor: Colors.surface,
     borderRadius: 20,
     padding: 20,
     alignItems: 'center',
   },
-  dismissKbBtn: {
+  containerKbOpen: {
+    padding: 14,
+  },
+  compactRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    alignSelf: 'flex-end',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    marginBottom: 4,
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
+    justifyContent: 'center',
+    marginBottom: 10,
   },
-  dismissKbText: { color: '#999', fontSize: 12 },
+  compactStars: {
+    flexDirection: 'row',
+    gap: 8,
+  },
   iconRow: { marginBottom: 10 },
   iconCircle: {
     width: 50,
@@ -191,7 +206,7 @@ const styles = StyleSheet.create({
   subtitle: { color: '#888', fontSize: 13, marginBottom: 12, textAlign: 'center' },
   starsRow: { flexDirection: 'row', gap: 6, marginBottom: 14 },
   starBtn: { padding: 2 },
-  btnsRow: { flexDirection: 'row', width: '100%', gap: 10, marginTop: 4 },
+  btnsRow: { flexDirection: 'row', width: '100%', gap: 10, marginTop: 6 },
   skipBtn: {
     flex: 1,
     paddingVertical: 13,
@@ -219,6 +234,6 @@ const styles = StyleSheet.create({
     maxHeight: 80,
     borderWidth: 1,
     borderColor: '#333',
-    marginBottom: 10,
+    marginBottom: 6,
   },
 });
