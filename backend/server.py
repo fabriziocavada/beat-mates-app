@@ -2638,6 +2638,9 @@ async def start_group_lesson(lesson_id: str, current_user: dict = Depends(get_cu
                     "enable_prejoin_ui": False,
                     "enable_knocking": False,
                     "enable_screenshare": True,
+                    "start_audio_off": True,
+                    "start_video_off": False,
+                    "enable_hand_raising": True,
                 }
             }
         )
@@ -2706,6 +2709,138 @@ async def end_group_lesson(lesson_id: str, current_user: dict = Depends(get_curr
         {"$set": {"status": "completed"}}
     )
     return {"message": "Lesson ended"}
+
+
+# ==================== GROUP LESSON - HAND RAISE & TOKEN ====================
+@api_router.post("/group-lessons/{lesson_id}/token")
+async def get_group_lesson_token(lesson_id: str, current_user: dict = Depends(get_current_user)):
+    """Get a Daily.co meeting token for a group lesson. Teacher gets owner token, students get participant token."""
+    lesson = await db.group_lessons.find_one({"id": lesson_id}, {"_id": 0})
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    if lesson["status"] != "live" or not lesson.get("room_name"):
+        raise HTTPException(status_code=400, detail="Lesson is not live")
+
+    is_teacher = current_user["id"] == lesson["teacher_id"]
+    if not is_teacher and current_user["id"] not in lesson.get("booked_users", []):
+        raise HTTPException(status_code=403, detail="You must book the lesson first")
+
+    if not DAILY_API_KEY:
+        raise HTTPException(status_code=500, detail="Daily.co API key not configured")
+
+    user_name = current_user.get("name") or current_user.get("username", "Utente")
+    exp_timestamp = int((datetime.utcnow() + timedelta(hours=4)).timestamp())
+
+    token_props = {
+        "room_name": lesson["room_name"],
+        "user_name": user_name,
+        "user_id": current_user["id"],
+        "exp": exp_timestamp,
+        "start_video_off": False,
+        "enable_prejoin_ui": False,
+    }
+
+    if is_teacher:
+        token_props["is_owner"] = True
+        token_props["start_audio_off"] = False
+    else:
+        token_props["is_owner"] = False
+        token_props["start_audio_off"] = True
+
+    async with httpx.AsyncClient() as client_http:
+        response = await client_http.post(
+            f"{DAILY_API_URL}/meeting-tokens",
+            headers={"Authorization": f"Bearer {DAILY_API_KEY}", "Content-Type": "application/json"},
+            json={"properties": token_props}
+        )
+        if response.status_code != 200:
+            logger.error(f"Daily.co group token failed: {response.text}")
+            raise HTTPException(status_code=500, detail="Failed to generate token")
+        token_data = response.json()
+
+    return {
+        "token": token_data["token"],
+        "is_teacher": is_teacher,
+        "room_url": lesson["room_url"],
+        "room_name": lesson["room_name"],
+        "teacher_id": lesson["teacher_id"]
+    }
+
+
+@api_router.post("/group-lessons/{lesson_id}/raise-hand")
+async def raise_hand(lesson_id: str, current_user: dict = Depends(get_current_user)):
+    lesson = await db.group_lessons.find_one({"id": lesson_id}, {"_id": 0})
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    if lesson["status"] != "live":
+        raise HTTPException(status_code=400, detail="Lesson is not live")
+
+    user_name = current_user.get("name") or current_user.get("username", "Utente")
+    hand_entry = {"user_id": current_user["id"], "user_name": user_name, "raised_at": datetime.utcnow().isoformat()}
+
+    await db.group_lessons.update_one(
+        {"id": lesson_id},
+        {"$pull": {"raised_hands": {"user_id": current_user["id"]}}}
+    )
+    await db.group_lessons.update_one(
+        {"id": lesson_id},
+        {"$push": {"raised_hands": hand_entry}}
+    )
+    return {"message": "Hand raised"}
+
+
+@api_router.post("/group-lessons/{lesson_id}/lower-hand")
+async def lower_hand(lesson_id: str, current_user: dict = Depends(get_current_user)):
+    await db.group_lessons.update_one(
+        {"id": lesson_id},
+        {"$pull": {"raised_hands": {"user_id": current_user["id"]}}}
+    )
+    return {"message": "Hand lowered"}
+
+
+@api_router.get("/group-lessons/{lesson_id}/hands")
+async def get_raised_hands(lesson_id: str, current_user: dict = Depends(get_current_user)):
+    lesson = await db.group_lessons.find_one({"id": lesson_id}, {"_id": 0})
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    hands = lesson.get("raised_hands", [])
+    allowed = lesson.get("allowed_speakers", [])
+    return {"raised_hands": hands, "allowed_speakers": allowed}
+
+
+@api_router.post("/group-lessons/{lesson_id}/allow-speak")
+async def allow_speak(lesson_id: str, student_id: str, current_user: dict = Depends(get_current_user)):
+    """Teacher allows a student to unmute and speak"""
+    lesson = await db.group_lessons.find_one({"id": lesson_id}, {"_id": 0})
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    if lesson["teacher_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Only the teacher can allow speaking")
+
+    await db.group_lessons.update_one(
+        {"id": lesson_id},
+        {
+            "$addToSet": {"allowed_speakers": student_id},
+            "$pull": {"raised_hands": {"user_id": student_id}}
+        }
+    )
+    return {"message": "Student allowed to speak"}
+
+
+@api_router.post("/group-lessons/{lesson_id}/revoke-speak")
+async def revoke_speak(lesson_id: str, student_id: str, current_user: dict = Depends(get_current_user)):
+    """Teacher revokes speaking permission"""
+    lesson = await db.group_lessons.find_one({"id": lesson_id}, {"_id": 0})
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    if lesson["teacher_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Only the teacher can revoke speaking")
+
+    await db.group_lessons.update_one(
+        {"id": lesson_id},
+        {"$pull": {"allowed_speakers": student_id}}
+    )
+    return {"message": "Speaking revoked"}
 
 
 # ==================== NOTIFICATIONS ====================
