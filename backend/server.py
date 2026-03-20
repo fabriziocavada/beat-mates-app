@@ -2843,6 +2843,22 @@ async def revoke_speak(lesson_id: str, student_id: str, current_user: dict = Dep
     return {"message": "Speaking revoked"}
 
 
+@api_router.post("/group-lessons/{lesson_id}/mute-all")
+async def mute_all_students(lesson_id: str, current_user: dict = Depends(get_current_user)):
+    """Teacher takes back control - mutes all students, clears all hands and speakers"""
+    lesson = await db.group_lessons.find_one({"id": lesson_id}, {"_id": 0})
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    if lesson["teacher_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Only the teacher can do this")
+
+    await db.group_lessons.update_one(
+        {"id": lesson_id},
+        {"$set": {"raised_hands": [], "allowed_speakers": []}}
+    )
+    return {"message": "All muted, teacher has control"}
+
+
 # ==================== NOTIFICATIONS ====================
 @api_router.get("/notifications")
 async def get_notifications(current_user: dict = Depends(get_current_user)):

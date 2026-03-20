@@ -130,13 +130,22 @@ export default function GroupVideoCallScreen() {
           if (nowAllowed && !wasAllowed) {
             Alert.alert('Puoi parlare!', 'Il maestro ti ha dato il permesso. Attiva il microfono.');
           }
+          // If was allowed but no longer → teacher muted everyone
+          if (!nowAllowed && wasAllowed) {
+            Alert.alert('Microfono disattivato', 'Il maestro ha ripreso il controllo. Puoi rialzare la mano.');
+          }
+          // Reset hand state if hands were cleared by teacher
+          const myHandRaised = (res.data.raised_hands || []).some((h: HandEntry) => h.user_id === currentUser.id);
+          if (!myHandRaised && handRaised) {
+            setHandRaised(false);
+          }
         }
       } catch {}
     };
     poll();
     handPollRef.current = setInterval(poll, 3000);
     return () => { if (handPollRef.current) clearInterval(handPollRef.current); };
-  }, [lessonId, roomUrl, isTeacher, canSpeak]);
+  }, [lessonId, roomUrl, isTeacher, canSpeak, handRaised]);
 
   const requestAndroidPermissions = async (): Promise<boolean> => {
     try {
@@ -245,6 +254,15 @@ export default function GroupVideoCallScreen() {
   const revokeStudent = async (studentId: string) => {
     try {
       await api.post(`/group-lessons/${lessonId}/revoke-speak?student_id=${studentId}`);
+    } catch {}
+  };
+
+  const muteAll = async () => {
+    try {
+      await api.post(`/group-lessons/${lessonId}/mute-all`);
+      setRaisedHands([]);
+      setAllowedSpeakers([]);
+      setShowHandsPanel(false);
     } catch {}
   };
 
@@ -436,6 +454,20 @@ export default function GroupVideoCallScreen() {
         </View>
       )}
 
+      {/* TEACHER: "SOLO IO" button - always visible, big and prominent */}
+      {webViewReady && isTeacher && (
+        <View style={st.teacherBottomControls} pointerEvents="box-none">
+          <TouchableOpacity
+            style={st.soloIoBtn}
+            onPress={muteAll}
+            data-testid="mute-all-btn"
+          >
+            <Ionicons name="mic" size={22} color="#FFF" />
+            <Text style={st.soloIoText}>SOLO IO</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* STUDENT: Hand Raise button + Can Speak indicator */}
       {webViewReady && !isTeacher && (
         <View style={st.studentControls} pointerEvents="box-none">
@@ -548,6 +580,19 @@ const st = StyleSheet.create({
   },
   allowBtnText: { color: '#FFF', fontSize: 11, fontWeight: '600' },
   noHandsText: { color: '#888', fontSize: 12, textAlign: 'center', paddingVertical: 8 },
+  // Teacher bottom controls
+  teacherBottomControls: {
+    position: 'absolute', bottom: 100, left: 0, right: 0,
+    alignItems: 'center', zIndex: 20,
+  },
+  soloIoBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#FF3B30', paddingHorizontal: 24, paddingVertical: 14,
+    borderRadius: 28, borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)',
+  },
+  soloIoText: {
+    color: '#FFF', fontSize: 16, fontWeight: '800', letterSpacing: 1,
+  },
   // Student controls
   studentControls: {
     position: 'absolute', bottom: 100, left: 0, right: 0,
