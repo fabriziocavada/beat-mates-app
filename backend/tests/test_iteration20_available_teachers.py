@@ -17,7 +17,7 @@ import requests
 import os
 from datetime import datetime, timedelta
 
-BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://beat-mates-app-1.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://coaching-connect-8.preview.emergentagent.com').rstrip('/')
 
 # Test credentials from main agent context
 STUDENT_EMAIL = "mario@test.com"

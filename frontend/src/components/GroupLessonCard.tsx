@@ -30,6 +30,8 @@ interface Props {
   onBook: () => void;
   onCancel: () => void;
   onPress: () => void;
+  onStart?: () => void;
+  onJoin?: () => void;
 }
 
 function formatDate(dateStr: string): string {
@@ -39,10 +41,11 @@ function formatDate(dateStr: string): string {
   return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} - ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-export default function GroupLessonCard({ lesson, currentUserId, onBook, onCancel, onPress }: Props) {
+export default function GroupLessonCard({ lesson, currentUserId, onBook, onCancel, onPress, onStart, onJoin }: Props) {
   const isBooked = lesson.booked_users?.includes(currentUserId);
   const isFull = lesson.booked_count >= lesson.max_participants;
   const isTeacher = lesson.teacher_id === currentUserId;
+  const isLive = lesson.status === 'live';
   const spotsLeft = lesson.max_participants - lesson.booked_count;
 
   return (
@@ -93,10 +96,34 @@ export default function GroupLessonCard({ lesson, currentUserId, onBook, onCance
         </View>
       </View>
 
-      {/* Action button */}
-      {!isTeacher && (
+      {/* Action buttons */}
+      {isTeacher ? (
         <View style={s.actionRow}>
-          {isBooked ? (
+          {isLive ? (
+            <View style={s.liveBadge}>
+              <View style={s.liveIndicator} />
+              <Text style={s.liveText}>IN DIRETTA</Text>
+            </View>
+          ) : (
+            <TouchableOpacity style={s.startBtn} onPress={onStart} data-testid={`start-lesson-${lesson.id}`}>
+              <Ionicons name="videocam" size={16} color="#FFF" />
+              <Text style={s.startText}>Avvia Lezione</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      ) : (
+        <View style={s.actionRow}>
+          {isLive && isBooked ? (
+            <TouchableOpacity style={s.joinBtn} onPress={onJoin} data-testid={`join-lesson-${lesson.id}`}>
+              <Ionicons name="videocam" size={16} color="#FFF" />
+              <Text style={s.joinText}>Entra nella Lezione</Text>
+            </TouchableOpacity>
+          ) : isLive ? (
+            <View style={s.liveBadge}>
+              <View style={s.liveIndicator} />
+              <Text style={s.liveText}>IN DIRETTA</Text>
+            </View>
+          ) : isBooked ? (
             <TouchableOpacity style={s.cancelBtn} onPress={onCancel} data-testid={`cancel-booking-${lesson.id}`}>
               <Ionicons name="close-circle-outline" size={16} color={Colors.error} />
               <Text style={s.cancelText}>Annulla prenotazione</Text>
@@ -112,15 +139,6 @@ export default function GroupLessonCard({ lesson, currentUserId, onBook, onCance
               <Text style={s.bookText}>{isFull ? 'Completo' : 'Prenota'}</Text>
             </TouchableOpacity>
           )}
-        </View>
-      )}
-
-      {isTeacher && (
-        <View style={s.actionRow}>
-          <View style={s.ownerBadge}>
-            <Ionicons name="school-outline" size={14} color={Colors.primary} />
-            <Text style={s.ownerText}>La tua lezione</Text>
-          </View>
         </View>
       )}
     </TouchableOpacity>
@@ -170,6 +188,24 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(255,59,48,0.1)', borderRadius: 10, paddingVertical: 10,
   },
   cancelText: { color: Colors.error, fontSize: 14, fontWeight: '600' },
+  startBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    backgroundColor: '#28A745', borderRadius: 10, paddingVertical: 10,
+  },
+  startText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  joinBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    backgroundColor: '#28A745', borderRadius: 10, paddingVertical: 10,
+  },
+  joinText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  liveBadge: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 8,
+  },
+  liveIndicator: {
+    width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF3B30',
+  },
+  liveText: { color: '#FF3B30', fontSize: 13, fontWeight: '700', letterSpacing: 1 },
   ownerBadge: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     paddingVertical: 6,

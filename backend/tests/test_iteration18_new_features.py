@@ -21,7 +21,7 @@ import uuid
 
 BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
-    BASE_URL = "https://beat-mates-app-1.preview.emergentagent.com"
+    BASE_URL = "https://coaching-connect-8.preview.emergentagent.com"
 
 # ----- FIXTURES -----
 

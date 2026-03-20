@@ -135,12 +135,34 @@ export default function AvailableScreen() {
     />
   );
 
+  const handleStartGroupLesson = async (lessonId: string) => {
+    try {
+      const res = await api.post(`/group-lessons/${lessonId}/start`);
+      const { room_url, room_name } = res.data;
+      router.push(`/(main)/video-call/${room_name}?group=true&lessonId=${lessonId}`);
+    } catch (error: any) {
+      Alert.alert('Errore', error?.response?.data?.detail || 'Avvio fallito');
+    }
+  };
+
+  const handleJoinGroupLesson = async (lessonId: string) => {
+    try {
+      const res = await api.post(`/group-lessons/${lessonId}/join`);
+      const { room_url, room_name } = res.data;
+      router.push(`/(main)/video-call/${room_name}?group=true&lessonId=${lessonId}`);
+    } catch (error: any) {
+      Alert.alert('Errore', error?.response?.data?.detail || 'Impossibile entrare');
+    }
+  };
+
   const renderGroupLesson = ({ item }: { item: GroupLesson }) => (
     <GroupLessonCard
       lesson={item}
       currentUserId={user?.id || ''}
       onBook={() => handleBookGroupLesson(item.id)}
       onCancel={() => handleCancelGroupBooking(item.id)}
+      onStart={() => handleStartGroupLesson(item.id)}
+      onJoin={() => handleJoinGroupLesson(item.id)}
       onPress={() => {}}
     />
   );

@@ -9,6 +9,7 @@ import {
   Alert,
   Platform,
   KeyboardAvoidingView,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -19,25 +20,74 @@ import api from '../../src/services/api';
 const DANCE_CATS = ['Salsa', 'Bachata', 'Hip Hop', 'Breakdance', 'Popping', 'Locking', 'House', 'Contemporary', 'Dancehall', 'Afro', 'Kizomba', 'Tango', 'Altro'];
 const DURATIONS = [30, 45, 60, 90];
 
+// Generate arrays for date/time pickers
+const YEARS = [2026, 2027];
+const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
+const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const MINUTES = [0, 15, 30, 45];
+
+function pad(n: number): string { return String(n).padStart(2, '0'); }
+
+function PickerWheel({ items, selected, onSelect, labelFn }: {
+  items: number[];
+  selected: number;
+  onSelect: (v: number) => void;
+  labelFn?: (v: number) => string;
+}) {
+  return (
+    <ScrollView style={pw.scroll} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+      {items.map(v => (
+        <TouchableOpacity
+          key={v}
+          style={[pw.item, selected === v && pw.itemActive]}
+          onPress={() => onSelect(v)}
+        >
+          <Text style={[pw.text, selected === v && pw.textActive]}>
+            {labelFn ? labelFn(v) : pad(v)}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
+}
+
+const pw = StyleSheet.create({
+  scroll: { maxHeight: 180, flex: 1 },
+  item: { paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
+  itemActive: { backgroundColor: Colors.primary },
+  text: { color: '#888', fontSize: 16 },
+  textActive: { color: '#FFF', fontWeight: '700' },
+});
+
+const MONTH_NAMES = ['', 'Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+
 export default function CreateGroupLesson() {
   const router = useRouter();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
+  const [year, setYear] = useState(2026);
+  const [month, setMonth] = useState(new Date().getMonth() + 1);
+  const [day, setDay] = useState(new Date().getDate());
+  const [hour, setHour] = useState(20);
+  const [minute, setMinute] = useState(0);
   const [duration, setDuration] = useState(60);
   const [maxParticipants, setMaxParticipants] = useState('15');
   const [price, setPrice] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
+  const dateStr = `${day} ${MONTH_NAMES[month]} ${year}`;
+  const timeStr = `${pad(hour)}:${pad(minute)}`;
 
   const handleCreate = async () => {
     if (!title.trim()) return Alert.alert('Errore', 'Inserisci un titolo');
     if (!category) return Alert.alert('Errore', 'Seleziona una disciplina');
-    if (!date || !time) return Alert.alert('Errore', 'Inserisci data e ora');
     if (!price) return Alert.alert('Errore', 'Inserisci un prezzo');
 
-    const scheduled_at = `${date}T${time}:00`;
+    const scheduled_at = `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:00`;
 
     setLoading(true);
     try {
@@ -50,7 +100,7 @@ export default function CreateGroupLesson() {
         max_participants: parseInt(maxParticipants) || 15,
         price: parseFloat(price) || 0,
       });
-      Alert.alert('Lezione creata!', 'La lezione è ora visibile nella sezione Lezioni.', [
+      Alert.alert('Lezione creata!', 'La lezione e ora visibile nella sezione Lezioni.', [
         { text: 'OK', onPress: () => router.back() }
       ]);
     } catch (error: any) {
@@ -62,7 +112,6 @@ export default function CreateGroupLesson() {
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
-      {/* Header */}
       <View style={s.header}>
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn} data-testid="back-btn">
           <Ionicons name="arrow-back" size={24} color="#FFF" />
@@ -105,37 +154,28 @@ export default function CreateGroupLesson() {
                 key={c}
                 style={[s.chip, category === c && s.chipActive]}
                 onPress={() => setCategory(c)}
-                data-testid={`cat-${c}`}
               >
                 <Text style={[s.chipText, category === c && s.chipTextActive]}>{c}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
 
-          {/* Date + Time */}
+          {/* Date + Time - tappable fields */}
           <View style={s.row}>
             <View style={{ flex: 1 }}>
-              <Text style={s.label}>Data * (AAAA-MM-GG)</Text>
-              <TextInput
-                style={s.input}
-                placeholder="2026-03-25"
-                placeholderTextColor="#555"
-                value={date}
-                onChangeText={setDate}
-                data-testid="lesson-date-input"
-              />
+              <Text style={s.label}>Data *</Text>
+              <TouchableOpacity style={s.pickerBtn} onPress={() => setShowDatePicker(true)} data-testid="date-picker-btn">
+                <Ionicons name="calendar" size={18} color={Colors.primary} />
+                <Text style={s.pickerText}>{dateStr}</Text>
+              </TouchableOpacity>
             </View>
             <View style={{ width: 12 }} />
             <View style={{ flex: 1 }}>
-              <Text style={s.label}>Ora * (HH:MM)</Text>
-              <TextInput
-                style={s.input}
-                placeholder="20:00"
-                placeholderTextColor="#555"
-                value={time}
-                onChangeText={setTime}
-                data-testid="lesson-time-input"
-              />
+              <Text style={s.label}>Ora *</Text>
+              <TouchableOpacity style={s.pickerBtn} onPress={() => setShowTimePicker(true)} data-testid="time-picker-btn">
+                <Ionicons name="time" size={18} color={Colors.primary} />
+                <Text style={s.pickerText}>{timeStr}</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -164,7 +204,6 @@ export default function CreateGroupLesson() {
                 value={maxParticipants}
                 onChangeText={setMaxParticipants}
                 keyboardType="numeric"
-                data-testid="lesson-max-input"
               />
             </View>
             <View style={{ width: 12 }} />
@@ -177,7 +216,6 @@ export default function CreateGroupLesson() {
                 value={price}
                 onChangeText={setPrice}
                 keyboardType="decimal-pad"
-                data-testid="lesson-price-input"
               />
             </View>
           </View>
@@ -196,6 +234,40 @@ export default function CreateGroupLesson() {
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Date Picker Modal */}
+      <Modal visible={showDatePicker} transparent animationType="fade">
+        <View style={s.modalOverlay}>
+          <View style={s.modalBox}>
+            <Text style={s.modalTitle}>Seleziona Data</Text>
+            <View style={s.pickersRow}>
+              <PickerWheel items={DAYS} selected={day} onSelect={setDay} />
+              <PickerWheel items={MONTHS} selected={month} onSelect={setMonth} labelFn={(v) => MONTH_NAMES[v]} />
+              <PickerWheel items={YEARS} selected={year} onSelect={setYear} labelFn={(v) => String(v)} />
+            </View>
+            <TouchableOpacity style={s.confirmBtn} onPress={() => setShowDatePicker(false)} data-testid="confirm-date-btn">
+              <Text style={s.confirmText}>Conferma</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Time Picker Modal */}
+      <Modal visible={showTimePicker} transparent animationType="fade">
+        <View style={s.modalOverlay}>
+          <View style={s.modalBox}>
+            <Text style={s.modalTitle}>Seleziona Ora</Text>
+            <View style={s.pickersRow}>
+              <PickerWheel items={HOURS} selected={hour} onSelect={setHour} />
+              <Text style={s.colonText}>:</Text>
+              <PickerWheel items={MINUTES} selected={minute} onSelect={setMinute} />
+            </View>
+            <TouchableOpacity style={s.confirmBtn} onPress={() => setShowTimePicker(false)} data-testid="confirm-time-btn">
+              <Text style={s.confirmText}>Conferma</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -225,6 +297,12 @@ const s = StyleSheet.create({
   chipText: { color: '#888', fontSize: 13, fontWeight: '500' },
   chipTextActive: { color: '#FFF' },
   row: { flexDirection: 'row' },
+  pickerBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: Colors.surface, borderRadius: 12, padding: 14,
+    borderWidth: 1, borderColor: '#2C2C2E',
+  },
+  pickerText: { color: '#FFF', fontSize: 15, fontWeight: '500' },
   durRow: { flexDirection: 'row', gap: 8 },
   durBtn: {
     flex: 1, paddingVertical: 10, borderRadius: 10,
@@ -239,4 +317,20 @@ const s = StyleSheet.create({
     backgroundColor: Colors.primary, borderRadius: 14, paddingVertical: 16, marginTop: 24,
   },
   createText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+  // Modal styles
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  modalBox: {
+    backgroundColor: '#1a1a2e', borderRadius: 20, padding: 20,
+    width: '85%',
+  },
+  modalTitle: { color: '#FFF', fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 16 },
+  pickersRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  colonText: { color: '#FFF', fontSize: 24, fontWeight: '700', alignSelf: 'center', paddingHorizontal: 4 },
+  confirmBtn: {
+    backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center',
+  },
+  confirmText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
 });

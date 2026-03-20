@@ -2577,6 +2577,90 @@ async def my_group_lessons(current_user: dict = Depends(get_current_user)):
     ).sort("scheduled_at", -1).to_list(50)
     return clean_doc(lessons)
 
+@api_router.post("/group-lessons/{lesson_id}/start")
+async def start_group_lesson(lesson_id: str, current_user: dict = Depends(get_current_user)):
+    """Teacher starts the group lesson - creates a Daily.co room"""
+    lesson = await db.group_lessons.find_one({"id": lesson_id}, {"_id": 0})
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    if lesson["teacher_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Only the teacher can start this lesson")
+    if lesson.get("room_url"):
+        return {"room_url": lesson["room_url"], "room_name": lesson.get("room_name", "")}
+
+    if not DAILY_API_KEY:
+        raise HTTPException(status_code=500, detail="Daily.co API key not configured")
+
+    room_name = f"group-{uuid.uuid4().hex[:12]}"
+    exp_timestamp = int((datetime.utcnow() + timedelta(hours=4)).timestamp())
+    max_p = min(lesson.get("max_participants", 15) + 1, 200)  # +1 for teacher
+
+    async with httpx.AsyncClient() as client_http:
+        response = await client_http.post(
+            f"{DAILY_API_URL}/rooms",
+            headers={"Authorization": f"Bearer {DAILY_API_KEY}", "Content-Type": "application/json"},
+            json={
+                "name": room_name,
+                "privacy": "public",
+                "properties": {
+                    "exp": exp_timestamp,
+                    "enable_chat": True,
+                    "max_participants": max_p,
+                    "enable_prejoin_ui": False,
+                    "enable_knocking": False,
+                    "enable_screenshare": True,
+                }
+            }
+        )
+        if response.status_code != 200:
+            logger.error(f"Daily.co group room creation failed: {response.text}")
+            raise HTTPException(status_code=500, detail="Failed to create group room")
+        room_data = response.json()
+
+    await db.group_lessons.update_one(
+        {"id": lesson_id},
+        {"$set": {"room_url": room_data["url"], "room_name": room_name, "status": "live"}}
+    )
+    return {"room_url": room_data["url"], "room_name": room_name}
+
+@api_router.post("/group-lessons/{lesson_id}/join")
+async def join_group_lesson(lesson_id: str, current_user: dict = Depends(get_current_user)):
+    """Student joins a live group lesson"""
+    lesson = await db.group_lessons.find_one({"id": lesson_id}, {"_id": 0})
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    if lesson["status"] != "live":
+        raise HTTPException(status_code=400, detail="Lesson has not started yet")
+    if not lesson.get("room_url"):
+        raise HTTPException(status_code=400, detail="Room not available")
+    if current_user["id"] not in lesson.get("booked_users", []) and lesson["teacher_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You must book the lesson first")
+
+    return {"room_url": lesson["room_url"], "room_name": lesson.get("room_name", "")}
+
+@api_router.post("/group-lessons/{lesson_id}/end")
+async def end_group_lesson(lesson_id: str, current_user: dict = Depends(get_current_user)):
+    """Teacher ends the group lesson"""
+    lesson = await db.group_lessons.find_one({"id": lesson_id}, {"_id": 0})
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    if lesson["teacher_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Only the teacher can end this lesson")
+
+    room_name = lesson.get("room_name")
+    if room_name and DAILY_API_KEY:
+        async with httpx.AsyncClient() as client_http:
+            await client_http.delete(
+                f"{DAILY_API_URL}/rooms/{room_name}",
+                headers={"Authorization": f"Bearer {DAILY_API_KEY}"}
+            )
+
+    await db.group_lessons.update_one(
+        {"id": lesson_id},
+        {"$set": {"status": "completed"}}
+    )
+    return {"message": "Lesson ended"}
+
 
 # Include the router in the main app
 app.include_router(api_router)
