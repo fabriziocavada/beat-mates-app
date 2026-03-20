@@ -375,6 +375,11 @@ export default function ProfileScreen() {
               <Text style={styles.menuItemText}>Calendario lezioni</Text>
             </TouchableOpacity>
             
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); router.push('/(main)/create-group-lesson'); }} data-testid="create-group-lesson-menu">
+              <Ionicons name="people-outline" size={24} color={Colors.primary} />
+              <Text style={[styles.menuItemText, { color: Colors.primary }]}>Crea Lezione di Gruppo</Text>
+            </TouchableOpacity>
+            
             <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); handleToggleAvailability(); }}>
               <Ionicons name={user?.is_available ? "radio-button-on" : "radio-button-off"} size={24} color={user?.is_available ? Colors.success : Colors.text} />
               <Text style={styles.menuItemText}>{user?.is_available ? 'Disponibile per lezioni' : 'Non disponibile'}</Text>

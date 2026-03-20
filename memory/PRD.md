@@ -4,8 +4,8 @@
 Social media mobile app for dancers called "BEAT MATES". Instagram-like experience with dance-specific features.
 
 ## Tech Stack
-- **Frontend:** React Native (Expo), TypeScript, react-native-webview (video player), Zustand
-- **Backend:** Python, FastAPI, Motor (async MongoDB), ffmpeg (video compression)
+- **Frontend:** React Native (Expo), TypeScript, react-native-webview, Zustand
+- **Backend:** Python, FastAPI, Motor (async MongoDB), ffmpeg
 - **Database:** MongoDB
 - **Video Calls:** Daily.co
 
@@ -19,142 +19,84 @@ Social media mobile app for dancers called "BEAT MATES". Instagram-like experien
 - Reels (vertical video feed)
 - Music page (playlists, songs, speed controls)
 - E-commerce: video lessons shop on profiles
-- Live video lessons via Daily.co
+- Live video lessons via Daily.co (1-to-1)
 - Post-call rating system
 - Direct messaging (basic)
 - User search with fuzzy matching
 - Custom thumbnail selection for video posts
 - Premium playlists (mock payments)
-- Automatic video compression (ffmpeg, H.264 8-bit web-compatible)
-- Server-side video player endpoint (`/api/video-player/{filename}`) with auto object-fit detection
-- **Live Coaching Tool** (March 2026):
-  - Teacher/student records/uploads 20s clip during live lesson
-  - Shared review interface with video player (WebView-based)
-  - Both users control: play/pause, seek, slow-motion (0.25x/0.5x/0.75x/1x)
-  - SVG drawing overlay (bidirectional sync)
-  - Color picker (5 colors), undo, clear drawings
-  - State sync via polling (700ms)
-  - Backend: 3 endpoints (upload, command, state) with MongoDB state store
-  - Autoplay on video load (no black first frame)
+- Automatic video compression (ffmpeg, H.264 8-bit)
+- Server-side video player endpoint
+- Live Coaching Tool (record, slow-motion, drawing, sync)
+- Available Teachers list with availability status
+- Reviews Popup (Google-style with arrows navigation)
 
-## Available Teachers Feature
-- Endpoint: GET /api/available-teachers
-- Returns all users with `is_available` boolean field
-- Real ratings from `reviews` collection (aggregation on reviewee_id)
-- Includes review_count
-- Busy teachers show `is_busy: true` with `remaining_minutes`
-- Auto-closes stale sessions (>2 hours)
-- Sorted: available first, then busy, rating descending
-- "i" icon next to stars opens Reviews Popup for each teacher
+## GROUP LESSONS (New - March 2026)
 
-## Reviews Popup Feature (Feb 2026)
-- **Backend:** GET /api/users/{user_id}/reviews - returns reviews with text, rating, reviewer info, timestamps
-- **Frontend:** Google-style horizontal carousel popup with:
-  - Average rating summary
-  - Swipeable cards with avatar, username, relative date, stars, comment text
-  - Dot indicators for navigation
-  - Closable via X button or overlay tap
+### Backend Endpoints
+- `POST /api/group-lessons` - create (teacher)
+- `GET /api/group-lessons` - list upcoming/live
+- `GET /api/group-lessons/{id}` - details
+- `POST /api/group-lessons/{id}/book` - book spot (student)
+- `DELETE /api/group-lessons/{id}/book` - cancel booking
+- `GET /api/my-group-lessons` - teacher's own lessons
 
-## Review Modal Keyboard Fix (Feb 2026)
-- Replaced `KeyboardAvoidingView` with `Keyboard API` + `Animated.View`
-- Modal shifts up automatically when keyboard opens (-(keyboardHeight/2 + 20))
-- "Chiudi tastiera" dismiss button appears when keyboard is open
-- Buttons (Salta/Invia) always accessible
+### DB Schema: group_lessons collection
+```
+{
+  id: uuid,
+  teacher_id: str,
+  title: str,
+  description: str,
+  dance_category: str,
+  scheduled_at: str (ISO),
+  duration_minutes: int,
+  max_participants: int,
+  price: float,
+  booked_count: int,
+  booked_users: [str],
+  status: "upcoming"|"live"|"completed"|"cancelled",
+  room_url: str|null,
+  created_at: str
+}
+```
 
-## VIDEOBUG Resolution (Critical Reference)
-**Problem:** Videos from iPhones appeared black/unplayable in the app.
-**Root Causes:**
-1. `ffmpeg` CLI was not installed (only Python wrapper) -> videos never re-encoded
-2. iPhone HDR videos (H.264 High 10, 10-bit, yuv420p10le) incompatible with WebView `<video>`
-3. Inline HTML WebView (`source={{ html }}`) had CORS/origin issues loading external video URLs
-**Solution:**
-1. Install `ffmpeg` CLI binary (`sudo apt-get install -y ffmpeg`)
-2. Always re-encode ALL uploaded videos to H.264 Main profile, 8-bit, yuv420p (web-compatible)
-3. Created server-side `/api/video-player/{filename}` endpoint that serves HTML page (same origin as video)
-4. Frontend WebView loads `source={{ uri: playerUrl }}` instead of inline HTML
-5. `fit=auto` parameter: auto-detects horizontal vs vertical -> contain vs cover
-**If this happens again:** Check ffmpeg CLI availability, check video codec with `ffmpeg -i`, re-encode to yuv420p
+### Frontend
+- Tabs "Live Ora" / "Lezioni" in Available page
+- GroupLessonCard component (badge, date, spots, price, book/cancel)
+- Create Group Lesson form (accessible from profile hamburger menu)
+- Group video call layout (TODO): teacher large center, students grid
 
----
+## Recent Fixes (March 2026)
+- **CRITICAL FIX**: CallRatingModal was inline in `video-call/[id].tsx` (NOT the separate file). Added Keyboard API listener - modal moves to top when keyboard opens.
+- ReviewsPopup: replaced ScrollView with arrow navigation (gesture issues in Modal)
+- "i" button: larger (32px) with pink background circle
 
-## PRODUCTION READINESS CHECKLIST (Pre-Launch for 20,000 users)
-
-### P0 - CRITICAL (Blocking - Must fix before launch)
-
-#### 1. MongoDB Indexes
-- **Status:** DONE (46 indexes added)
-
-#### 2. Cloud Storage (S3 + CDN)
-- **Status:** NOT DONE
-- **Impact:** Disk fills up in days with 20K users uploading videos
-
-#### 3. Rate Limiting
-- **Status:** NOT DONE
-
-#### 4. JWT Secret from Environment
-- **Status:** NOT DONE (hardcoded)
-
-#### 5. Password Validation
-- **Status:** NOT DONE
-
-#### 6. Stripe Payment Integration
-- **Status:** MOCK payments only
-
-### P1 - IMPORTANT (Before public launch)
-- Email Verification
-- Password Recovery
-- Report & Block System
-- Push Notifications
-- Backend Refactoring (server.py is 2400+ lines monolith)
-- CORS Restriction
-
-### P2 - SPONSORSHIP SYSTEM
-- Sponsored Posts / Boost System (detailed spec in original PRD)
-
-### P3 - POST-LAUNCH
-- Google Social Login
-- Real-time Chat (WebSocket)
-- Admin Dashboard
-- Automatic Database Backups
-- Production Deployment
-- Development Build migration (Expo Go -> native builds)
-
----
-
-## Current Database Collections (20 collections)
-availability_slots, bookings, coaching_sessions, comments, conversations, follows, likes, live_sessions, messages, playlist_subscriptions, playlists, posts, purchases, reviews, saved_posts, song_likes, songs, stories, users, video_lessons
-
-## Key API Endpoints (73+ endpoints)
-- Auth: register, login
-- Users: me, search, follow, profile
-- Posts: CRUD, like, save, comments
-- Stories: create, list, view
-- Live Lessons: request, accept, reject, end, review
-- **Coaching: upload clip, send command, poll state**
-- Music: playlists, songs, upload, genres
-- Video Lessons: CRUD, reviews, purchase
-- Chat: conversations, messages
-- Media: upload, serve, thumbnail, video-player
-- **Available Teachers: filtered, rated, with busy status**
-- **User Reviews: GET /api/users/{user_id}/reviews**
+## Key Files
+- `backend/server.py` - monolith (2500+ lines)
+- `frontend/app/(main)/available.tsx` - tabs + teacher list + group lessons
+- `frontend/app/(main)/create-group-lesson.tsx` - NEW form
+- `frontend/app/(main)/video-call/[id].tsx` - video call + rating modal
+- `frontend/src/components/GroupLessonCard.tsx` - NEW card component
+- `frontend/src/components/ReviewsPopup.tsx` - arrow navigation
+- `frontend/src/components/AvailableTeacherCard.tsx` - teacher card + "i" button
 
 ## Credentials
 - Teacher: tutor@test.com / password123
 - Student: mario@test.com / password123
 - Other: f.totti@roma.it / password123
-- DB: test_database on localhost:27017
 
 ## Known Issues
-- Carousel swipe on home feed: fix applied but USER VERIFICATION PENDING
-- ffmpeg needs reinstall after environment restart (`sudo apt-get install -y ffmpeg`)
-- Daily.co tunnel may disconnect intermittently (preview environment limitation)
-- iPhone video autoplay regression in home feed (not addressed yet)
-- One device shows a pause button at video call start (likely Daily.co rendering quirk)
-- Coaching sync may have issues on some devices (architectural limitation of WebView state sync)
+- ngrok tunnel can be unstable (infrastructure, not code)
+- iPhone video autoplay regression in home feed
+- Coaching sync may have issues (WebView state sync architectural limitation)
 
-## Recent Changes (Feb 2026 - Current Session)
-- **CRITICAL FIX**: CallRatingModal was an INLINE component in `video-call/[id].tsx` (NOT the separate CallRatingModal.tsx file). Previous agents edited the wrong file multiple times.
-- CallRatingModal keyboard fix: When keyboard opens, modal moves to top of screen, hides icon/title/subtitle, shows compact stars + input + buttons always above keyboard
-- ReviewsPopup: Google-style horizontal carousel with avatars, comments, dot indicators
-- AvailableTeacherCard: Simplified "i" button logic - always visible for all teachers
-- available.tsx: Added ReviewsPopup rendering (was imported but never rendered)
+## Upcoming Tasks (Priority Order)
+1. Group lesson video call layout (teacher large + student grid)
+2. Stripe integration for real payments
+3. Push notifications
+4. Google Social Login
+5. Deploy to OVH/AWS (Dockerfile preparation)
+6. Native build for App Store / Play Store
+7. Backend refactoring into modular routers
+8. Sponsored posts system

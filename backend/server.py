@@ -279,6 +279,34 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     user: UserResponse
 
+# ==================== GROUP LESSONS MODELS ====================
+
+class GroupLessonCreate(BaseModel):
+    title: str
+    description: str = ""
+    dance_category: str
+    scheduled_at: str  # ISO datetime string
+    duration_minutes: int = 60
+    max_participants: int = 15
+    price: float
+
+class GroupLessonResponse(BaseModel):
+    id: str
+    teacher_id: str
+    teacher: Optional[dict] = None
+    title: str
+    description: str = ""
+    dance_category: str
+    scheduled_at: str
+    duration_minutes: int
+    max_participants: int
+    price: float
+    booked_count: int = 0
+    booked_users: List[str] = []
+    status: str = "upcoming"  # upcoming, live, completed, cancelled
+    room_url: Optional[str] = None
+    created_at: str
+
 # ==================== AUTH HELPERS ====================
 
 def hash_password(password: str) -> str:
@@ -2457,6 +2485,97 @@ async def mock_purchase(data: MockPurchase, current_user: dict = Depends(get_cur
     await db.purchases.insert_one(purchase)
     return {"message": "Purchase recorded", "id": purchase["id"]}
 
+
+# ==================== GROUP LESSONS ENDPOINTS ====================
+
+@api_router.post("/group-lessons")
+async def create_group_lesson(data: GroupLessonCreate, current_user: dict = Depends(get_current_user)):
+    lesson_id = str(uuid.uuid4())
+    lesson = {
+        "id": lesson_id,
+        "teacher_id": current_user["id"],
+        "title": data.title,
+        "description": data.description,
+        "dance_category": data.dance_category,
+        "scheduled_at": data.scheduled_at,
+        "duration_minutes": data.duration_minutes,
+        "max_participants": data.max_participants,
+        "price": data.price,
+        "booked_count": 0,
+        "booked_users": [],
+        "status": "upcoming",
+        "room_url": None,
+        "created_at": datetime.utcnow().isoformat()
+    }
+    await db.group_lessons.insert_one(lesson)
+    # Attach teacher info
+    teacher = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "password": 0})
+    result = clean_doc(lesson)
+    result["teacher"] = clean_doc(teacher)
+    return result
+
+@api_router.get("/group-lessons")
+async def list_group_lessons(current_user: dict = Depends(get_current_user)):
+    lessons = await db.group_lessons.find(
+        {"status": {"$in": ["upcoming", "live"]}},
+        {"_id": 0}
+    ).sort("scheduled_at", 1).to_list(50)
+
+    for lesson in lessons:
+        teacher = await db.users.find_one({"id": lesson["teacher_id"]}, {"_id": 0, "password": 0})
+        lesson["teacher"] = clean_doc(teacher)
+
+    return clean_doc(lessons)
+
+@api_router.get("/group-lessons/{lesson_id}")
+async def get_group_lesson(lesson_id: str, current_user: dict = Depends(get_current_user)):
+    lesson = await db.group_lessons.find_one({"id": lesson_id}, {"_id": 0})
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    teacher = await db.users.find_one({"id": lesson["teacher_id"]}, {"_id": 0, "password": 0})
+    lesson["teacher"] = clean_doc(teacher)
+    return clean_doc(lesson)
+
+@api_router.post("/group-lessons/{lesson_id}/book")
+async def book_group_lesson(lesson_id: str, current_user: dict = Depends(get_current_user)):
+    lesson = await db.group_lessons.find_one({"id": lesson_id}, {"_id": 0})
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    if lesson["status"] != "upcoming":
+        raise HTTPException(status_code=400, detail="Lesson is not available for booking")
+    if current_user["id"] in lesson.get("booked_users", []):
+        raise HTTPException(status_code=400, detail="Already booked")
+    if lesson["booked_count"] >= lesson["max_participants"]:
+        raise HTTPException(status_code=400, detail="Lesson is full")
+
+    await db.group_lessons.update_one(
+        {"id": lesson_id},
+        {"$push": {"booked_users": current_user["id"]}, "$inc": {"booked_count": 1}}
+    )
+    return {"message": "Booked successfully", "lesson_id": lesson_id}
+
+@api_router.delete("/group-lessons/{lesson_id}/book")
+async def cancel_group_lesson_booking(lesson_id: str, current_user: dict = Depends(get_current_user)):
+    lesson = await db.group_lessons.find_one({"id": lesson_id}, {"_id": 0})
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    if current_user["id"] not in lesson.get("booked_users", []):
+        raise HTTPException(status_code=400, detail="Not booked")
+
+    await db.group_lessons.update_one(
+        {"id": lesson_id},
+        {"$pull": {"booked_users": current_user["id"]}, "$inc": {"booked_count": -1}}
+    )
+    return {"message": "Booking cancelled"}
+
+@api_router.get("/my-group-lessons")
+async def my_group_lessons(current_user: dict = Depends(get_current_user)):
+    """Get group lessons created by the current teacher"""
+    lessons = await db.group_lessons.find(
+        {"teacher_id": current_user["id"]},
+        {"_id": 0}
+    ).sort("scheduled_at", -1).to_list(50)
+    return clean_doc(lessons)
 
 
 # Include the router in the main app
