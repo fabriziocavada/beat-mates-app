@@ -6,35 +6,31 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { WebView } from 'react-native-webview';
-import api, { getMediaUrl, getVideoPlayerUrl } from '../../../src/services/api';
+import { Video, ResizeMode } from 'expo-av';
+import api, { getMediaUrl } from '../../../src/services/api';
 import Colors from '../../../src/constants/colors';
 
 const { width, height } = Dimensions.get('window');
 
 const REACTIONS = ['❤️', '🔥', '👏', '😍', '💃', '🕺'];
 
-// WebView video player - more stable, doesn't conflict with other players
+// Native video player for stories - direct streaming, no WebView overhead
 function StoryVideoPlayer({ url }: { url: string }) {
   const [isLoading, setIsLoading] = useState(true);
-  const playerUrl = getVideoPlayerUrl(url, { muted: false, autoplay: true });
   
   return (
     <View style={StyleSheet.absoluteFill}>
-      <WebView
-        source={{ uri: playerUrl }}
-        style={[StyleSheet.absoluteFill, { opacity: isLoading ? 0 : 1 }]}
-        scrollEnabled={false}
-        bounces={false}
-        allowsInlineMediaPlayback={true}
-        mediaPlaybackRequiresUserAction={false}
-        javaScriptEnabled={true}
-        originWhitelist={['*']}
-        onMessage={(e) => {
-          const msg = e.nativeEvent.data;
-          if (msg === 'ready' || msg === 'playing') setIsLoading(false);
+      <Video
+        source={{ uri: url }}
+        style={StyleSheet.absoluteFill}
+        resizeMode={ResizeMode.COVER}
+        shouldPlay
+        isLooping
+        isMuted={false}
+        onLoad={() => setIsLoading(false)}
+        onPlaybackStatusUpdate={(status: any) => {
+          if (status.isLoaded && isLoading) setIsLoading(false);
         }}
-        onLoadEnd={() => setIsLoading(false)}
       />
       {isLoading && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>

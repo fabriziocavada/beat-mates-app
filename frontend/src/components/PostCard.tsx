@@ -1,9 +1,9 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, FlatList, ScrollView, Animated, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { WebView } from 'react-native-webview';
+import { Video, ResizeMode } from 'expo-av';
 import { useRouter } from 'expo-router';
-import api, { getMediaUrl, getThumbnailUrl, getVideoPlayerUrl } from '../services/api';
+import api, { getMediaUrl, getThumbnailUrl } from '../services/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -39,42 +39,43 @@ function isVideoPath(path: string | null | undefined): boolean {
 function FeedVideoPlayer({ url, height, isVisible, muted }: { url: string; height: number; isVisible: boolean; muted: boolean }) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
-  const webRef = useRef<WebView>(null);
-  const lastMuted = useRef(muted);
+  const videoRef = useRef<any>(null);
 
-  // Sync muted state with WebView
   useEffect(() => {
-    if (lastMuted.current !== muted) {
-      lastMuted.current = muted;
-      webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v)v.muted=${muted};true;`);
+    if (videoRef.current) {
+      if (isVisible) {
+        videoRef.current.playAsync?.().catch(() => {});
+      } else {
+        videoRef.current.pauseAsync?.().catch(() => {});
+      }
+    }
+  }, [isVisible]);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.setIsMutedAsync?.(muted).catch(() => {});
     }
   }, [muted]);
 
-  const playerUrl = getVideoPlayerUrl(url);
-
   return (
-    <View style={{ width: '100%', height }} pointerEvents="none">
-      <WebView
-        ref={webRef}
-        source={{ uri: playerUrl }}
-        style={{ width: '100%', height, opacity: isLoading ? 0 : 1 }}
-        scrollEnabled={false}
-        bounces={false}
-        allowsInlineMediaPlayback={true}
-        mediaPlaybackRequiresUserAction={false}
-        javaScriptEnabled={true}
-        originWhitelist={['*']}
-        onMessage={(e) => {
-          const msg = e.nativeEvent.data;
-          if (msg === 'ready' || msg === 'playing') setIsLoading(false);
-          if (msg.startsWith('error')) setHasError(true);
-        }}
+    <View style={{ width: '100%', height }}>
+      <Video
+        ref={videoRef}
+        source={{ uri: url }}
+        style={{ width: '100%', height }}
+        resizeMode={ResizeMode.COVER}
+        shouldPlay={isVisible}
+        isMuted={muted}
+        isLooping
+        onLoad={() => setIsLoading(false)}
         onError={() => setHasError(true)}
+        onPlaybackStatusUpdate={(status: any) => {
+          if (status.isLoaded && isLoading) setIsLoading(false);
+        }}
       />
       {isLoading && !hasError && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
           <ActivityIndicator size="large" color="#FF6978" />
-          <Text style={{ color: '#888', fontSize: 12, marginTop: 8 }}>Caricamento video...</Text>
         </View>
       )}
       {hasError && (
