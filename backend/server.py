@@ -2509,7 +2509,7 @@ async def create_group_lesson(data: GroupLessonCreate, current_user: dict = Depe
     }
     await db.group_lessons.insert_one(lesson)
     # Attach teacher info
-    teacher = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "password": 0})
+    teacher = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "password_hash": 0})
     result = clean_doc(lesson)
     result["teacher"] = clean_doc(teacher)
     return result
@@ -2522,7 +2522,7 @@ async def list_group_lessons(current_user: dict = Depends(get_current_user)):
     ).sort("scheduled_at", 1).to_list(50)
 
     for lesson in lessons:
-        teacher = await db.users.find_one({"id": lesson["teacher_id"]}, {"_id": 0, "password": 0})
+        teacher = await db.users.find_one({"id": lesson["teacher_id"]}, {"_id": 0, "password_hash": 0})
         lesson["teacher"] = clean_doc(teacher)
 
     return clean_doc(lessons)
@@ -2532,7 +2532,7 @@ async def get_group_lesson(lesson_id: str, current_user: dict = Depends(get_curr
     lesson = await db.group_lessons.find_one({"id": lesson_id}, {"_id": 0})
     if not lesson:
         raise HTTPException(status_code=404, detail="Lesson not found")
-    teacher = await db.users.find_one({"id": lesson["teacher_id"]}, {"_id": 0, "password": 0})
+    teacher = await db.users.find_one({"id": lesson["teacher_id"]}, {"_id": 0, "password_hash": 0})
     lesson["teacher"] = clean_doc(teacher)
     return clean_doc(lesson)
 

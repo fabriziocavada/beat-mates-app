@@ -137,9 +137,8 @@ export default function AvailableScreen() {
 
   const handleStartGroupLesson = async (lessonId: string) => {
     try {
-      const res = await api.post(`/group-lessons/${lessonId}/start`);
-      const { room_url, room_name } = res.data;
-      router.push(`/(main)/video-call/${room_name}?group=true&lessonId=${lessonId}`);
+      await api.post(`/group-lessons/${lessonId}/start`);
+      router.push(`/(main)/group-video-call/${lessonId}`);
     } catch (error: any) {
       Alert.alert('Errore', error?.response?.data?.detail || 'Avvio fallito');
     }
@@ -147,9 +146,8 @@ export default function AvailableScreen() {
 
   const handleJoinGroupLesson = async (lessonId: string) => {
     try {
-      const res = await api.post(`/group-lessons/${lessonId}/join`);
-      const { room_url, room_name } = res.data;
-      router.push(`/(main)/video-call/${room_name}?group=true&lessonId=${lessonId}`);
+      await api.post(`/group-lessons/${lessonId}/join`);
+      router.push(`/(main)/group-video-call/${lessonId}`);
     } catch (error: any) {
       Alert.alert('Errore', error?.response?.data?.detail || 'Impossibile entrare');
     }
