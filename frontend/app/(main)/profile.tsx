@@ -68,6 +68,7 @@ export default function ProfileScreen() {
   const [isUploadingPic, setIsUploadingPic] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [editingLesson, setEditingLesson] = useState<VideoLesson | null>(null);
+  const [infoLesson, setInfoLesson] = useState<VideoLesson | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editPrice, setEditPrice] = useState('');
@@ -628,6 +629,15 @@ export default function ProfileScreen() {
                         <Ionicons name="play" size={28} color="#FFF" />
                       </View>
                     </View>
+                    {/* Info button */}
+                    <TouchableOpacity
+                      style={styles.lessonInfoBtn}
+                      onPress={() => setInfoLesson(lesson)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      data-testid={`lesson-info-btn-${lesson.id}`}
+                    >
+                      <Ionicons name="information-circle" size={28} color="#FFF" />
+                    </TouchableOpacity>
                   </TouchableOpacity>
                   {/* Reviews button */}
                   <TouchableOpacity 
@@ -728,6 +738,41 @@ export default function ProfileScreen() {
                     </View>
                   ))}
                 </ScrollView>
+              )}
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Lesson Info Popup */}
+        <Modal visible={!!infoLesson} transparent animationType="fade" onRequestClose={() => setInfoLesson(null)}>
+          <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setInfoLesson(null)}>
+            <View style={styles.lessonInfoSheet} onStartShouldSetResponder={() => true}>
+              <View style={styles.menuHandle} />
+              {infoLesson && (
+                <>
+                  <Text style={styles.lessonInfoTitle}>{infoLesson.title}</Text>
+                  <View style={styles.lessonInfoDivider} />
+                  <View style={styles.lessonInfoRow}>
+                    <Ionicons name="time-outline" size={18} color={Colors.primary} />
+                    <Text style={styles.lessonInfoLabel}>Durata</Text>
+                    <Text style={styles.lessonInfoValue}>{infoLesson.duration_minutes} min</Text>
+                  </View>
+                  <View style={styles.lessonInfoRow}>
+                    <Ionicons name="pricetag-outline" size={18} color={Colors.primary} />
+                    <Text style={styles.lessonInfoLabel}>Prezzo</Text>
+                    <Text style={styles.lessonInfoValue}>{infoLesson.price.toFixed(2)} {infoLesson.currency}</Text>
+                  </View>
+                  {infoLesson.description ? (
+                    <>
+                      <View style={styles.lessonInfoDivider} />
+                      <Text style={styles.lessonInfoDescLabel}>Descrizione</Text>
+                      <Text style={styles.lessonInfoDesc}>{infoLesson.description}</Text>
+                    </>
+                  ) : null}
+                  <TouchableOpacity style={styles.lessonInfoCloseBtn} onPress={() => setInfoLesson(null)} data-testid="close-lesson-info">
+                    <Text style={styles.lessonInfoCloseText}>Chiudi</Text>
+                  </TouchableOpacity>
+                </>
               )}
             </View>
           </TouchableOpacity>
@@ -1260,4 +1305,33 @@ const styles = StyleSheet.create({
     marginVertical: 8,
     marginHorizontal: 24,
   },
+  // Lesson info button & popup
+  lessonInfoBtn: {
+    position: 'absolute', top: 8, right: 8, zIndex: 5,
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center',
+  },
+  lessonInfoSheet: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingBottom: 40, paddingTop: 8, paddingHorizontal: 20,
+  },
+  lessonInfoTitle: {
+    color: '#FFF', fontSize: 20, fontWeight: '700', textAlign: 'center', marginBottom: 12, marginTop: 8,
+  },
+  lessonInfoDivider: {
+    height: 0.5, backgroundColor: '#333', marginVertical: 12,
+  },
+  lessonInfoRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6,
+  },
+  lessonInfoLabel: { color: '#AAA', fontSize: 14, flex: 1 },
+  lessonInfoValue: { color: '#FFF', fontSize: 15, fontWeight: '600' },
+  lessonInfoDescLabel: { color: '#AAA', fontSize: 13, marginBottom: 6 },
+  lessonInfoDesc: { color: '#CCC', fontSize: 14, lineHeight: 22 },
+  lessonInfoCloseBtn: {
+    marginTop: 20, alignSelf: 'center',
+    backgroundColor: Colors.primary, paddingHorizontal: 30, paddingVertical: 12, borderRadius: 12,
+  },
+  lessonInfoCloseText: { color: '#FFF', fontSize: 15, fontWeight: '600' },
 });

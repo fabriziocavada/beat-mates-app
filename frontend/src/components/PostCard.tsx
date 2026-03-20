@@ -212,12 +212,13 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
                 const fullUrl = getMediaUrl(url) || '';
                 const isVid = isVideoPath(url);
                 return (
-                  <View key={index} style={{ width: SCREEN_WIDTH, height: mediaHeight }}>
+                  <TouchableOpacity key={index} activeOpacity={1} onPress={handleDoubleTap} style={{ width: SCREEN_WIDTH, height: mediaHeight }} data-testid={`carousel-tap-${post.id}-${index}`}>
                     {isVid ? (
                       <FeedVideoPlayer url={fullUrl} height={mediaHeight} isVisible={index === carouselIndex} muted={videoMuted} />
                     ) : (
                       <Image source={{ uri: fullUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                     )}
+                  </TouchableOpacity>
                   </View>
                 );
               })}
@@ -241,8 +242,10 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
               </TouchableOpacity>
             </View>
           ) : (
-            /* Single photo: no overlay, stays in feed */
-            <Image source={{ uri: getMediaUrl(mediaUrls[0]) || '' }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+            /* Single photo: double tap to like */
+            <TouchableOpacity activeOpacity={1} onPress={handleDoubleTap} data-testid={`photo-tap-${post.id}`}>
+              <Image source={{ uri: getMediaUrl(mediaUrls[0]) || '' }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+            </TouchableOpacity>
           )}
 
           {isCarousel && (

@@ -228,9 +228,9 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
 
   const undoDrawing = useCallback(() => {
     setDrawings(prev => {
+      if (prev.length === 0) return prev;
       const next = prev.slice(0, -1);
-      sendCommand('clear_drawings');
-      next.forEach(p => sendCommand('draw', JSON.stringify(p)));
+      sendCommand('undo_drawing');
       return next;
     });
   }, [sendCommand]);

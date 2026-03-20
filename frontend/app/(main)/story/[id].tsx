@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, Image, TouchableOpacity,
-  Dimensions, ActivityIndicator, StatusBar,
+  Dimensions, ActivityIndicator, StatusBar, Animated, PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -11,6 +11,8 @@ import api, { getMediaUrl, getVideoPlayerUrl } from '../../../src/services/api';
 import Colors from '../../../src/constants/colors';
 
 const { width, height } = Dimensions.get('window');
+
+const REACTIONS = ['❤️', '🔥', '👏', '😍', '💃', '🕺'];
 
 // WebView video player - more stable, doesn't conflict with other players
 function StoryVideoPlayer({ url }: { url: string }) {
@@ -66,8 +68,57 @@ export default function StoryViewerScreen() {
   const [currentStoryIdx, setCurrentStoryIdx] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [progress, setProgress] = useState(0);
+  const [showReactions, setShowReactions] = useState(false);
+  const [sentReaction, setSentReaction] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const STORY_DURATION = 6000;
+  const reactionAnim = useRef(new Animated.Value(0)).current;
+  const reactionScale = useRef(new Animated.Value(0)).current;
+  const panY = useRef(new Animated.Value(0)).current;
+
+  // Swipe up gesture
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 20 && gs.dy < 0,
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy < 0) panY.setValue(gs.dy);
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy < -60) {
+          // Swipe up detected → show reactions
+          setShowReactions(true);
+          if (timerRef.current) clearInterval(timerRef.current);
+        }
+        Animated.spring(panY, { toValue: 0, useNativeDriver: true }).start();
+      },
+    })
+  ).current;
+
+  const sendReaction = async (emoji: string) => {
+    setSentReaction(emoji);
+    setShowReactions(false);
+
+    // Animate the reaction
+    reactionScale.setValue(0);
+    reactionAnim.setValue(1);
+    Animated.parallel([
+      Animated.spring(reactionScale, { toValue: 1, friction: 3, tension: 100, useNativeDriver: true }),
+      Animated.timing(reactionAnim, { toValue: 0, duration: 1500, delay: 500, useNativeDriver: true }),
+    ]).start(() => {
+      setSentReaction(null);
+      startTimer();
+    });
+
+    // Send to backend
+    const userStories = allUserStories[currentUserIdx];
+    const story = userStories?.stories[currentStoryIdx];
+    if (story && userStories) {
+      try {
+        await api.post(`/stories/${story.id}/react`, { emoji });
+      } catch {}
+    }
+  };
 
   useEffect(() => {
     loadStories();
@@ -157,7 +208,7 @@ export default function StoryViewerScreen() {
   const isVideo = story.type === 'video';
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} {...panResponder.panHandlers}>
       <StatusBar hidden />
       
       {/* Media content */}
@@ -201,6 +252,49 @@ export default function StoryViewerScreen() {
           </TouchableOpacity>
         </View>
       </SafeAreaView>
+
+      {/* Swipe up hint */}
+      {!showReactions && !sentReaction && (
+        <View style={styles.swipeHint} pointerEvents="none">
+          <Ionicons name="chevron-up" size={20} color="rgba(255,255,255,0.5)" />
+          <Text style={styles.swipeHintText}>Scorri per reagire</Text>
+        </View>
+      )}
+
+      {/* Reaction picker */}
+      {showReactions && (
+        <TouchableOpacity
+          style={styles.reactionOverlay}
+          activeOpacity={1}
+          onPress={() => { setShowReactions(false); startTimer(); }}
+        >
+          <View style={styles.reactionBar} data-testid="reaction-bar">
+            {REACTIONS.map((emoji) => (
+              <TouchableOpacity
+                key={emoji}
+                style={styles.reactionBtn}
+                onPress={() => sendReaction(emoji)}
+                data-testid={`reaction-${emoji}`}
+              >
+                <Text style={styles.reactionEmoji}>{emoji}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {/* Sent reaction animation */}
+      {sentReaction && (
+        <Animated.View
+          style={[styles.sentReaction, {
+            opacity: reactionAnim,
+            transform: [{ scale: reactionScale.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) }],
+          }]}
+          pointerEvents="none"
+        >
+          <Text style={styles.sentReactionEmoji}>{sentReaction}</Text>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -228,4 +322,24 @@ const styles = StyleSheet.create({
   username: { color: '#FFF', fontWeight: '700', fontSize: 14, marginLeft: 10 },
   timeText: { color: 'rgba(255,255,255,0.6)', fontSize: 13, marginLeft: 8 },
   closeBtn: { marginLeft: 'auto', padding: 4 },
+  // Reactions
+  swipeHint: {
+    position: 'absolute', bottom: 40, alignSelf: 'center', alignItems: 'center', gap: 2,
+  },
+  swipeHintText: { color: 'rgba(255,255,255,0.4)', fontSize: 11 },
+  reactionOverlay: {
+    ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end', alignItems: 'center', zIndex: 30, paddingBottom: 60,
+  },
+  reactionBar: {
+    flexDirection: 'row', gap: 12, backgroundColor: 'rgba(30,30,50,0.95)',
+    paddingHorizontal: 20, paddingVertical: 14, borderRadius: 28,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+  },
+  reactionBtn: { padding: 4 },
+  reactionEmoji: { fontSize: 30 },
+  sentReaction: {
+    position: 'absolute', top: '35%', alignSelf: 'center', zIndex: 40,
+  },
+  sentReactionEmoji: { fontSize: 80 },
 });

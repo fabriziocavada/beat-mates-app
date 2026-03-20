@@ -35,6 +35,10 @@ function getIcon(type: string): { name: string; color: string } {
     case 'group_lesson_started': return { name: 'videocam', color: '#28A745' };
     case 'booking_confirmed': return { name: 'checkmark-circle', color: Colors.primary };
     case 'lesson_request': return { name: 'school', color: Colors.primary };
+    case 'like': return { name: 'heart', color: '#FF6978' };
+    case 'chat_message': return { name: 'chatbubble', color: '#5856D6' };
+    case 'lesson_booked': return { name: 'calendar', color: '#FF9500' };
+    case 'story_reaction': return { name: 'happy', color: '#FFD60A' };
     default: return { name: 'notifications', color: '#888' };
   }
 }

@@ -163,6 +163,7 @@ class AvailabilitySlotCreate(BaseModel):
     end_time: str  # HH:MM
     dance_categories: List[str]
     price: float
+    lesson_type: str = "single"  # "single", "group", or "both"
 
 class AvailabilitySlotResponse(BaseModel):
     id: str
@@ -174,6 +175,7 @@ class AvailabilitySlotResponse(BaseModel):
     dance_categories: List[str]
     price: float
     is_booked: bool = False
+    lesson_type: str = "single"
     created_at: datetime
 
 class BookingCreate(BaseModel):
@@ -731,6 +733,22 @@ async def like_post(post_id: str, current_user: dict = Depends(get_current_user)
         }
         await db.likes.insert_one(like)
         await db.posts.update_one({"id": post_id}, {"$inc": {"likes_count": 1}})
+
+        # Send notification to post owner (if not self-like)
+        if post.get("user_id") and post["user_id"] != current_user["id"]:
+            liker_name = current_user.get("name") or current_user.get("username", "Qualcuno")
+            notif = {
+                "id": str(uuid.uuid4()),
+                "user_id": post["user_id"],
+                "type": "like",
+                "title": "Nuovo like!",
+                "message": f'{liker_name} ha messo like al tuo post.',
+                "data": {"post_id": post_id},
+                "read": False,
+                "created_at": datetime.utcnow().isoformat()
+            }
+            await db.notifications.insert_one(notif)
+
         return {"liked": True}
 
 @api_router.post("/posts/{post_id}/save")
@@ -990,6 +1008,42 @@ async def get_story(story_id: str, current_user: dict = Depends(get_current_user
     return story
 
 
+@api_router.post("/stories/{story_id}/react")
+async def react_to_story(story_id: str, data: dict, current_user: dict = Depends(get_current_user)):
+    """React to a story with an emoji"""
+    story = await db.stories.find_one({"id": story_id}, {"_id": 0})
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    
+    emoji = data.get("emoji", "")
+    
+    # Store reaction
+    reaction = {
+        "id": str(uuid.uuid4()),
+        "story_id": story_id,
+        "user_id": current_user["id"],
+        "emoji": emoji,
+        "created_at": datetime.utcnow().isoformat()
+    }
+    await db.story_reactions.insert_one(reaction)
+    
+    # Notify story owner (if not self-reaction)
+    if story.get("user_id") and story["user_id"] != current_user["id"]:
+        reactor_name = current_user.get("name") or current_user.get("username", "Qualcuno")
+        notif = {
+            "id": str(uuid.uuid4()),
+            "user_id": story["user_id"],
+            "type": "story_reaction",
+            "title": "Reazione alla tua storia",
+            "message": f'{reactor_name} ha reagito {emoji} alla tua storia.',
+            "data": {"story_id": story_id, "emoji": emoji},
+            "read": False,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        await db.notifications.insert_one(notif)
+    
+    return {"message": "Reaction sent"}
+
 
 # ==================== AVAILABILITY & BOOKINGS ====================
 
@@ -1071,6 +1125,7 @@ async def create_availability_slot(data: AvailabilitySlotCreate, current_user: d
         "end_time": data.end_time,
         "dance_categories": data.dance_categories,
         "price": data.price,
+        "lesson_type": data.lesson_type,
         "is_booked": False,
         "created_at": datetime.utcnow()
     }
@@ -1153,6 +1208,20 @@ async def create_booking(data: BookingCreate, current_user: dict = Depends(get_c
     await db.bookings.insert_one(booking)
     await db.availability_slots.update_one({"id": data.slot_id}, {"$set": {"is_booked": True}})
     
+    # Notify teacher about new booking
+    student_name = current_user.get("name") or current_user.get("username", "Uno studente")
+    notif = {
+        "id": str(uuid.uuid4()),
+        "user_id": slot["user_id"],
+        "type": "lesson_booked",
+        "title": "Nuova prenotazione!",
+        "message": f'{student_name} ha prenotato una lezione con te.',
+        "data": {"booking_id": booking_id, "slot_id": data.slot_id},
+        "read": False,
+        "created_at": datetime.utcnow().isoformat()
+    }
+    await db.notifications.insert_one(notif)
+
     # Clean slot data to remove MongoDB ObjectIDs that can't be serialized
     clean_slot = {k: v for k, v in slot.items() if k != "_id"}
     booking["slot"] = clean_slot
@@ -1335,7 +1404,7 @@ async def end_live_session(session_id: str, current_user: dict = Depends(get_cur
 # ==================== COACHING REVIEW TOOL ====================
 
 class CoachingCommand(BaseModel):
-    action: str  # "seek", "speed", "play", "pause", "draw", "clear_drawings"
+    action: str  # "seek", "speed", "play", "pause", "draw", "clear_drawings", "undo_drawing"
     value: Optional[str] = None  # seek time, speed value, or drawing SVG path data
 
 @api_router.post("/coaching/{session_id}/upload")
@@ -1419,6 +1488,13 @@ async def send_coaching_command(session_id: str, cmd: CoachingCommand, current_u
         return {"ok": True}
     elif cmd.action == "clear_drawings":
         update["drawings"] = []
+    elif cmd.action == "undo_drawing":
+        await db.coaching_sessions.update_one(
+            {"session_id": session_id},
+            {"$pop": {"drawings": 1}, "$set": {"updated_at": datetime.utcnow().isoformat()}},
+            upsert=True
+        )
+        return {"ok": True}
     elif cmd.action == "start_uploading":
         update["uploading_by"] = current_user.get("username", "Utente")
     elif cmd.action == "stop_uploading":
@@ -2447,6 +2523,22 @@ async def send_message(convo_id: str, data: dict, current_user: dict = Depends(g
         {"$set": {"last_message": text, "updated_at": datetime.utcnow()}}
     )
     
+    # Send notification to other participant(s)
+    sender_name = current_user.get("name") or current_user.get("username", "Qualcuno")
+    for pid in convo.get("participants", []):
+        if pid != current_user["id"]:
+            notif = {
+                "id": str(uuid.uuid4()),
+                "user_id": pid,
+                "type": "chat_message",
+                "title": "Nuovo messaggio",
+                "message": f'{sender_name}: {text[:80]}{"..." if len(text) > 80 else ""}',
+                "data": {"conversation_id": convo_id},
+                "read": False,
+                "created_at": datetime.utcnow().isoformat()
+            }
+            await db.notifications.insert_one(notif)
+
     msg["sender"] = {"id": current_user["id"], "username": current_user["username"], "profile_image": current_user.get("profile_image")}
     return msg
 

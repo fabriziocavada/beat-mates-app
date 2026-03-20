@@ -36,6 +36,7 @@ export default function CalendarScreen() {
   const [endTime, setEndTime] = useState('14:00');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [price, setPrice] = useState(50);
+  const [lessonType, setLessonType] = useState<'single' | 'group' | 'both'>('single');
   const [isLoading, setIsLoading] = useState(false);
   
   const getDaysInMonth = () => {
@@ -79,6 +80,7 @@ export default function CalendarScreen() {
         end_time: endTime,
         dance_categories: selectedCategories,
         price: price,
+        lesson_type: lessonType,
       });
       
       Alert.alert('Success', 'Availability slot saved!');
@@ -287,6 +289,32 @@ export default function CalendarScreen() {
           </TouchableOpacity>
         </View>
         
+        {/* Lesson Type */}
+        <Text style={styles.label}>Tipo lezione</Text>
+        <View style={styles.lessonTypeRow}>
+          {([
+            { key: 'single', label: 'Singola', icon: 'person' },
+            { key: 'group', label: 'Gruppo', icon: 'people' },
+            { key: 'both', label: 'Entrambe', icon: 'people-circle' },
+          ] as const).map((opt) => (
+            <TouchableOpacity
+              key={opt.key}
+              style={[styles.lessonTypeBtn, lessonType === opt.key && styles.lessonTypeBtnActive]}
+              onPress={() => setLessonType(opt.key)}
+              data-testid={`lesson-type-${opt.key}`}
+            >
+              <Ionicons
+                name={opt.icon as any}
+                size={20}
+                color={lessonType === opt.key ? '#FFF' : Colors.textMuted}
+              />
+              <Text style={[styles.lessonTypeText, lessonType === opt.key && styles.lessonTypeTextActive]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         {/* Save Button */}
         <TouchableOpacity
           style={styles.saveButton}
@@ -480,5 +508,22 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  lessonTypeRow: {
+    flexDirection: 'row', gap: 10, marginBottom: 10,
+  },
+  lessonTypeBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 12, borderRadius: 12,
+    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
+  },
+  lessonTypeBtnActive: {
+    backgroundColor: Colors.primary, borderColor: Colors.primary,
+  },
+  lessonTypeText: {
+    color: Colors.textMuted, fontSize: 13, fontWeight: '600',
+  },
+  lessonTypeTextActive: {
+    color: '#FFF',
   },
 });
