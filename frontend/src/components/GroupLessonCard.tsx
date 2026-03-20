@@ -118,6 +118,11 @@ export default function GroupLessonCard({ lesson, currentUserId, onBook, onCance
               <Ionicons name="videocam" size={16} color="#FFF" />
               <Text style={s.joinText}>Entra nella Lezione</Text>
             </TouchableOpacity>
+          ) : isLive && !isBooked && !isFull ? (
+            <TouchableOpacity style={s.joinBtn} onPress={onBook} data-testid={`book-join-lesson-${lesson.id}`}>
+              <Ionicons name="card-outline" size={16} color="#FFF" />
+              <Text style={s.joinText}>Paga e Entra ({lesson.price}€)</Text>
+            </TouchableOpacity>
           ) : isLive ? (
             <View style={s.liveBadge}>
               <View style={s.liveIndicator} />

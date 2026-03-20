@@ -136,7 +136,17 @@ export default function AvailableScreen() {
     setPaymentModal({ visible: false, lesson: null });
     try {
       await api.post(`/group-lessons/${lesson.id}/book`);
-      loadData();
+      // If lesson is already live, join the video call directly
+      if (lesson.status === 'live') {
+        try {
+          await api.post(`/group-lessons/${lesson.id}/join`);
+          router.push(`/(main)/group-video-call/${lesson.id}`);
+        } catch {
+          loadData(); // fallback: refresh list
+        }
+      } else {
+        loadData();
+      }
     } catch (error: any) {
       Alert.alert('Errore', error?.response?.data?.detail || 'Prenotazione fallita');
     }

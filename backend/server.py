@@ -2541,7 +2541,7 @@ async def book_group_lesson(lesson_id: str, current_user: dict = Depends(get_cur
     lesson = await db.group_lessons.find_one({"id": lesson_id}, {"_id": 0})
     if not lesson:
         raise HTTPException(status_code=404, detail="Lesson not found")
-    if lesson["status"] != "upcoming":
+    if lesson["status"] not in ("upcoming", "live"):
         raise HTTPException(status_code=400, detail="Lesson is not available for booking")
     if current_user["id"] in lesson.get("booked_users", []):
         raise HTTPException(status_code=400, detail="Already booked")
