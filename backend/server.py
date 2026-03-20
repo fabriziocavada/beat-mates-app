@@ -932,11 +932,13 @@ async def create_story(data: StoryCreate, current_user: dict = Depends(get_curre
             video_path = UPLOADS_DIR / video_filename
             thumb_filename = f"thumb_{story_id}.jpg"
             thumb_path = UPLOADS_DIR / thumb_filename
-            import subprocess
-            subprocess.run([
-                "ffmpeg", "-i", str(video_path), "-ss", "0.5", "-vframes", "1",
-                "-vf", "scale=480:-1", str(thumb_path)
-            ], capture_output=True, timeout=10)
+            import subprocess, asyncio
+            await asyncio.to_thread(
+                subprocess.run,
+                ["ffmpeg", "-i", str(video_path), "-ss", "0.5", "-vframes", "1",
+                 "-vf", "scale=480:-1", str(thumb_path)],
+                capture_output=True, timeout=10
+            )
             if thumb_path.exists():
                 story["thumbnail"] = f"/api/uploads/{thumb_filename}"
         except Exception as e:
@@ -959,30 +961,46 @@ async def get_stories(current_user: dict = Depends(get_current_user)):
     now = datetime.utcnow()
     stories = await db.stories.find({
         "expires_at": {"$gt": now}
-    }).sort("created_at", -1).to_list(100)
+    }, {"_id": 0}).sort("created_at", -1).to_list(100)
+    
+    # Batch-load all unique users in one query
+    user_ids = list(set(s["user_id"] for s in stories))
+    users_list = await db.users.find(
+        {"id": {"$in": user_ids}},
+        {"_id": 0, "password_hash": 0}
+    ).to_list(len(user_ids))
+    users_map = {u["id"]: u for u in users_list}
     
     # Group by user
     user_stories = {}
     for story in stories:
         user_id = story["user_id"]
         if user_id not in user_stories:
-            user = await db.users.find_one({"id": user_id})
+            user = users_map.get(user_id, {})
             user_stories[user_id] = {
                 "user_id": user_id,
-                "username": user["username"] if user else "unknown",
-                "profile_image": user.get("profile_image") if user else None,
+                "username": user.get("username", "unknown"),
+                "profile_image": user.get("profile_image"),
                 "stories": [],
-                "has_unread": True  # Simplified for now
+                "has_unread": True
             }
+        created_at = story["created_at"]
+        if isinstance(created_at, datetime):
+            created_at = created_at.isoformat()
         user_stories[user_id]["stories"].append({
             "id": story["id"],
             "media": story["media"],
             "thumbnail": story.get("thumbnail"),
             "type": story["type"],
-            "created_at": story["created_at"].isoformat()
+            "created_at": created_at
         })
     
-    return list(user_stories.values())
+    # Put current user's stories first
+    result = []
+    if current_user["id"] in user_stories:
+        result.append(user_stories.pop(current_user["id"]))
+    result.extend(user_stories.values())
+    return result
 
 @api_router.get("/stories/{story_id}")
 async def get_story(story_id: str, current_user: dict = Depends(get_current_user)):
@@ -1874,12 +1892,14 @@ async def stream_media(filename: str, request: Request):
             end = min(end, file_size - 1)
             content_length = end - start + 1
             
+            CHUNK_SIZE = 262144  # 256KB chunks for fast streaming
+            
             def iter_file():
                 with open(filepath, 'rb') as f:
                     f.seek(start)
                     remaining = content_length
                     while remaining > 0:
-                        chunk = f.read(min(8192, remaining))
+                        chunk = f.read(min(CHUNK_SIZE, remaining))
                         if not chunk:
                             break
                         remaining -= len(chunk)
@@ -1893,7 +1913,7 @@ async def stream_media(filename: str, request: Request):
                     'Content-Range': f'bytes {start}-{end}/{file_size}',
                     'Content-Length': str(content_length),
                     'Accept-Ranges': 'bytes',
-                    'Cache-Control': 'public, max-age=3600',
+                    'Cache-Control': 'public, max-age=86400',
                 }
             )
         except Exception:
@@ -1907,7 +1927,7 @@ async def stream_media(filename: str, request: Request):
             headers={
                 'Content-Length': str(file_size),
                 'Accept-Ranges': 'bytes',
-                'Cache-Control': 'public, max-age=3600',
+                'Cache-Control': 'public, max-age=86400',
             }
         )
     
@@ -1916,7 +1936,7 @@ async def stream_media(filename: str, request: Request):
         media_type=media_type,
         headers={
             'Accept-Ranges': 'bytes',
-            'Cache-Control': 'public, max-age=3600',
+            'Cache-Control': 'public, max-age=86400',
             'Content-Length': str(file_size),
         }
     )
@@ -2985,6 +3005,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+async def create_indexes():
+    """Create MongoDB indexes for performance"""
+    try:
+        await db.stories.create_index([("expires_at", 1)])
+        await db.stories.create_index([("user_id", 1)])
+        await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
+        await db.notifications.create_index([("user_id", 1), ("read", 1)])
+        await db.posts.create_index([("created_at", -1)])
+        await db.posts.create_index([("user_id", 1)])
+        await db.group_lessons.create_index([("status", 1), ("scheduled_at", 1)])
+        await db.messages.create_index([("conversation_id", 1), ("created_at", -1)])
+        logger.info("MongoDB indexes created successfully")
+    except Exception as e:
+        logger.error(f"Failed to create indexes: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

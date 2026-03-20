@@ -219,7 +219,6 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
                       <Image source={{ uri: fullUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                     )}
                   </TouchableOpacity>
-                  </View>
                 );
               })}
             </ScrollView>
