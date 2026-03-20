@@ -2552,7 +2552,36 @@ async def book_group_lesson(lesson_id: str, current_user: dict = Depends(get_cur
         {"id": lesson_id},
         {"$push": {"booked_users": current_user["id"]}, "$inc": {"booked_count": 1}}
     )
-    return {"message": "Booked successfully", "lesson_id": lesson_id}
+
+    # Record mock payment
+    payment = {
+        "id": str(uuid.uuid4()),
+        "user_id": current_user["id"],
+        "lesson_id": lesson_id,
+        "amount": lesson.get("price", 0),
+        "currency": "EUR",
+        "status": "completed",
+        "payment_method": "mock",
+        "created_at": datetime.utcnow().isoformat()
+    }
+    await db.group_lesson_payments.insert_one(payment)
+
+    # Send booking confirmation notification
+    teacher = await db.users.find_one({"id": lesson["teacher_id"]}, {"_id": 0, "password_hash": 0})
+    teacher_name = teacher.get("name") or teacher.get("username", "Insegnante") if teacher else "Insegnante"
+    notif = {
+        "id": str(uuid.uuid4()),
+        "user_id": current_user["id"],
+        "type": "booking_confirmed",
+        "title": "Prenotazione confermata!",
+        "message": f'Hai prenotato "{lesson["title"]}" con {teacher_name}. Riceverai una notifica quando iniziera.',
+        "data": {"lesson_id": lesson_id},
+        "read": False,
+        "created_at": datetime.utcnow().isoformat()
+    }
+    await db.notifications.insert_one(notif)
+
+    return {"message": "Booked successfully", "lesson_id": lesson_id, "payment_id": payment["id"]}
 
 @api_router.delete("/group-lessons/{lesson_id}/book")
 async def cancel_group_lesson_booking(lesson_id: str, current_user: dict = Depends(get_current_user)):
@@ -2621,6 +2650,23 @@ async def start_group_lesson(lesson_id: str, current_user: dict = Depends(get_cu
         {"id": lesson_id},
         {"$set": {"room_url": room_data["url"], "room_name": room_name, "status": "live"}}
     )
+
+    # Notify all booked students that the lesson has started
+    booked_users = lesson.get("booked_users", [])
+    teacher_name = current_user.get("name") or current_user.get("username", "Insegnante")
+    for user_id in booked_users:
+        notif = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "type": "group_lesson_started",
+            "title": "Lezione iniziata!",
+            "message": f'La lezione "{lesson["title"]}" con {teacher_name} e iniziata! Entra ora.',
+            "data": {"lesson_id": lesson_id},
+            "read": False,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        await db.notifications.insert_one(notif)
+
     return {"room_url": room_data["url"], "room_name": room_name}
 
 @api_router.post("/group-lessons/{lesson_id}/join")
@@ -2660,6 +2706,30 @@ async def end_group_lesson(lesson_id: str, current_user: dict = Depends(get_curr
         {"$set": {"status": "completed"}}
     )
     return {"message": "Lesson ended"}
+
+
+# ==================== NOTIFICATIONS ====================
+@api_router.get("/notifications")
+async def get_notifications(current_user: dict = Depends(get_current_user)):
+    """Get notifications for current user"""
+    notifs = await db.notifications.find(
+        {"user_id": current_user["id"]},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    return clean_doc(notifs)
+
+@api_router.get("/notifications/unread-count")
+async def get_unread_notifications_count(current_user: dict = Depends(get_current_user)):
+    count = await db.notifications.count_documents({"user_id": current_user["id"], "read": False})
+    return {"count": count}
+
+@api_router.post("/notifications/{notif_id}/read")
+async def mark_notification_read(notif_id: str, current_user: dict = Depends(get_current_user)):
+    await db.notifications.update_one(
+        {"id": notif_id, "user_id": current_user["id"]},
+        {"$set": {"read": True}}
+    )
+    return {"message": "Marked as read"}
 
 
 # Include the router in the main app

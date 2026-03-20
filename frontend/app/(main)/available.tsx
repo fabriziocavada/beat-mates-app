@@ -17,6 +17,7 @@ import TabBar from '../../src/components/TabBar';
 import AvailableTeacherCard from '../../src/components/AvailableTeacherCard';
 import ReviewsPopup from '../../src/components/ReviewsPopup';
 import GroupLessonCard from '../../src/components/GroupLessonCard';
+import PaymentModal from '../../src/components/PaymentModal';
 import api from '../../src/services/api';
 import { useAuthStore } from '../../src/store/authStore';
 
@@ -62,6 +63,10 @@ export default function AvailableScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [reviewsPopup, setReviewsPopup] = useState<{ visible: boolean; userId: string; username: string }>({ visible: false, userId: '', username: '' });
+  const [paymentModal, setPaymentModal] = useState<{
+    visible: boolean;
+    lesson: GroupLesson | null;
+  }>({ visible: false, lesson: null });
 
   useEffect(() => {
     loadData();
@@ -108,9 +113,17 @@ export default function AvailableScreen() {
     router.push(`/(main)/book/${teacher.id}`);
   };
 
-  const handleBookGroupLesson = async (lessonId: string) => {
+  const handleBookGroupLesson = async (lesson: GroupLesson) => {
+    // Show payment modal instead of directly booking
+    setPaymentModal({ visible: true, lesson });
+  };
+
+  const handlePaymentConfirm = async () => {
+    const lesson = paymentModal.lesson;
+    if (!lesson) return;
+    setPaymentModal({ visible: false, lesson: null });
     try {
-      await api.post(`/group-lessons/${lessonId}/book`);
+      await api.post(`/group-lessons/${lesson.id}/book`);
       loadData();
     } catch (error: any) {
       Alert.alert('Errore', error?.response?.data?.detail || 'Prenotazione fallita');
@@ -157,7 +170,7 @@ export default function AvailableScreen() {
     <GroupLessonCard
       lesson={item}
       currentUserId={user?.id || ''}
-      onBook={() => handleBookGroupLesson(item.id)}
+      onBook={() => handleBookGroupLesson(item)}
       onCancel={() => handleCancelGroupBooking(item.id)}
       onStart={() => handleStartGroupLesson(item.id)}
       onJoin={() => handleJoinGroupLesson(item.id)}
@@ -242,6 +255,15 @@ export default function AvailableScreen() {
         onClose={() => setReviewsPopup({ visible: false, userId: '', username: '' })}
         userId={reviewsPopup.userId}
         username={reviewsPopup.username}
+      />
+      <PaymentModal
+        visible={paymentModal.visible}
+        onClose={() => setPaymentModal({ visible: false, lesson: null })}
+        onConfirm={handlePaymentConfirm}
+        lessonTitle={paymentModal.lesson?.title || ''}
+        teacherName={paymentModal.lesson?.teacher?.name || paymentModal.lesson?.teacher?.username || 'Insegnante'}
+        price={paymentModal.lesson?.price || 0}
+        date={paymentModal.lesson?.scheduled_at ? new Date(paymentModal.lesson.scheduled_at).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
       />
     </SafeAreaView>
   );
