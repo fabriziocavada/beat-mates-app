@@ -72,6 +72,18 @@ export default function AvailableScreen() {
     loadData();
   }, [subTab]);
 
+  // Auto-poll group lessons every 10s so student sees "Entra" button quickly
+  useEffect(() => {
+    if (subTab !== 'lessons') return;
+    const interval = setInterval(async () => {
+      try {
+        const response = await api.get('/group-lessons');
+        setGroupLessons(response.data);
+      } catch {}
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [subTab]);
+
   const loadData = async () => {
     try {
       if (subTab === 'live') {

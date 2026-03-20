@@ -129,7 +129,16 @@ export default function GroupVideoCallScreen() {
         return;
       }
 
-      const finalUrl = lesson.room_url;
+      // Get meeting token for proper Daily.co authentication (same as 1-to-1)
+      let finalUrl = lesson.room_url;
+      if (lesson.room_name) {
+        try {
+          const tokenRes = await api.post(`/video-call/token?room_name=${lesson.room_name}`);
+          if (tokenRes.data?.token) {
+            finalUrl = `${lesson.room_url}?t=${tokenRes.data.token}`;
+          }
+        } catch {}
+      }
 
       if (IS_ANDROID) {
         setLoading(false);
