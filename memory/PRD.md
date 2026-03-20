@@ -29,17 +29,20 @@ Social media mobile app for dancers called "BEAT MATES". Instagram-like experien
 - Server-side video player endpoint
 - Live Coaching Tool (record, slow-motion, drawing, sync)
 - Available Teachers list with availability status
-- Reviews Popup (Google-style with arrows navigation)
+- Reviews Popup (arrow navigation)
 
-## GROUP LESSONS (New - March 2026)
+## GROUP LESSONS (Completed - March 2026)
 
-### Backend Endpoints
+### Backend Endpoints (All tested, 29/29 passed)
 - `POST /api/group-lessons` - create (teacher)
 - `GET /api/group-lessons` - list upcoming/live
 - `GET /api/group-lessons/{id}` - details
 - `POST /api/group-lessons/{id}/book` - book spot (student)
 - `DELETE /api/group-lessons/{id}/book` - cancel booking
 - `GET /api/my-group-lessons` - teacher's own lessons
+- `POST /api/group-lessons/{id}/start` - start lesson (creates Daily.co room)
+- `POST /api/group-lessons/{id}/join` - student joins live lesson
+- `POST /api/group-lessons/{id}/end` - teacher ends lesson
 
 ### DB Schema: group_lessons collection
 ```
@@ -57,27 +60,30 @@ Social media mobile app for dancers called "BEAT MATES". Instagram-like experien
   booked_users: [str],
   status: "upcoming"|"live"|"completed"|"cancelled",
   room_url: str|null,
+  room_name: str|null,
   created_at: str
 }
 ```
 
 ### Frontend
 - Tabs "Live Ora" / "Lezioni" in Available page
-- GroupLessonCard component (badge, date, spots, price, book/cancel)
+- GroupLessonCard component (badge, date, spots, price, book/cancel/start/join)
 - Create Group Lesson form (accessible from profile hamburger menu)
-- Group video call layout (TODO): teacher large center, students grid
-
-## Recent Fixes (March 2026)
-- **CRITICAL FIX**: CallRatingModal was inline in `video-call/[id].tsx` (NOT the separate file). Added Keyboard API listener - modal moves to top when keyboard opens.
-- ReviewsPopup: replaced ScrollView with arrow navigation (gesture issues in Modal)
-- "i" button: larger (32px) with pink background circle
+- **Group Video Call screen** (`group-video-call/[id].tsx`):
+  - WebView with Daily.co (default grid layout for multiple participants)
+  - Teacher controls: "Termina" button (ends lesson for all, deletes Daily.co room)
+  - Student controls: "Esci" button (leaves the call)
+  - Live indicator badge with lesson title and participant count
+  - Android support via external browser
+  - Auto-retry on connection errors
 
 ## Key Files
-- `backend/server.py` - monolith (2500+ lines)
+- `backend/server.py` - monolith (2600+ lines)
 - `frontend/app/(main)/available.tsx` - tabs + teacher list + group lessons
-- `frontend/app/(main)/create-group-lesson.tsx` - NEW form
-- `frontend/app/(main)/video-call/[id].tsx` - video call + rating modal
-- `frontend/src/components/GroupLessonCard.tsx` - NEW card component
+- `frontend/app/(main)/create-group-lesson.tsx` - create form
+- `frontend/app/(main)/group-video-call/[id].tsx` - group video call screen
+- `frontend/app/(main)/video-call/[id].tsx` - 1-to-1 video call + coaching + rating
+- `frontend/src/components/GroupLessonCard.tsx` - card component
 - `frontend/src/components/ReviewsPopup.tsx` - arrow navigation
 - `frontend/src/components/AvailableTeacherCard.tsx` - teacher card + "i" button
 
@@ -87,16 +93,17 @@ Social media mobile app for dancers called "BEAT MATES". Instagram-like experien
 - Other: f.totti@roma.it / password123
 
 ## Known Issues
+- ReviewsPopup carousel swipe broken (using arrow navigation as workaround)
+- "i" icon for reviews may be too small for some users
+- 1-to-1 coaching sync may have issues
 - ngrok tunnel can be unstable (infrastructure, not code)
-- iPhone video autoplay regression in home feed
-- Coaching sync may have issues (WebView state sync architectural limitation)
 
 ## Upcoming Tasks (Priority Order)
-1. Group lesson video call layout (teacher large + student grid)
-2. Stripe integration for real payments
-3. Push notifications
-4. Google Social Login
-5. Deploy to OVH/AWS (Dockerfile preparation)
-6. Native build for App Store / Play Store
-7. Backend refactoring into modular routers
-8. Sponsored posts system
+1. Stripe integration for real payments
+2. Push notifications
+3. Google Social Login
+4. Deploy to OVH/AWS (Dockerfile preparation)
+5. Native build for App Store / Play Store
+6. Backend refactoring into modular routers
+7. Sponsored posts system
+8. ReviewsPopup swipe fix (if user requests)
