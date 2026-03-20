@@ -18,7 +18,7 @@ import AvailableTeacherCard from '../../src/components/AvailableTeacherCard';
 import ReviewsPopup from '../../src/components/ReviewsPopup';
 import GroupLessonCard from '../../src/components/GroupLessonCard';
 import api from '../../src/services/api';
-import { useAuthStore } from '../../src/stores/authStore';
+import { useAuthStore } from '../../src/store/authStore';
 
 interface Teacher {
   id: string;
