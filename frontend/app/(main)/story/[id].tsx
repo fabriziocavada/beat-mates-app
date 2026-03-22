@@ -79,32 +79,31 @@ export default function StoryViewerScreen() {
   const panY = useRef(new Animated.Value(0)).current;
 
   // Refs for nav functions (PanResponder needs stable refs)
-  const goNextRef = useRef<() => void>(() => {});
-  const goPrevRef = useRef<() => void>(() => {});
+  const goNextUserRef = useRef<() => void>(() => {});
+  const goPrevUserRef = useRef<() => void>(() => {});
 
-  // Swipe gesture: horizontal = change story/user, vertical up = reactions
+  // Swipe gesture: horizontal = change USER, vertical up = reactions
   // onStartShouldSetPanResponder: false → taps pass through to TouchableOpacity
   // onMoveShouldSetPanResponder: only capture on significant movement
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gs) => {
-        // Capture horizontal swipe OR vertical swipe up
         return (Math.abs(gs.dx) > 20) || (gs.dy < -20);
       },
       onPanResponderMove: (_, gs) => {
         if (gs.dy < 0) panY.setValue(gs.dy);
       },
       onPanResponderRelease: (_, gs) => {
-        // Horizontal swipe
+        // Horizontal swipe → change USER
         if (Math.abs(gs.dx) > 50 && Math.abs(gs.dx) > Math.abs(gs.dy)) {
           if (gs.dx < 0) {
-            goNextRef.current(); // swipe left → next
+            goNextUserRef.current();
           } else {
-            goPrevRef.current(); // swipe right → prev
+            goPrevUserRef.current();
           }
         }
-        // Vertical swipe up
+        // Vertical swipe up → reactions
         else if (gs.dy < -60) {
           setShowReactions(true);
           if (timerRef.current) clearInterval(timerRef.current);
@@ -178,8 +177,14 @@ export default function StoryViewerScreen() {
     if (!isLoading && allUserStories.length > 0) {
       const currentStory = allUserStories[currentUserIdx]?.stories[currentStoryIdx];
       if (currentStory?.type === 'video' && !videoDuration) {
-        // Wait for video to report its duration before starting timer
-        return;
+        // Wait for video to report duration, but set fallback after 3s
+        const fallbackTimer = setTimeout(() => {
+          setVideoDuration(30000); // 30s fallback
+        }, 3000);
+        return () => { 
+          clearTimeout(fallbackTimer);
+          if (timerRef.current) clearInterval(timerRef.current); 
+        };
       }
       startTimer();
     }
@@ -213,9 +218,30 @@ export default function StoryViewerScreen() {
     }
   };
 
-  // Keep refs in sync for PanResponder
-  useEffect(() => { goNextRef.current = goNext; });
-  useEffect(() => { goPrevRef.current = goPrev; });
+  // Swipe: jump to next/prev USER (skip remaining stories of current user)
+  const goNextUser = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setVideoDuration(null);
+    if (currentUserIdx < allUserStories.length - 1) {
+      setCurrentUserIdx(prev => prev + 1);
+      setCurrentStoryIdx(0);
+    } else {
+      router.replace('/(main)/home');
+    }
+  };
+
+  const goPrevUser = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setVideoDuration(null);
+    if (currentUserIdx > 0) {
+      setCurrentUserIdx(prev => prev - 1);
+      setCurrentStoryIdx(0);
+    }
+  };
+
+  // Keep refs in sync for PanResponder (must be after function definitions)
+  useEffect(() => { goNextUserRef.current = goNextUser; });
+  useEffect(() => { goPrevUserRef.current = goPrevUser; });
 
   const handleTap = (e: any) => {
     const tapX = e.nativeEvent.locationX;
