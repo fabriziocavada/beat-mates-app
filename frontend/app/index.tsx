@@ -1,10 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Video, ResizeMode } from 'expo-av';
 import { useAuthStore } from '../src/store/authStore';
-
-const LOADING_VIDEO_URL = 'https://customer-assets.emergentagent.com/job_4846b9df-52ad-4f93-b361-644907cb8b9c/artifacts/15uk85uk_loading.mp4';
 
 export default function SplashScreen() {
   const router = useRouter();
@@ -13,33 +10,20 @@ export default function SplashScreen() {
   useEffect(() => {
     if (isLoading) return;
     
-    const timer = setTimeout(() => {
-      if (isAuthenticated) {
-        if (hasSelectedCategories) {
-          router.replace('/(main)/home');
-        } else {
-          router.replace('/(auth)/categories');
-        }
+    // Redirect immediately - the actual splash video is in _layout.tsx
+    if (isAuthenticated) {
+      if (hasSelectedCategories) {
+        router.replace('/(main)/home');
       } else {
-        router.replace('/(auth)/login');
+        router.replace('/(auth)/categories');
       }
-    }, 2000);
-    
-    return () => clearTimeout(timer);
+    } else {
+      router.replace('/(auth)/login');
+    }
   }, [isLoading, isAuthenticated, hasSelectedCategories]);
   
-  return (
-    <View style={styles.container}>
-      <Video
-        source={{ uri: LOADING_VIDEO_URL }}
-        style={StyleSheet.absoluteFill}
-        resizeMode={ResizeMode.COVER}
-        shouldPlay
-        isLooping
-        isMuted
-      />
-    </View>
-  );
+  // Empty view - splash video is handled by _layout.tsx
+  return <View style={styles.container} />;
 }
 
 const styles = StyleSheet.create({
