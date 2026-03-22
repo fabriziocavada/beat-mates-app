@@ -59,10 +59,11 @@ Zoom-like: owner tokens, hand raise, SOLO IO, mock payment
 - ✅ Large videos compressed (60MB → 13MB)
 - ✅ New story upload flow: compress → thumbnail → save
 - ✅ Video streaming with Range request (HTTP 206) for iOS
-- ✅ Story swipe left/right navigation fixed (unified PanResponder for tap + swipe)
-- ✅ Home page video "play barrato" fixed (converted 10-bit to 8-bit)
-- ✅ Stories support up to 60s per clip with auto-split for longer videos
-- ✅ Video stories use actual video duration for progress timer (not fixed 6s)
+- ✅ Story viewer rewritten with horizontal FlatList pager (like Instagram)
+- ✅ Swipe between users via native scroll + arrow buttons
+- ✅ Stories support 60s per clip with auto-split for longer videos (backend)
+- ✅ Existing long video stories split into 60s segments
+- ✅ Home page video "play barrato" fixed (10-bit → 8-bit conversion)
 
 ## Known Issues
 - ReviewsPopup carousel swipe (using arrows) - P0
