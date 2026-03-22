@@ -19,7 +19,7 @@ import tempfile
 import time
 from datetime import datetime
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://stories-feed-staging.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://coaching-live-demo-1.preview.emergentagent.com').rstrip('/')
 
 # Test credentials
 TEACHER_EMAIL = "tutor@test.com"

@@ -10,7 +10,7 @@ import time
 from datetime import datetime, timedelta
 
 # Configuration
-BASE_URL = "https://stories-feed-staging.preview.emergentagent.com/api"
+BASE_URL = "https://coaching-live-demo-1.preview.emergentagent.com/api"
 headers = {'Content-Type': 'application/json'}
 auth_token = None
 

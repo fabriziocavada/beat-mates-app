@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, Image, TouchableOpacity, FlatList,
-  Dimensions, ActivityIndicator, StatusBar, Animated,
+  Dimensions, ActivityIndicator, StatusBar, Animated, Modal, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -13,6 +13,9 @@ import Colors from '../../../src/constants/colors';
 const { width, height } = Dimensions.get('window');
 const PHOTO_DURATION = 6000;
 const VIDEO_DURATION = 60000;
+
+// Instagram-style reactions
+const REACTIONS = ['❤️', '😂', '😮', '😢', '👏', '🔥'];
 
 type StoryData = { id: string; media: string; thumbnail?: string; type: string; created_at: string };
 type UserStories = { user_id: string; username: string; profile_image: string | null; stories: StoryData[] };
@@ -43,19 +46,34 @@ function StoryVideoPlayer({ url, isActive }: { url: string; isActive: boolean })
 
 // Single user's story page (rendered inside the horizontal pager)
 function UserStoryPage({
-  userStories, storyIdx, progress, isActive, onTap, onClose
+  userStories, storyIdx, progress, isActive, onTap, onClose, onSwipeUp, onSwipeDown
 }: {
   userStories: UserStories; storyIdx: number; progress: number;
   isActive: boolean; onTap: (side: 'left' | 'right') => void; onClose: () => void;
+  onSwipeUp: () => void; onSwipeDown: () => void;
 }) {
   const story = userStories.stories[storyIdx];
   if (!story) return null;
   const mediaUrl = getMediaUrl(story.media) || '';
   const isVideo = story.type === 'video';
+  const touchY = useRef(0);
+
+  // Detect vertical swipes on press in/out (doesn't conflict with FlatList horizontal scroll)
+  const handlePressIn = (e: any) => {
+    touchY.current = e.nativeEvent.pageY;
+  };
+  const handlePressOut = (side: 'left' | 'right', e: any) => {
+    const dy = e.nativeEvent.pageY - touchY.current;
+    const absDy = Math.abs(dy);
+    if (absDy > 80) {
+      if (dy < 0) onSwipeUp();   // swipe up → reactions
+      else onSwipeDown();         // swipe down → close
+    }
+    // If not a swipe, onPress handles tap (fires separately for taps only)
+  };
 
   return (
     <View style={{ width, height, backgroundColor: '#000' }}>
-      {/* Media */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         {isVideo ? (
           <StoryVideoPlayer key={story.id} url={mediaUrl} isActive={isActive} />
@@ -64,20 +82,29 @@ function UserStoryPage({
         )}
       </View>
 
-      {/* Tap zones: left = prev story, right = next story */}
+      {/* Tap zones with vertical swipe detection */}
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
         <View style={{ flexDirection: 'row', flex: 1 }}>
           <TouchableOpacity
             style={{ flex: 1 }}
             activeOpacity={1}
+            onPressIn={handlePressIn}
             onPress={() => onTap('left')}
+            onPressOut={(e) => handlePressOut('left', e)}
           />
           <TouchableOpacity
             style={{ flex: 2 }}
             activeOpacity={1}
+            onPressIn={handlePressIn}
             onPress={() => onTap('right')}
+            onPressOut={(e) => handlePressOut('right', e)}
           />
         </View>
+      </View>
+
+      {/* Swipe up hint at bottom */}
+      <View style={styles.swipeHint} pointerEvents="none">
+        <Ionicons name="chevron-up" size={20} color="rgba(255,255,255,0.5)" />
       </View>
 
       {/* Top: progress bars + user info */}
@@ -122,6 +149,7 @@ export default function StoryViewerScreen() {
   const [currentStoryIdx, setCurrentStoryIdx] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [progress, setProgress] = useState(0);
+  const [showReactions, setShowReactions] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pagerRef = useRef<FlatList>(null);
   const isScrolling = useRef(false);
@@ -234,6 +262,31 @@ export default function StoryViewerScreen() {
 
   const onClose = () => router.replace('/(main)/home');
 
+  // Swipe UP → show reactions (Instagram style)
+  const onSwipeUp = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setShowReactions(true);
+  };
+
+  // Swipe DOWN → close and go home
+  const onSwipeDown = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    router.replace('/(main)/home');
+  };
+
+  // Handle reaction selection
+  const onReactionSelect = (emoji: string) => {
+    setShowReactions(false);
+    // TODO: Send reaction to backend if needed
+    startTimer(); // Resume timer after reaction
+  };
+
+  // Close reactions panel
+  const closeReactions = () => {
+    setShowReactions(false);
+    startTimer();
+  };
+
   if (isLoading) {
     return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={Colors.primary} /></View>;
   }
@@ -262,6 +315,8 @@ export default function StoryViewerScreen() {
             isActive={index === currentUserIdx}
             onTap={onTap}
             onClose={onClose}
+            onSwipeUp={onSwipeUp}
+            onSwipeDown={onSwipeDown}
           />
         )}
       />
@@ -277,6 +332,32 @@ export default function StoryViewerScreen() {
           <Ionicons name="chevron-forward" size={30} color="rgba(255,255,255,0.8)" />
         </TouchableOpacity>
       )}
+
+      {/* Instagram-style Reactions Modal (Swipe UP) */}
+      <Modal
+        visible={showReactions}
+        transparent
+        animationType="slide"
+        onRequestClose={closeReactions}
+      >
+        <Pressable style={styles.reactionsOverlay} onPress={closeReactions}>
+          <View style={styles.reactionsContainer}>
+            <View style={styles.reactionsHandle} />
+            <View style={styles.reactionsRow}>
+              {REACTIONS.map((emoji, i) => (
+                <TouchableOpacity
+                  key={i}
+                  style={styles.reactionButton}
+                  onPress={() => onReactionSelect(emoji)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.reactionEmoji}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -303,5 +384,46 @@ const styles = StyleSheet.create({
     width: 50, height: 50, borderRadius: 25,
     backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center', justifyContent: 'center', zIndex: 20,
+  },
+  swipeHint: {
+    position: 'absolute', bottom: 30, alignSelf: 'center',
+  },
+  // Instagram-style reactions modal
+  reactionsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  reactionsContainer: {
+    backgroundColor: '#262626',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 40,
+    paddingTop: 12,
+    alignItems: 'center',
+  },
+  reactionsHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#666',
+    borderRadius: 2,
+    marginBottom: 20,
+  },
+  reactionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    paddingHorizontal: 20,
+  },
+  reactionButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#333',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reactionEmoji: {
+    fontSize: 28,
   },
 });
