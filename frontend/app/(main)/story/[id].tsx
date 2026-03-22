@@ -71,22 +71,41 @@ export default function StoryViewerScreen() {
   const reactionAnim = useRef(new Animated.Value(0)).current;
   const reactionScale = useRef(new Animated.Value(0)).current;
   const panY = useRef(new Animated.Value(0)).current;
+  const panX = useRef(new Animated.Value(0)).current;
 
-  // Swipe up gesture
+  // Refs for navigation functions (avoid stale closures in PanResponder)
+  const goNextRef = useRef<() => void>(() => {});
+  const goPrevRef = useRef<() => void>(() => {});
+
+  // Swipe gesture handler: horizontal = navigate, vertical up = reactions
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 20 && gs.dy < 0,
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return Math.abs(gs.dx) > 15 || (Math.abs(gs.dy) > 20 && gs.dy < 0);
+      },
       onPanResponderMove: (_, gs) => {
-        if (gs.dy < 0) panY.setValue(gs.dy);
+        if (Math.abs(gs.dx) > Math.abs(gs.dy)) {
+          panX.setValue(gs.dx);
+        } else if (gs.dy < 0) {
+          panY.setValue(gs.dy);
+        }
       },
       onPanResponderRelease: (_, gs) => {
-        if (gs.dy < -60) {
-          // Swipe up detected → show reactions
+        if (Math.abs(gs.dx) > Math.abs(gs.dy) && Math.abs(gs.dx) > 40) {
+          if (gs.dx < 0) {
+            goNextRef.current();
+          } else {
+            goPrevRef.current();
+          }
+        } else if (gs.dy < -60) {
           setShowReactions(true);
           if (timerRef.current) clearInterval(timerRef.current);
         }
-        Animated.spring(panY, { toValue: 0, useNativeDriver: true }).start();
+        Animated.parallel([
+          Animated.spring(panY, { toValue: 0, useNativeDriver: true }),
+          Animated.spring(panX, { toValue: 0, useNativeDriver: true }),
+        ]).start();
       },
     })
   ).current;
@@ -178,6 +197,10 @@ export default function StoryViewerScreen() {
       setCurrentStoryIdx(prevUser ? prevUser.stories.length - 1 : 0);
     }
   };
+
+  // Keep refs in sync for PanResponder
+  useEffect(() => { goNextRef.current = goNext; });
+  useEffect(() => { goPrevRef.current = goPrev; });
 
   const handleTap = (e: any) => {
     const tapX = e.nativeEvent.locationX;
