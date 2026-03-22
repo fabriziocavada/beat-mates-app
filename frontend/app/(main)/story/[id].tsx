@@ -15,8 +15,9 @@ const { width, height } = Dimensions.get('window');
 const REACTIONS = ['❤️', '🔥', '👏', '😍', '💃', '🕺'];
 
 // Native video player for stories - direct streaming, no WebView overhead
-function StoryVideoPlayer({ url, onDurationReady }: { url: string; onDurationReady?: (ms: number) => void }) {
+function StoryVideoPlayer({ url, onVideoDuration }: { url: string; onVideoDuration?: (ms: number) => void }) {
   const [isLoading, setIsLoading] = useState(true);
+  const durationReported = useRef(false);
   
   return (
     <View style={StyleSheet.absoluteFill}>
@@ -25,13 +26,14 @@ function StoryVideoPlayer({ url, onDurationReady }: { url: string; onDurationRea
         style={StyleSheet.absoluteFill}
         resizeMode={ResizeMode.COVER}
         shouldPlay
-        isLooping={false}
+        isLooping
         isMuted={false}
         onLoad={() => setIsLoading(false)}
         onPlaybackStatusUpdate={(status: any) => {
           if (status.isLoaded && isLoading) setIsLoading(false);
-          if (status.isLoaded && status.durationMillis && onDurationReady) {
-            onDurationReady(Math.min(status.durationMillis, 60000));
+          if (status.isLoaded && status.durationMillis && onVideoDuration && !durationReported.current) {
+            durationReported.current = true;
+            onVideoDuration(Math.min(status.durationMillis, 60000));
           }
         }}
       />
@@ -70,60 +72,44 @@ export default function StoryViewerScreen() {
   const [showReactions, setShowReactions] = useState(false);
   const [sentReaction, setSentReaction] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const STORY_DURATION = 6000; // 6s for photos, videos use their own duration
-  const [storyDuration, setStoryDuration] = useState(STORY_DURATION);
+  const STORY_DURATION = 6000; // default for photos
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const reactionAnim = useRef(new Animated.Value(0)).current;
   const reactionScale = useRef(new Animated.Value(0)).current;
   const panY = useRef(new Animated.Value(0)).current;
-  const panX = useRef(new Animated.Value(0)).current;
 
-  // Refs for navigation functions (avoid stale closures in PanResponder)
+  // Refs for nav functions (PanResponder needs stable refs)
   const goNextRef = useRef<() => void>(() => {});
   const goPrevRef = useRef<() => void>(() => {});
 
-  // Swipe gesture handler: horizontal = navigate, vertical up = reactions, tap = navigate
+  // Swipe gesture: horizontal = change story/user, vertical up = reactions
+  // onStartShouldSetPanResponder: false → taps pass through to TouchableOpacity
+  // onMoveShouldSetPanResponder: only capture on significant movement
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponderCapture: (_, gs) => {
-        // Capture horizontal swipes aggressively
-        return Math.abs(gs.dx) > 10 || (Math.abs(gs.dy) > 15 && gs.dy < 0);
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) => {
+        // Capture horizontal swipe OR vertical swipe up
+        return (Math.abs(gs.dx) > 20) || (gs.dy < -20);
       },
-      onPanResponderGrant: () => {},
       onPanResponderMove: (_, gs) => {
-        if (Math.abs(gs.dx) > Math.abs(gs.dy)) {
-          panX.setValue(gs.dx);
-        } else if (gs.dy < 0) {
-          panY.setValue(gs.dy);
-        }
+        if (gs.dy < 0) panY.setValue(gs.dy);
       },
-      onPanResponderRelease: (evt, gs) => {
-        const isSwipe = Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5;
-        if (!isSwipe) {
-          // It's a tap - navigate based on position
-          const tapX = evt.nativeEvent.locationX;
-          if (tapX < width / 3) {
-            goPrevRef.current();
-          } else {
-            goNextRef.current();
-          }
-        } else if (Math.abs(gs.dx) > Math.abs(gs.dy) && Math.abs(gs.dx) > 40) {
-          // Horizontal swipe
+      onPanResponderRelease: (_, gs) => {
+        // Horizontal swipe
+        if (Math.abs(gs.dx) > 50 && Math.abs(gs.dx) > Math.abs(gs.dy)) {
           if (gs.dx < 0) {
-            goNextRef.current();
+            goNextRef.current(); // swipe left → next
           } else {
-            goPrevRef.current();
+            goPrevRef.current(); // swipe right → prev
           }
-        } else if (gs.dy < -60) {
-          // Swipe up → show reactions
+        }
+        // Vertical swipe up
+        else if (gs.dy < -60) {
           setShowReactions(true);
           if (timerRef.current) clearInterval(timerRef.current);
         }
-        Animated.parallel([
-          Animated.spring(panY, { toValue: 0, useNativeDriver: true }),
-          Animated.spring(panX, { toValue: 0, useNativeDriver: true }),
-        ]).start();
+        Animated.spring(panY, { toValue: 0, useNativeDriver: true }).start();
       },
     })
   ).current;
@@ -175,7 +161,8 @@ export default function StoryViewerScreen() {
   const startTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     setProgress(0);
-    const duration = storyDuration;
+    // Per video: usa la durata reale (fino a 60s), per foto: 6 secondi
+    const duration = videoDuration || STORY_DURATION;
     const interval = 50;
     let elapsed = 0;
     timerRef.current = setInterval(() => {
@@ -189,18 +176,19 @@ export default function StoryViewerScreen() {
 
   useEffect(() => {
     if (!isLoading && allUserStories.length > 0) {
-      // Reset duration for new story
       const currentStory = allUserStories[currentUserIdx]?.stories[currentStoryIdx];
-      if (currentStory?.type !== 'video') {
-        setStoryDuration(STORY_DURATION);
+      if (currentStory?.type === 'video' && !videoDuration) {
+        // Wait for video to report its duration before starting timer
+        return;
       }
       startTimer();
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [currentUserIdx, currentStoryIdx, isLoading, storyDuration]);
+  }, [currentUserIdx, currentStoryIdx, isLoading, videoDuration]);
 
   const goNext = () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    setVideoDuration(null); // reset per la prossima storia
     const userStories = allUserStories[currentUserIdx];
     if (!userStories) { router.replace('/(main)/home'); return; }
     if (currentStoryIdx < userStories.stories.length - 1) {
@@ -215,6 +203,7 @@ export default function StoryViewerScreen() {
 
   const goPrev = () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    setVideoDuration(null); // reset per la prossima storia
     if (currentStoryIdx > 0) {
       setCurrentStoryIdx(prev => prev - 1);
     } else if (currentUserIdx > 0) {
@@ -227,6 +216,12 @@ export default function StoryViewerScreen() {
   // Keep refs in sync for PanResponder
   useEffect(() => { goNextRef.current = goNext; });
   useEffect(() => { goPrevRef.current = goPrev; });
+
+  const handleTap = (e: any) => {
+    const tapX = e.nativeEvent.locationX;
+    if (tapX < width / 3) goPrev();
+    else goNext();
+  };
 
   if (isLoading) {
     return (
@@ -251,15 +246,13 @@ export default function StoryViewerScreen() {
       <StatusBar hidden />
       
       {/* Media content */}
-      <View style={StyleSheet.absoluteFill}>
+      <TouchableOpacity activeOpacity={1} onPress={handleTap} style={StyleSheet.absoluteFill}>
         {isVideo ? (
-          <StoryVideoPlayer url={mediaUrl} onDurationReady={(ms) => {
-            if (ms > 0 && ms !== storyDuration) setStoryDuration(ms);
-          }} />
+          <StoryVideoPlayer url={mediaUrl} onVideoDuration={(ms) => setVideoDuration(ms)} />
         ) : (
           <Image source={{ uri: mediaUrl }} style={styles.fullMedia} resizeMode="cover" />
         )}
-      </View>
+      </TouchableOpacity>
 
       {/* Top overlay with progress and user info */}
       <SafeAreaView edges={['top']} style={styles.topOverlay} pointerEvents="box-none">
