@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, Image, TouchableOpacity, FlatList,
-  Dimensions, ActivityIndicator, StatusBar, Animated, Modal, Pressable,
+  Dimensions, ActivityIndicator, StatusBar, Animated, Modal, Pressable, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -59,7 +59,7 @@ function UserStoryPage({
   const touchY = useRef(0);
   const wasSwipe = useRef(false);
 
-  // Detect vertical swipes on press in/out (doesn't conflict with FlatList horizontal scroll)
+  // Detect vertical swipes - threshold reduced to 40px for better sensitivity
   const handlePressIn = (e: any) => {
     touchY.current = e.nativeEvent.pageY;
     wasSwipe.current = false;
@@ -68,7 +68,7 @@ function UserStoryPage({
   const handlePressOut = (e: any) => {
     const dy = e.nativeEvent.pageY - touchY.current;
     const absDy = Math.abs(dy);
-    if (absDy > 80) {
+    if (absDy > 40) {  // More sensitive: 40px instead of 80px
       wasSwipe.current = true;
       if (dy < 0) onSwipeUp();   // swipe up → reactions
       else onSwipeDown();         // swipe down → close
@@ -112,11 +112,6 @@ function UserStoryPage({
         </View>
       </View>
 
-      {/* Swipe up hint at bottom */}
-      <View style={styles.swipeHint} pointerEvents="none">
-        <Ionicons name="chevron-up" size={20} color="rgba(255,255,255,0.5)" />
-      </View>
-
       {/* Top: progress bars + user info */}
       <SafeAreaView edges={['top']} style={styles.topOverlay} pointerEvents="box-none">
         <View style={styles.progressContainer}>
@@ -144,6 +139,29 @@ function UserStoryPage({
           <Text style={styles.username}>{userStories.username}</Text>
           <TouchableOpacity onPress={onClose} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
             <Ionicons name="close" size={28} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+
+      {/* Instagram-style bottom bar */}
+      <SafeAreaView edges={['bottom']} style={styles.bottomBar} pointerEvents="box-none">
+        <View style={styles.bottomBarContent}>
+          <View style={styles.messageInputContainer}>
+            <TextInput
+              style={styles.messageInput}
+              placeholder="Invia messaggio..."
+              placeholderTextColor="rgba(255,255,255,0.6)"
+              editable={false}
+            />
+          </View>
+          <TouchableOpacity style={styles.bottomIcon} onPress={onSwipeUp}>
+            <Ionicons name="heart-outline" size={26} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.bottomIcon}>
+            <Ionicons name="chatbubble-outline" size={24} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.bottomIcon}>
+            <Ionicons name="paper-plane-outline" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -435,5 +453,40 @@ const styles = StyleSheet.create({
   },
   reactionEmoji: {
     fontSize: 28,
+  },
+  // Instagram-style bottom bar
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 30,
+  },
+  bottomBarContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingBottom: 20,
+  },
+  messageInputContainer: {
+    flex: 1,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    marginRight: 12,
+  },
+  messageInput: {
+    color: '#fff',
+    fontSize: 15,
+  },
+  bottomIcon: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
