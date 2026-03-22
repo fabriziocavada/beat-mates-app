@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, Image, TouchableOpacity,
   Dimensions, ActivityIndicator, StatusBar, Animated,
@@ -208,42 +208,44 @@ export default function StoryViewerScreen() {
   };
 
   // Unified touch handler: detects taps, horizontal swipes, vertical swipes
-  const onTouchStart = useCallback((e: GestureResponderEvent) => {
+  const onTouchStart = (e: GestureResponderEvent) => {
     touchRef.current = {
       startX: e.nativeEvent.pageX,
       startY: e.nativeEvent.pageY,
       startTime: Date.now(),
     };
-  }, []);
+  };
 
-  const onTouchEnd = useCallback((e: GestureResponderEvent) => {
+  const onTouchEnd = (e: GestureResponderEvent) => {
     const { startX, startY, startTime } = touchRef.current;
     const endX = e.nativeEvent.pageX;
     const endY = e.nativeEvent.pageY;
     const dx = endX - startX;
     const dy = endY - startY;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
     const dt = Date.now() - startTime;
 
-    // Horizontal swipe → change USER (threshold: >60px horizontal, dominant direction)
-    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 600) {
+    // Horizontal swipe → change USER
+    if (absDx > 40 && absDx > absDy && dt < 800) {
       if (dx < 0) goNextUser();
       else goPrevUser();
       return;
     }
 
     // Vertical swipe up → show reactions
-    if (dy < -80 && Math.abs(dy) > Math.abs(dx) * 1.5 && dt < 600) {
+    if (dy < -60 && absDy > absDx && dt < 800) {
       setShowReactions(true);
       if (timerRef.current) clearInterval(timerRef.current);
       return;
     }
 
     // Tap → navigate stories (left 1/3 = prev, right 2/3 = next)
-    if (Math.abs(dx) < 20 && Math.abs(dy) < 20 && dt < 400) {
+    if (absDx < 15 && absDy < 15 && dt < 500) {
       if (endX < width / 3) goPrev();
       else goNext();
     }
-  }, [allUserStories, currentUserIdx, currentStoryIdx]);
+  };
 
   if (isLoading) {
     return (

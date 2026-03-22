@@ -13,7 +13,15 @@ export default function MainLayout() {
           contentStyle: { backgroundColor: Colors.background },
           animation: 'fade',
         }}
-      />
+      >
+        <Stack.Screen
+          name="story/[id]"
+          options={{
+            gestureEnabled: false,
+            animation: 'none',
+          }}
+        />
+      </Stack>
       <LessonNotificationBanner />
     </View>
   );
