@@ -932,17 +932,18 @@ async def create_story(data: StoryCreate, current_user: dict = Depends(get_curre
             video_path = UPLOADS_DIR / video_filename
             thumb_filename = f"thumb_{story_id}.jpg"
             thumb_path = UPLOADS_DIR / thumb_filename
-            import subprocess, asyncio
-            await asyncio.to_thread(
-                subprocess.run,
-                ["ffmpeg", "-i", str(video_path), "-ss", "0.5", "-vframes", "1",
-                 "-vf", "scale=480:-1", str(thumb_path)],
-                capture_output=True, timeout=10
-            )
-            if thumb_path.exists():
+            import asyncio as _asyncio
+            # First compress the video to H.264 for iOS compatibility
+            compressed_name = await _asyncio.to_thread(compress_video, str(video_path))
+            if compressed_name != video_filename:
+                story["media"] = f"/api/uploads/{compressed_name}"
+                media_value = story["media"]
+                video_path = UPLOADS_DIR / compressed_name
+            # Generate thumbnail
+            if generate_video_thumbnail(str(video_path), str(thumb_path)):
                 story["thumbnail"] = f"/api/uploads/{thumb_filename}"
         except Exception as e:
-            logger.error(f"Story thumbnail generation failed: {e}")
+            logger.error(f"Story video processing failed: {e}")
     
     await db.stories.insert_one(story)
     
@@ -1449,7 +1450,7 @@ async def upload_coaching_clip(session_id: str, file: UploadFile = File(...), cu
     try:
         await asyncio.to_thread(
             lambda: subprocess.run(
-                ["ffmpeg", "-i", str(UPLOADS_DIR / compressed), "-vframes", "1", "-an", "-ss", "0.01", "-update", "1", str(poster_path), "-y"],
+                [FFMPEG_PATH, "-i", str(UPLOADS_DIR / compressed), "-vframes", "1", "-an", "-ss", "0.01", "-update", "1", str(poster_path), "-y"],
                 capture_output=True, timeout=15
             )
         )
@@ -1730,11 +1731,13 @@ async def toggle_availability(current_user: dict = Depends(get_current_user)):
 
 import subprocess
 
+FFMPEG_PATH = '/usr/bin/ffmpeg'
+
 def generate_video_thumbnail(video_path: str, thumb_path: str) -> bool:
     """Extract first frame from video as JPEG thumbnail."""
     try:
         cmd = [
-            'ffmpeg', '-y', '-i', video_path,
+            FFMPEG_PATH, '-y', '-i', video_path,
             '-vframes', '1', '-q:v', '3',
             '-vf', 'scale=320:-1',
             thumb_path
@@ -1749,9 +1752,9 @@ def convert_video_to_mp4(input_path: str, output_path: str) -> bool:
     """Convert any video to web-compatible H.264 8-bit MP4 format."""
     try:
         cmd = [
-            'ffmpeg', '-y', '-i', input_path,
+            FFMPEG_PATH, '-y', '-i', input_path,
             '-c:v', 'libx264', '-profile:v', 'main', '-level', '4.0',
-            '-pix_fmt', 'yuv420p',  # Force 8-bit for web compatibility
+            '-pix_fmt', 'yuv420p',
             '-preset', 'fast', '-crf', '23',
             '-c:a', 'aac', '-b:a', '64k',
             '-movflags', '+faststart',
@@ -1777,13 +1780,13 @@ def compress_video(input_path: str) -> str:
         crf = '28' if file_size > 3 * 1024 * 1024 else '23'
         
         cmd = [
-            'ffmpeg', '-y', '-i', input_path,
+            FFMPEG_PATH, '-y', '-i', input_path,
             '-c:v', 'libx264', '-profile:v', 'main', '-level', '4.0',
-            '-pix_fmt', 'yuv420p',  # Force 8-bit for web compatibility
+            '-pix_fmt', 'yuv420p',
             '-preset', 'fast', '-crf', crf,
             '-c:a', 'aac', '-b:a', '64k',
             '-movflags', '+faststart',
-            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',  # Ensure even dimensions
+            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
             output_path
         ]
         result = subprocess.run(cmd, capture_output=True, timeout=180)
@@ -2200,7 +2203,7 @@ async def upload_song(
     try:
         import subprocess
         result = subprocess.run(
-            ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', str(file_path)],
+            ['/usr/bin/ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', str(file_path)],
             capture_output=True, text=True, timeout=10
         )
         if result.returncode == 0 and result.stdout.strip():
@@ -2316,7 +2319,7 @@ async def create_video_lesson(
     final_path = UPLOADS_DIR / final_filename
     try:
         subprocess.run([
-            "ffmpeg", "-y", "-i", str(orig_path),
+            FFMPEG_PATH, "-y", "-i", str(orig_path),
             "-c:v", "libx264", "-preset", "fast", "-crf", "28",
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
@@ -2337,7 +2340,7 @@ async def create_video_lesson(
     thumb_path = UPLOADS_DIR / thumb_filename
     try:
         subprocess.run([
-            "ffmpeg", "-y", "-i", str(final_path), "-ss", "00:00:01",
+            FFMPEG_PATH, "-y", "-i", str(final_path), "-ss", "00:00:01",
             "-vframes", "1", "-vf", "scale=640:-1", "-q:v", "4", str(thumb_path)
         ], capture_output=True, timeout=15)
         if not thumb_path.exists():
@@ -2349,7 +2352,7 @@ async def create_video_lesson(
     duration_minutes = 0
     try:
         result = subprocess.run([
-            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "/usr/bin/ffprobe", "-v", "error", "-show_entries", "format=duration",
             "-of", "default=noprint_wrappers=1:nokey=1", str(final_path)
         ], capture_output=True, text=True, timeout=10)
         secs = float(result.stdout.strip())

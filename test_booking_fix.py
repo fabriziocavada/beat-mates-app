@@ -7,7 +7,7 @@ import requests
 import json
 from datetime import datetime, timedelta
 
-BASE_URL = "https://coaching-connect-8.preview.emergentagent.com/api"
+BASE_URL = "https://stories-feed-staging.preview.emergentagent.com/api"
 headers = {'Content-Type': 'application/json'}
 
 def log_test(test_name, success, details=""):
