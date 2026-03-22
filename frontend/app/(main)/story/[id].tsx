@@ -78,8 +78,8 @@ export default function StoryViewerScreen() {
   const reactionAnim = useRef(new Animated.Value(0)).current;
   const reactionScale = useRef(new Animated.Value(0)).current;
 
-  // Touch tracking for gesture detection (no PanResponder needed)
-  const touchRef = useRef({ startX: 0, startY: 0, startTime: 0 });
+  // Touch tracking for gesture detection
+  const touchRef = useRef({ startX: 0, startY: 0, startTime: 0, currentX: 0, currentY: 0 });
 
   const sendReaction = async (emoji: string) => {
     setSentReaction(emoji);
@@ -207,21 +207,22 @@ export default function StoryViewerScreen() {
     }
   };
 
-  // Unified touch handler: detects taps, horizontal swipes, vertical swipes
+  // Gesture handlers with move tracking (onResponderRelease has stale coords on iOS)
   const onTouchStart = (e: GestureResponderEvent) => {
-    touchRef.current = {
-      startX: e.nativeEvent.pageX,
-      startY: e.nativeEvent.pageY,
-      startTime: Date.now(),
-    };
+    const x = e.nativeEvent.pageX;
+    const y = e.nativeEvent.pageY;
+    touchRef.current = { startX: x, startY: y, startTime: Date.now(), currentX: x, currentY: y };
   };
 
-  const onTouchEnd = (e: GestureResponderEvent) => {
-    const { startX, startY, startTime } = touchRef.current;
-    const endX = e.nativeEvent.pageX;
-    const endY = e.nativeEvent.pageY;
-    const dx = endX - startX;
-    const dy = endY - startY;
+  const onTouchMove = (e: GestureResponderEvent) => {
+    touchRef.current.currentX = e.nativeEvent.pageX;
+    touchRef.current.currentY = e.nativeEvent.pageY;
+  };
+
+  const onTouchEnd = () => {
+    const { startX, startY, startTime, currentX, currentY } = touchRef.current;
+    const dx = currentX - startX;
+    const dy = currentY - startY;
     const absDx = Math.abs(dx);
     const absDy = Math.abs(dy);
     const dt = Date.now() - startTime;
@@ -242,7 +243,7 @@ export default function StoryViewerScreen() {
 
     // Tap → navigate stories (left 1/3 = prev, right 2/3 = next)
     if (absDx < 15 && absDy < 15 && dt < 500) {
-      if (endX < width / 3) goPrev();
+      if (currentX < width / 3) goPrev();
       else goNext();
     }
   };
@@ -270,7 +271,9 @@ export default function StoryViewerScreen() {
       style={styles.container}
       onStartShouldSetResponder={() => true}
       onMoveShouldSetResponder={() => true}
+      onResponderTerminationRequest={() => false}
       onResponderGrant={onTouchStart}
+      onResponderMove={onTouchMove}
       onResponderRelease={onTouchEnd}
     >
       <StatusBar hidden />
