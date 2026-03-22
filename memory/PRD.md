@@ -53,12 +53,16 @@ Zoom-like: owner tokens, hand raise, SOLO IO, mock payment
 
 ## Completed Fixes (March 22, 2026)
 - ✅ ffmpeg path fixed (all subprocess calls use `/usr/bin/ffmpeg`)
-- ✅ All 21 video stories re-encoded to H.264 Main profile (iOS compatible)
+- ✅ All video stories + posts re-encoded to H.264 Main profile 8-bit yuv420p (iOS compatible)
 - ✅ All video stories have thumbnails generated
-- ✅ HEVC videos converted to H.264
+- ✅ HEVC/10-bit videos converted to H.264 8-bit
 - ✅ Large videos compressed (60MB → 13MB)
 - ✅ New story upload flow: compress → thumbnail → save
 - ✅ Video streaming with Range request (HTTP 206) for iOS
+- ✅ Story swipe left/right navigation fixed (unified PanResponder for tap + swipe)
+- ✅ Home page video "play barrato" fixed (converted 10-bit to 8-bit)
+- ✅ Stories support up to 60s per clip with auto-split for longer videos
+- ✅ Video stories use actual video duration for progress timer (not fixed 6s)
 
 ## Known Issues
 - ReviewsPopup carousel swipe (using arrows) - P0
