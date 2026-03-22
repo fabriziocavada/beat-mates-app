@@ -51,8 +51,19 @@ Zoom-like: owner tokens, hand raise, SOLO IO, mock payment
 - Teacher: tutor@test.com / password123
 - Student: mario@test.com / password123
 
+## Completed Fixes (March 22, 2026)
+- ✅ ffmpeg path fixed (all subprocess calls use `/usr/bin/ffmpeg`)
+- ✅ All 21 video stories re-encoded to H.264 Main profile (iOS compatible)
+- ✅ All video stories have thumbnails generated
+- ✅ HEVC videos converted to H.264
+- ✅ Large videos compressed (60MB → 13MB)
+- ✅ New story upload flow: compress → thumbnail → save
+- ✅ Video streaming with Range request (HTTP 206) for iOS
+
 ## Known Issues
-- ReviewsPopup carousel swipe (using arrows)
+- ReviewsPopup carousel swipe (using arrows) - P0
+- "i" icon too small on teacher card - P1
+- 1-to-1 coaching video sync/loop bug - P2
 - ngrok tunnel instability (infrastructure)
 
 ## Upcoming Tasks
@@ -62,3 +73,4 @@ Zoom-like: owner tokens, hand raise, SOLO IO, mock payment
 4. Deploy to OVH/AWS (Dockerfiles)
 5. App Store / Play Store builds
 6. Backend refactoring into modular routers
+7. Sponsored posts system
