@@ -92,12 +92,18 @@ function UserStoryPage({
           ))}
         </View>
         <View style={styles.userRow}>
-          <Image
-            source={userStories.profile_image
-              ? { uri: getMediaUrl(userStories.profile_image) || '' }
-              : require('../../../assets/default-avatar.png')}
-            style={styles.avatar}
-          />
+          {userStories.profile_image ? (
+            <Image
+              source={{ uri: getMediaUrl(userStories.profile_image) || '' }}
+              style={styles.avatar}
+            />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: '#555', alignItems: 'center', justifyContent: 'center' }]}>
+              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>
+                {userStories.username?.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
           <Text style={styles.username}>{userStories.username}</Text>
           <TouchableOpacity onPress={onClose} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
             <Ionicons name="close" size={28} color="#fff" />
