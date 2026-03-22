@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, Image, TouchableOpacity,
-  Dimensions, ActivityIndicator, StatusBar, Animated, PanResponder,
+  Dimensions, ActivityIndicator, StatusBar, Animated,
+  GestureResponderEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -76,42 +77,9 @@ export default function StoryViewerScreen() {
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const reactionAnim = useRef(new Animated.Value(0)).current;
   const reactionScale = useRef(new Animated.Value(0)).current;
-  const panY = useRef(new Animated.Value(0)).current;
 
-  // Refs for nav functions (PanResponder needs stable refs)
-  const goNextUserRef = useRef<() => void>(() => {});
-  const goPrevUserRef = useRef<() => void>(() => {});
-
-  // Swipe gesture: horizontal = change USER, vertical up = reactions
-  // onStartShouldSetPanResponder: false → taps pass through to TouchableOpacity
-  // onMoveShouldSetPanResponder: only capture on significant movement
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => {
-        return (Math.abs(gs.dx) > 20) || (gs.dy < -20);
-      },
-      onPanResponderMove: (_, gs) => {
-        if (gs.dy < 0) panY.setValue(gs.dy);
-      },
-      onPanResponderRelease: (_, gs) => {
-        // Horizontal swipe → change USER
-        if (Math.abs(gs.dx) > 50 && Math.abs(gs.dx) > Math.abs(gs.dy)) {
-          if (gs.dx < 0) {
-            goNextUserRef.current();
-          } else {
-            goPrevUserRef.current();
-          }
-        }
-        // Vertical swipe up → reactions
-        else if (gs.dy < -60) {
-          setShowReactions(true);
-          if (timerRef.current) clearInterval(timerRef.current);
-        }
-        Animated.spring(panY, { toValue: 0, useNativeDriver: true }).start();
-      },
-    })
-  ).current;
+  // Touch tracking for gesture detection (no PanResponder needed)
+  const touchRef = useRef({ startX: 0, startY: 0, startTime: 0 });
 
   const sendReaction = async (emoji: string) => {
     setSentReaction(emoji);
@@ -239,15 +207,43 @@ export default function StoryViewerScreen() {
     }
   };
 
-  // Keep refs in sync for PanResponder (must be after function definitions)
-  useEffect(() => { goNextUserRef.current = goNextUser; });
-  useEffect(() => { goPrevUserRef.current = goPrevUser; });
+  // Unified touch handler: detects taps, horizontal swipes, vertical swipes
+  const onTouchStart = useCallback((e: GestureResponderEvent) => {
+    touchRef.current = {
+      startX: e.nativeEvent.pageX,
+      startY: e.nativeEvent.pageY,
+      startTime: Date.now(),
+    };
+  }, []);
 
-  const handleTap = (e: any) => {
-    const tapX = e.nativeEvent.locationX;
-    if (tapX < width / 3) goPrev();
-    else goNext();
-  };
+  const onTouchEnd = useCallback((e: GestureResponderEvent) => {
+    const { startX, startY, startTime } = touchRef.current;
+    const endX = e.nativeEvent.pageX;
+    const endY = e.nativeEvent.pageY;
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const dt = Date.now() - startTime;
+
+    // Horizontal swipe → change USER (threshold: >60px horizontal, dominant direction)
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 600) {
+      if (dx < 0) goNextUser();
+      else goPrevUser();
+      return;
+    }
+
+    // Vertical swipe up → show reactions
+    if (dy < -80 && Math.abs(dy) > Math.abs(dx) * 1.5 && dt < 600) {
+      setShowReactions(true);
+      if (timerRef.current) clearInterval(timerRef.current);
+      return;
+    }
+
+    // Tap → navigate stories (left 1/3 = prev, right 2/3 = next)
+    if (Math.abs(dx) < 20 && Math.abs(dy) < 20 && dt < 400) {
+      if (endX < width / 3) goPrev();
+      else goNext();
+    }
+  }, [allUserStories, currentUserIdx, currentStoryIdx]);
 
   if (isLoading) {
     return (
@@ -268,17 +264,27 @@ export default function StoryViewerScreen() {
   const isVideo = story.type === 'video';
 
   return (
-    <View style={styles.container} {...panResponder.panHandlers}>
+    <View
+      style={styles.container}
+      onStartShouldSetResponder={() => true}
+      onMoveShouldSetResponder={() => true}
+      onResponderGrant={onTouchStart}
+      onResponderRelease={onTouchEnd}
+    >
       <StatusBar hidden />
       
       {/* Media content */}
-      <TouchableOpacity activeOpacity={1} onPress={handleTap} style={StyleSheet.absoluteFill}>
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
         {isVideo ? (
-          <StoryVideoPlayer url={mediaUrl} onVideoDuration={(ms) => setVideoDuration(ms)} />
+          <StoryVideoPlayer
+            key={`${currentUserIdx}-${currentStoryIdx}`}
+            url={mediaUrl}
+            onVideoDuration={(ms) => setVideoDuration(ms)}
+          />
         ) : (
           <Image source={{ uri: mediaUrl }} style={styles.fullMedia} resizeMode="cover" />
         )}
-      </TouchableOpacity>
+      </View>
 
       {/* Top overlay with progress and user info */}
       <SafeAreaView edges={['top']} style={styles.topOverlay} pointerEvents="box-none">
