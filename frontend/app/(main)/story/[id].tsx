@@ -13,7 +13,6 @@ import Colors from '../../../src/constants/colors';
 const { width, height } = Dimensions.get('window');
 const PHOTO_DURATION = 6000;
 const VIDEO_DURATION = 60000;
-const LOADING_VIDEO_URL = 'https://customer-assets.emergentagent.com/job_4846b9df-52ad-4f93-b361-644907cb8b9c/artifacts/15uk85uk_loading.mp4';
 
 // Instagram-style reactions
 const REACTIONS = ['❤️', '😂', '😮', '😢', '👏', '🔥'];
@@ -38,14 +37,7 @@ function StoryVideoPlayer({ url, isActive }: { url: string; isActive: boolean })
       />
       {loading && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
-          <Video
-            source={{ uri: LOADING_VIDEO_URL }}
-            style={{ width: 120, height: 120 }}
-            resizeMode={ResizeMode.CONTAIN}
-            shouldPlay
-            isLooping
-            isMuted
-          />
+          <ActivityIndicator size="large" color={Colors.primary} />
         </View>
       )}
     </View>
@@ -306,18 +298,7 @@ export default function StoryViewerScreen() {
   };
 
   if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Video
-          source={{ uri: LOADING_VIDEO_URL }}
-          style={{ width: 120, height: 120 }}
-          resizeMode={ResizeMode.CONTAIN}
-          shouldPlay
-          isLooping
-          isMuted
-        />
-      </View>
-    );
+    return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={Colors.primary} /></View>;
   }
 
   return (

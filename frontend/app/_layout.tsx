@@ -46,15 +46,10 @@ export default function RootLayout() {
     return (
       <View style={styles.splashContainer}>
         <StatusBar barStyle="light-content" backgroundColor="#000000" />
-        <Image
-          source={require('../assets/images/splash-logo.png')}
-          style={styles.splashLogo}
-          resizeMode="contain"
-        />
         <Video
           source={{ uri: LOADING_VIDEO_URL }}
-          style={styles.splashLoader}
-          resizeMode={ResizeMode.CONTAIN}
+          style={StyleSheet.absoluteFill}
+          resizeMode={ResizeMode.COVER}
           shouldPlay
           isLooping
           isMuted

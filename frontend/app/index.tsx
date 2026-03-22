@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Image } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Video, ResizeMode } from 'expo-av';
 import { useAuthStore } from '../src/store/authStore';
@@ -30,18 +30,10 @@ export default function SplashScreen() {
   
   return (
     <View style={styles.container}>
-      {/* Logo from Figma design */}
-      <Image
-        source={require('../assets/images/splash-logo.png')}
-        style={styles.logo}
-        resizeMode="contain"
-      />
-      
-      {/* Loading video */}
       <Video
         source={{ uri: LOADING_VIDEO_URL }}
-        style={styles.loader}
-        resizeMode={ResizeMode.CONTAIN}
+        style={StyleSheet.absoluteFill}
+        resizeMode={ResizeMode.COVER}
         shouldPlay
         isLooping
         isMuted
@@ -54,17 +46,5 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logo: {
-    width: 280,
-    height: 280,
-    marginBottom: 20,
-  },
-  loader: {
-    width: 80,
-    height: 80,
-    marginTop: 30,
   },
 });
