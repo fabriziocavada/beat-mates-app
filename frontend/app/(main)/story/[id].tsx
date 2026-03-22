@@ -13,6 +13,7 @@ import Colors from '../../../src/constants/colors';
 const { width, height } = Dimensions.get('window');
 const PHOTO_DURATION = 6000;
 const VIDEO_DURATION = 60000;
+const LOADING_VIDEO_URL = 'https://customer-assets.emergentagent.com/job_4846b9df-52ad-4f93-b361-644907cb8b9c/artifacts/15uk85uk_loading.mp4';
 
 // Instagram-style reactions
 const REACTIONS = ['❤️', '😂', '😮', '😢', '👏', '🔥'];
@@ -37,7 +38,14 @@ function StoryVideoPlayer({ url, isActive }: { url: string; isActive: boolean })
       />
       {loading && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <Video
+            source={{ uri: LOADING_VIDEO_URL }}
+            style={{ width: 120, height: 120 }}
+            resizeMode={ResizeMode.CONTAIN}
+            shouldPlay
+            isLooping
+            isMuted
+          />
         </View>
       )}
     </View>
@@ -57,19 +65,29 @@ function UserStoryPage({
   const mediaUrl = getMediaUrl(story.media) || '';
   const isVideo = story.type === 'video';
   const touchY = useRef(0);
+  const wasSwipe = useRef(false);
 
   // Detect vertical swipes on press in/out (doesn't conflict with FlatList horizontal scroll)
   const handlePressIn = (e: any) => {
     touchY.current = e.nativeEvent.pageY;
+    wasSwipe.current = false;
   };
-  const handlePressOut = (side: 'left' | 'right', e: any) => {
+
+  const handlePressOut = (e: any) => {
     const dy = e.nativeEvent.pageY - touchY.current;
     const absDy = Math.abs(dy);
     if (absDy > 80) {
+      wasSwipe.current = true;
       if (dy < 0) onSwipeUp();   // swipe up → reactions
       else onSwipeDown();         // swipe down → close
     }
-    // If not a swipe, onPress handles tap (fires separately for taps only)
+  };
+
+  const handleTap = (side: 'left' | 'right') => {
+    // Only handle tap if it wasn't a swipe
+    if (!wasSwipe.current) {
+      onTap(side);
+    }
   };
 
   return (
@@ -89,15 +107,15 @@ function UserStoryPage({
             style={{ flex: 1 }}
             activeOpacity={1}
             onPressIn={handlePressIn}
-            onPress={() => onTap('left')}
-            onPressOut={(e) => handlePressOut('left', e)}
+            onPressOut={handlePressOut}
+            onPress={() => handleTap('left')}
           />
           <TouchableOpacity
             style={{ flex: 2 }}
             activeOpacity={1}
             onPressIn={handlePressIn}
-            onPress={() => onTap('right')}
-            onPressOut={(e) => handlePressOut('right', e)}
+            onPressOut={handlePressOut}
+            onPress={() => handleTap('right')}
           />
         </View>
       </View>
@@ -288,7 +306,18 @@ export default function StoryViewerScreen() {
   };
 
   if (isLoading) {
-    return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={Colors.primary} /></View>;
+    return (
+      <View style={styles.loadingContainer}>
+        <Video
+          source={{ uri: LOADING_VIDEO_URL }}
+          style={{ width: 120, height: 120 }}
+          resizeMode={ResizeMode.CONTAIN}
+          shouldPlay
+          isLooping
+          isMuted
+        />
+      </View>
+    );
   }
 
   return (
