@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ActivityIndicator, StatusBar, Image } from 'react-native';
+import { View, StyleSheet, StatusBar, Image } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Video, ResizeMode } from 'expo-av';
 import { useAuthStore } from '../src/store/authStore';
 import Colors from '../src/constants/colors';
+
+const LOADING_VIDEO_URL = 'https://customer-assets.emergentagent.com/job_4846b9df-52ad-4f93-b361-644907cb8b9c/artifacts/15uk85uk_loading.mp4';
 
 export default function RootLayout() {
   const router = useRouter();
@@ -48,10 +51,13 @@ export default function RootLayout() {
           style={styles.splashLogo}
           resizeMode="contain"
         />
-        <ActivityIndicator
-          size="small"
-          color={Colors.primary}
+        <Video
+          source={{ uri: LOADING_VIDEO_URL }}
           style={styles.splashLoader}
+          resizeMode={ResizeMode.CONTAIN}
+          shouldPlay
+          isLooping
+          isMuted
         />
       </View>
     );
@@ -83,6 +89,8 @@ const styles = StyleSheet.create({
     height: 280,
   },
   splashLoader: {
+    width: 80,
+    height: 80,
     marginTop: 40,
   },
 });

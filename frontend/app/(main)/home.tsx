@@ -4,18 +4,20 @@ import {
   StyleSheet,
   FlatList,
   RefreshControl,
-  ActivityIndicator,
   Text,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
+import { Video, ResizeMode } from 'expo-av';
 import Header from '../../src/components/Header';
 import TabBar from '../../src/components/TabBar';
 import StoriesBar from '../../src/components/StoriesBar';
 import PostCard from '../../src/components/PostCard';
 import api from '../../src/services/api';
 import { useAuthStore } from '../../src/store/authStore';
+
+const LOADING_VIDEO_URL = 'https://customer-assets.emergentagent.com/job_4846b9df-52ad-4f93-b361-644907cb8b9c/artifacts/15uk85uk_loading.mp4';
 
 interface Post {
   id: string;
@@ -154,7 +156,14 @@ export default function HomeScreen() {
       
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FF6978" />
+          <Video
+            source={{ uri: LOADING_VIDEO_URL }}
+            style={{ width: 120, height: 120 }}
+            resizeMode={ResizeMode.CONTAIN}
+            shouldPlay
+            isLooping
+            isMuted
+          />
         </View>
       ) : (
         <FlatList
