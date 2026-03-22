@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, StatusBar, Image } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, StyleSheet, StatusBar } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Video, ResizeMode } from 'expo-av';
+import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { useAuthStore } from '../src/store/authStore';
 import Colors from '../src/constants/colors';
 
@@ -14,17 +14,19 @@ export default function RootLayout() {
   const { isLoading, isAuthenticated, hasSelectedCategories, loadUser } = useAuthStore();
   const [isReady, setIsReady] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
+  const videoFinished = useRef(false);
   
   useEffect(() => {
     loadUser().finally(() => setIsReady(true));
-    
-    // Show splash for 3 seconds
-    const splashTimer = setTimeout(() => {
-      setShowSplash(false);
-    }, 3000);
-    
-    return () => clearTimeout(splashTimer);
   }, []);
+  
+  // Handle video end - hide splash when video finishes playing once
+  const onPlaybackStatusUpdate = (status: AVPlaybackStatus) => {
+    if (status.isLoaded && status.didJustFinish && !videoFinished.current) {
+      videoFinished.current = true;
+      setShowSplash(false);
+    }
+  };
   
   useEffect(() => {
     if (!isReady || showSplash) return;
@@ -51,8 +53,9 @@ export default function RootLayout() {
           style={StyleSheet.absoluteFill}
           resizeMode={ResizeMode.COVER}
           shouldPlay
-          isLooping
+          isLooping={false}
           isMuted
+          onPlaybackStatusUpdate={onPlaybackStatusUpdate}
         />
       </View>
     );
