@@ -15,7 +15,7 @@ const { width, height } = Dimensions.get('window');
 const REACTIONS = ['❤️', '🔥', '👏', '😍', '💃', '🕺'];
 
 // Native video player for stories - direct streaming, no WebView overhead
-function StoryVideoPlayer({ url }: { url: string }) {
+function StoryVideoPlayer({ url, onDurationReady }: { url: string; onDurationReady?: (ms: number) => void }) {
   const [isLoading, setIsLoading] = useState(true);
   
   return (
@@ -25,11 +25,14 @@ function StoryVideoPlayer({ url }: { url: string }) {
         style={StyleSheet.absoluteFill}
         resizeMode={ResizeMode.COVER}
         shouldPlay
-        isLooping
+        isLooping={false}
         isMuted={false}
         onLoad={() => setIsLoading(false)}
         onPlaybackStatusUpdate={(status: any) => {
           if (status.isLoaded && isLoading) setIsLoading(false);
+          if (status.isLoaded && status.durationMillis && onDurationReady) {
+            onDurationReady(Math.min(status.durationMillis, 60000));
+          }
         }}
       />
       {isLoading && (
@@ -67,7 +70,8 @@ export default function StoryViewerScreen() {
   const [showReactions, setShowReactions] = useState(false);
   const [sentReaction, setSentReaction] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const STORY_DURATION = 6000;
+  const STORY_DURATION = 6000; // 6s for photos, videos use their own duration
+  const [storyDuration, setStoryDuration] = useState(STORY_DURATION);
   const reactionAnim = useRef(new Animated.Value(0)).current;
   const reactionScale = useRef(new Animated.Value(0)).current;
   const panY = useRef(new Animated.Value(0)).current;
@@ -77,13 +81,16 @@ export default function StoryViewerScreen() {
   const goNextRef = useRef<() => void>(() => {});
   const goPrevRef = useRef<() => void>(() => {});
 
-  // Swipe gesture handler: horizontal = navigate, vertical up = reactions
+  // Swipe gesture handler: horizontal = navigate, vertical up = reactions, tap = navigate
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => {
-        return Math.abs(gs.dx) > 15 || (Math.abs(gs.dy) > 20 && gs.dy < 0);
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        // Capture horizontal swipes aggressively
+        return Math.abs(gs.dx) > 10 || (Math.abs(gs.dy) > 15 && gs.dy < 0);
       },
+      onPanResponderGrant: () => {},
       onPanResponderMove: (_, gs) => {
         if (Math.abs(gs.dx) > Math.abs(gs.dy)) {
           panX.setValue(gs.dx);
@@ -91,14 +98,25 @@ export default function StoryViewerScreen() {
           panY.setValue(gs.dy);
         }
       },
-      onPanResponderRelease: (_, gs) => {
-        if (Math.abs(gs.dx) > Math.abs(gs.dy) && Math.abs(gs.dx) > 40) {
+      onPanResponderRelease: (evt, gs) => {
+        const isSwipe = Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5;
+        if (!isSwipe) {
+          // It's a tap - navigate based on position
+          const tapX = evt.nativeEvent.locationX;
+          if (tapX < width / 3) {
+            goPrevRef.current();
+          } else {
+            goNextRef.current();
+          }
+        } else if (Math.abs(gs.dx) > Math.abs(gs.dy) && Math.abs(gs.dx) > 40) {
+          // Horizontal swipe
           if (gs.dx < 0) {
             goNextRef.current();
           } else {
             goPrevRef.current();
           }
         } else if (gs.dy < -60) {
+          // Swipe up → show reactions
           setShowReactions(true);
           if (timerRef.current) clearInterval(timerRef.current);
         }
@@ -157,21 +175,29 @@ export default function StoryViewerScreen() {
   const startTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     setProgress(0);
+    const duration = storyDuration;
     const interval = 50;
     let elapsed = 0;
     timerRef.current = setInterval(() => {
       elapsed += interval;
-      setProgress(elapsed / STORY_DURATION);
-      if (elapsed >= STORY_DURATION) {
+      setProgress(elapsed / duration);
+      if (elapsed >= duration) {
         goNext();
       }
     }, interval);
   };
 
   useEffect(() => {
-    if (!isLoading && allUserStories.length > 0) startTimer();
+    if (!isLoading && allUserStories.length > 0) {
+      // Reset duration for new story
+      const currentStory = allUserStories[currentUserIdx]?.stories[currentStoryIdx];
+      if (currentStory?.type !== 'video') {
+        setStoryDuration(STORY_DURATION);
+      }
+      startTimer();
+    }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [currentUserIdx, currentStoryIdx, isLoading]);
+  }, [currentUserIdx, currentStoryIdx, isLoading, storyDuration]);
 
   const goNext = () => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -202,12 +228,6 @@ export default function StoryViewerScreen() {
   useEffect(() => { goNextRef.current = goNext; });
   useEffect(() => { goPrevRef.current = goPrev; });
 
-  const handleTap = (e: any) => {
-    const tapX = e.nativeEvent.locationX;
-    if (tapX < width / 3) goPrev();
-    else goNext();
-  };
-
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -231,13 +251,15 @@ export default function StoryViewerScreen() {
       <StatusBar hidden />
       
       {/* Media content */}
-      <TouchableOpacity activeOpacity={1} onPress={handleTap} style={StyleSheet.absoluteFill}>
+      <View style={StyleSheet.absoluteFill}>
         {isVideo ? (
-          <StoryVideoPlayer url={mediaUrl} />
+          <StoryVideoPlayer url={mediaUrl} onDurationReady={(ms) => {
+            if (ms > 0 && ms !== storyDuration) setStoryDuration(ms);
+          }} />
         ) : (
           <Image source={{ uri: mediaUrl }} style={styles.fullMedia} resizeMode="cover" />
         )}
-      </TouchableOpacity>
+      </View>
 
       {/* Top overlay with progress and user info */}
       <SafeAreaView edges={['top']} style={styles.topOverlay} pointerEvents="box-none">

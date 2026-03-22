@@ -876,7 +876,7 @@ async def get_comments(post_id: str, current_user: dict = Depends(get_current_us
 # ==================== STORIES ====================
 
 class StoryCreate(BaseModel):
-    media: str  # base64
+    media: str  # URL from /api/upload or base64
     type: str = "photo"  # photo or video
 
 class StoryResponse(BaseModel):
@@ -890,9 +890,64 @@ class StoryResponse(BaseModel):
     created_at: datetime
     expires_at: datetime
 
-@api_router.post("/stories", response_model=StoryResponse)
+STORY_MAX_DURATION = 60  # seconds per story clip
+
+def split_video_into_segments(input_path: str, max_duration: int = STORY_MAX_DURATION) -> list:
+    """Split a video into segments of max_duration seconds. Returns list of output file paths."""
+    import json as _json
+    # Get video duration
+    probe = subprocess.run(
+        ['/usr/bin/ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', input_path],
+        capture_output=True, text=True, timeout=15
+    )
+    if probe.returncode != 0:
+        return [input_path]
+    
+    try:
+        duration = float(_json.loads(probe.stdout)['format']['duration'])
+    except (KeyError, ValueError):
+        return [input_path]
+    
+    if duration <= max_duration:
+        return [input_path]
+    
+    segments = []
+    num_segments = int(duration // max_duration) + (1 if duration % max_duration > 0 else 0)
+    base_dir = os.path.dirname(input_path)
+    base_name = os.path.splitext(os.path.basename(input_path))[0]
+    
+    for i in range(num_segments):
+        start = i * max_duration
+        seg_filename = f"{base_name}_seg{i}.mp4"
+        seg_path = os.path.join(base_dir, seg_filename)
+        
+        cmd = [
+            FFMPEG_PATH, '-y', '-i', input_path,
+            '-ss', str(start), '-t', str(max_duration),
+            '-c:v', 'libx264', '-profile:v', 'main', '-level', '4.0',
+            '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', '26',
+            '-c:a', 'aac', '-b:a', '64k',
+            '-movflags', '+faststart',
+            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+            seg_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, timeout=120)
+        if result.returncode == 0 and os.path.exists(seg_path):
+            segments.append(seg_path)
+        else:
+            logger.warning(f"Segment {i} split failed")
+    
+    # Remove original if we got segments
+    if segments:
+        try:
+            os.remove(input_path)
+        except Exception:
+            pass
+    
+    return segments if segments else [input_path]
+
+@api_router.post("/stories")
 async def create_story(data: StoryCreate, current_user: dict = Depends(get_current_user)):
-    story_id = str(uuid.uuid4())
     now = datetime.utcnow()
     
     # Convert base64 media to file if needed
@@ -905,6 +960,7 @@ async def create_story(data: StoryCreate, current_user: dict = Depends(get_curre
                 ext = 'mp4'
             elif 'png' in header:
                 ext = 'png'
+            story_id = str(uuid.uuid4())
             filename = f"story_{story_id}.{ext}"
             filepath = UPLOADS_DIR / filename
             import base64 as b64mod
@@ -914,47 +970,80 @@ async def create_story(data: StoryCreate, current_user: dict = Depends(get_curre
         except Exception as e:
             logger.error(f"Failed to save story media: {e}")
     
-    story = {
-        "id": story_id,
-        "user_id": current_user["id"],
-        "media": media_value,
-        "thumbnail": None,
-        "type": data.type,
-        "views_count": 0,
-        "created_at": now,
-        "expires_at": now + timedelta(hours=24)
-    }
+    created_stories = []
     
-    # Generate thumbnail for video stories
+    # For videos: split into 60s segments if needed, compress, generate thumbnails
     if data.type == "video" and media_value and media_value.startswith("/api/uploads/"):
+        video_filename = media_value.replace("/api/uploads/", "")
+        video_path = UPLOADS_DIR / video_filename
+        
         try:
-            video_filename = media_value.replace("/api/uploads/", "")
-            video_path = UPLOADS_DIR / video_filename
-            thumb_filename = f"thumb_{story_id}.jpg"
-            thumb_path = UPLOADS_DIR / thumb_filename
             import asyncio as _asyncio
-            # First compress the video to H.264 for iOS compatibility
-            compressed_name = await _asyncio.to_thread(compress_video, str(video_path))
-            if compressed_name != video_filename:
-                story["media"] = f"/api/uploads/{compressed_name}"
-                media_value = story["media"]
-                video_path = UPLOADS_DIR / compressed_name
-            # Generate thumbnail
-            if generate_video_thumbnail(str(video_path), str(thumb_path)):
-                story["thumbnail"] = f"/api/uploads/{thumb_filename}"
+            # Split video into 60s segments
+            segments = await _asyncio.to_thread(split_video_into_segments, str(video_path))
+            
+            for seg_path in segments:
+                seg_id = str(uuid.uuid4())
+                seg_filename = os.path.basename(seg_path)
+                
+                # Compress to H.264
+                compressed_name = await _asyncio.to_thread(compress_video, seg_path)
+                final_path = UPLOADS_DIR / compressed_name
+                
+                # Generate thumbnail
+                thumb_filename = f"thumb_{seg_id}.jpg"
+                thumb_path = UPLOADS_DIR / thumb_filename
+                thumb_url = None
+                if generate_video_thumbnail(str(final_path), str(thumb_path)):
+                    thumb_url = f"/api/uploads/{thumb_filename}"
+                
+                story = {
+                    "id": seg_id,
+                    "user_id": current_user["id"],
+                    "media": f"/api/uploads/{compressed_name}",
+                    "thumbnail": thumb_url,
+                    "type": "video",
+                    "views_count": 0,
+                    "created_at": now,
+                    "expires_at": now + timedelta(hours=24),
+                }
+                await db.stories.insert_one(story)
+                story.pop("_id", None)
+                story["user"] = {
+                    "id": current_user["id"],
+                    "username": current_user["username"],
+                    "name": current_user["name"],
+                    "profile_image": current_user.get("profile_image"),
+                }
+                created_stories.append(story)
         except Exception as e:
             logger.error(f"Story video processing failed: {e}")
     
-    await db.stories.insert_one(story)
+    # Single photo or fallback
+    if not created_stories:
+        story_id = str(uuid.uuid4())
+        story = {
+            "id": story_id,
+            "user_id": current_user["id"],
+            "media": media_value,
+            "thumbnail": None,
+            "type": data.type,
+            "views_count": 0,
+            "created_at": now,
+            "expires_at": now + timedelta(hours=24),
+        }
+        await db.stories.insert_one(story)
+        story.pop("_id", None)
+        story["user"] = {
+            "id": current_user["id"],
+            "username": current_user["username"],
+            "name": current_user["name"],
+            "profile_image": current_user.get("profile_image"),
+        }
+        created_stories.append(story)
     
-    story["user"] = {
-        "id": current_user["id"],
-        "username": current_user["username"],
-        "name": current_user["name"],
-        "profile_image": current_user.get("profile_image")
-    }
-    
-    return StoryResponse(**story)
+    # Return first story (for backward compatibility) or all
+    return created_stories[0]
 
 @api_router.get("/stories", response_model=List[dict])
 async def get_stories(current_user: dict = Depends(get_current_user)):
