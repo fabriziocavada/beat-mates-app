@@ -152,6 +152,25 @@ function UserStoryPage({
         </View>
       </SafeAreaView>
 
+      {/* Instagram-style viewers section with reactions */}
+      <View style={styles.viewersSection}>
+        <View style={styles.viewersAvatars}>
+          {/* Mock viewer avatars - in real app these would come from API */}
+          <View style={[styles.viewerAvatar, { zIndex: 3 }]}>
+            <View style={[styles.viewerAvatarInner, { backgroundColor: '#FF6B6B' }]} />
+          </View>
+          <View style={[styles.viewerAvatar, { marginLeft: -10, zIndex: 2 }]}>
+            <View style={[styles.viewerAvatarInner, { backgroundColor: '#4ECDC4' }]} />
+          </View>
+          <View style={[styles.viewerAvatar, { marginLeft: -10, zIndex: 1 }]}>
+            <View style={[styles.viewerAvatarInner, { backgroundColor: '#45B7D1' }]} />
+          </View>
+        </View>
+        <View style={styles.reactionsPreview}>
+          <Text style={styles.reactionsText}>❤️❤️❤️❤️❤️❤️❤️</Text>
+        </View>
+      </View>
+
       {/* Instagram-style bottom bar */}
       <SafeAreaView edges={['bottom']} style={styles.bottomBar} pointerEvents="box-none">
         <View style={styles.bottomBarContent}>
@@ -329,11 +348,20 @@ export default function StoryViewerScreen() {
     startTimer();
   };
 
-  // Send message to story owner
-  const onSendMessage = (message: string) => {
+  // Send message to story owner - create/find conversation first
+  const onSendMessage = async (message: string) => {
     const currentUser = allUserStories[currentUserIdx];
-    // Navigate to chat with this user
-    router.push(`/(main)/chat/${currentUser.user_id}`);
+    try {
+      // Create or find conversation with this user
+      const res = await api.post('/conversations', { other_user_id: currentUser.user_id });
+      const conversationId = res.data.id;
+      // Send the message
+      await api.post(`/conversations/${conversationId}/messages`, { text: message });
+      // Navigate to chat
+      router.push(`/(main)/chat/${conversationId}`);
+    } catch (e) {
+      console.error('Failed to send message', e);
+    }
   };
 
   // Like story
@@ -567,5 +595,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 100,
+  },
+  // Instagram-style viewers section
+  viewersSection: {
+    position: 'absolute',
+    bottom: 100,
+    left: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 25,
+  },
+  viewersAvatars: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  viewerAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#000',
+    overflow: 'hidden',
+  },
+  viewerAvatarInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 14,
+  },
+  reactionsPreview: {
+    marginLeft: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  reactionsText: {
+    fontSize: 14,
   },
 });
