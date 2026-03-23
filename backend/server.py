@@ -1152,6 +1152,28 @@ async def react_to_story(story_id: str, data: dict, current_user: dict = Depends
     
     return {"message": "Reaction sent"}
 
+@api_router.get("/stories/{story_id}/reactions")
+async def get_story_reactions(story_id: str, current_user: dict = Depends(get_current_user)):
+    """Get reactions and viewers for a story"""
+    story = await db.stories.find_one({"id": story_id}, {"_id": 0})
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    
+    # Get reactions with user info
+    reactions = await db.story_reactions.find(
+        {"story_id": story_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    
+    # Enrich with user data
+    for r in reactions:
+        user = await db.users.find_one({"id": r["user_id"]}, {"_id": 0, "id": 1, "username": 1, "profile_image": 1})
+        r["user"] = user
+    
+    return {
+        "reactions": reactions,
+        "views_count": story.get("views_count", 0)
+    }
+
 
 # ==================== AVAILABILITY & BOOKINGS ====================
 

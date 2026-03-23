@@ -55,6 +55,48 @@ function UserStoryPage({
 }) {
   const story = userStories.stories[storyIdx];
   const [messageText, setMessageText] = useState('');
+  const [reactions, setReactions] = useState<any[]>([]);
+  const [currentReactionIdx, setCurrentReactionIdx] = useState(0);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  
+  // Load reactions for current story
+  useEffect(() => {
+    if (story?.id && isActive) {
+      loadReactions();
+    }
+  }, [story?.id, isActive]);
+
+  // Animate through reactions (rotate every 2 seconds like Instagram)
+  useEffect(() => {
+    if (reactions.length <= 1) return;
+    const interval = setInterval(() => {
+      // Fade out
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(() => {
+        setCurrentReactionIdx(prev => (prev + 1) % reactions.length);
+        // Fade in
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      });
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [reactions.length]);
+
+  const loadReactions = async () => {
+    try {
+      const res = await api.get(`/stories/${story.id}/reactions`);
+      setReactions(res.data.reactions || []);
+    } catch (e) {
+      // Story might not have reactions endpoint yet, fail silently
+    }
+  };
+
   if (!story) return null;
   const mediaUrl = getMediaUrl(story.media) || '';
   const isVideo = story.type === 'video';
@@ -153,23 +195,29 @@ function UserStoryPage({
       </SafeAreaView>
 
       {/* Instagram-style viewers section with reactions */}
-      <View style={styles.viewersSection}>
-        <View style={styles.viewersAvatars}>
-          {/* Mock viewer avatars - in real app these would come from API */}
-          <View style={[styles.viewerAvatar, { zIndex: 3 }]}>
-            <View style={[styles.viewerAvatarInner, { backgroundColor: '#FF6B6B' }]} />
+      {reactions.length > 0 && (
+        <Animated.View style={[styles.viewersSection, { opacity: fadeAnim }]}>
+          <View style={styles.viewersAvatars}>
+            {reactions.slice(0, 3).map((r, i) => (
+              <View key={r.id} style={[styles.viewerAvatar, { zIndex: 3 - i, marginLeft: i > 0 ? -10 : 0 }]}>
+                {r.user?.profile_image ? (
+                  <Image 
+                    source={{ uri: getMediaUrl(r.user.profile_image) || '' }} 
+                    style={styles.viewerAvatarInner} 
+                  />
+                ) : (
+                  <View style={[styles.viewerAvatarInner, { backgroundColor: ['#FF6B6B', '#4ECDC4', '#45B7D1'][i] }]} />
+                )}
+              </View>
+            ))}
           </View>
-          <View style={[styles.viewerAvatar, { marginLeft: -10, zIndex: 2 }]}>
-            <View style={[styles.viewerAvatarInner, { backgroundColor: '#4ECDC4' }]} />
+          <View style={styles.reactionsPreview}>
+            <Text style={styles.reactionsText}>
+              {reactions[currentReactionIdx]?.emoji || '❤️'} {reactions[currentReactionIdx]?.user?.username || ''}
+            </Text>
           </View>
-          <View style={[styles.viewerAvatar, { marginLeft: -10, zIndex: 1 }]}>
-            <View style={[styles.viewerAvatarInner, { backgroundColor: '#45B7D1' }]} />
-          </View>
-        </View>
-        <View style={styles.reactionsPreview}>
-          <Text style={styles.reactionsText}>❤️❤️❤️❤️❤️❤️❤️</Text>
-        </View>
-      </View>
+        </Animated.View>
+      )}
 
       {/* Instagram-style bottom bar */}
       <SafeAreaView edges={['bottom']} style={styles.bottomBar} pointerEvents="box-none">
@@ -336,9 +384,16 @@ export default function StoryViewerScreen() {
   };
 
   // Handle reaction selection
-  const onReactionSelect = (emoji: string) => {
+  const onReactionSelect = async (emoji: string) => {
     setShowReactions(false);
-    // TODO: Send reaction to backend if needed
+    const currentStory = allUserStories[currentUserIdx]?.stories[currentStoryIdx];
+    if (currentStory?.id) {
+      try {
+        await api.post(`/stories/${currentStory.id}/react`, { emoji });
+      } catch (e) {
+        console.error('Failed to send reaction', e);
+      }
+    }
     startTimer(); // Resume timer after reaction
   };
 
@@ -352,8 +407,8 @@ export default function StoryViewerScreen() {
   const onSendMessage = async (message: string) => {
     const currentUser = allUserStories[currentUserIdx];
     try {
-      // Create or find conversation with this user
-      const res = await api.post('/conversations', { other_user_id: currentUser.user_id });
+      // Create or find conversation with this user (backend expects "user_id")
+      const res = await api.post('/conversations', { user_id: currentUser.user_id });
       const conversationId = res.data.id;
       // Send the message
       await api.post(`/conversations/${conversationId}/messages`, { text: message });
