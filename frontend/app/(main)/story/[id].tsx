@@ -46,13 +46,15 @@ function StoryVideoPlayer({ url, isActive }: { url: string; isActive: boolean })
 
 // Single user's story page (rendered inside the horizontal pager)
 function UserStoryPage({
-  userStories, storyIdx, progress, isActive, onTap, onClose, onSwipeUp, onSwipeDown
+  userStories, storyIdx, progress, isActive, onTap, onClose, onSwipeUp, onSwipeDown, onSendMessage, onLike, onShare
 }: {
   userStories: UserStories; storyIdx: number; progress: number;
   isActive: boolean; onTap: (side: 'left' | 'right') => void; onClose: () => void;
   onSwipeUp: () => void; onSwipeDown: () => void;
+  onSendMessage: (message: string) => void; onLike: () => void; onShare: () => void;
 }) {
   const story = userStories.stories[storyIdx];
+  const [messageText, setMessageText] = useState('');
   if (!story) return null;
   const mediaUrl = getMediaUrl(story.media) || '';
   const isVideo = story.type === 'video';
@@ -79,6 +81,13 @@ function UserStoryPage({
     // Only handle tap if it wasn't a swipe
     if (!wasSwipe.current) {
       onTap(side);
+    }
+  };
+
+  const handleSendMessage = () => {
+    if (messageText.trim()) {
+      onSendMessage(messageText.trim());
+      setMessageText('');
     }
   };
 
@@ -151,16 +160,19 @@ function UserStoryPage({
               style={styles.messageInput}
               placeholder="Invia messaggio..."
               placeholderTextColor="rgba(255,255,255,0.6)"
-              editable={false}
+              value={messageText}
+              onChangeText={setMessageText}
+              onSubmitEditing={handleSendMessage}
+              returnKeyType="send"
             />
           </View>
-          <TouchableOpacity style={styles.bottomIcon} onPress={onSwipeUp}>
+          <TouchableOpacity style={styles.bottomIcon} onPress={onLike}>
             <Ionicons name="heart-outline" size={26} color="#fff" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.bottomIcon}>
-            <Ionicons name="chatbubble-outline" size={24} color="#fff" />
+          <TouchableOpacity style={styles.bottomIcon} onPress={onSwipeUp}>
+            <Ionicons name="happy-outline" size={24} color="#fff" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.bottomIcon}>
+          <TouchableOpacity style={styles.bottomIcon} onPress={onShare}>
             <Ionicons name="paper-plane-outline" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
@@ -178,9 +190,11 @@ export default function StoryViewerScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   const [showReactions, setShowReactions] = useState(false);
+  const [likedStory, setLikedStory] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pagerRef = useRef<FlatList>(null);
   const isScrolling = useRef(false);
+  const scrollX = useRef(new Animated.Value(0)).current;
 
   // Load stories
   useEffect(() => {
@@ -315,6 +329,27 @@ export default function StoryViewerScreen() {
     startTimer();
   };
 
+  // Send message to story owner
+  const onSendMessage = (message: string) => {
+    const currentUser = allUserStories[currentUserIdx];
+    // Navigate to chat with this user
+    router.push(`/(main)/chat/${currentUser.user_id}`);
+  };
+
+  // Like story
+  const onLike = () => {
+    setLikedStory(true);
+    // Show heart animation briefly
+    setTimeout(() => setLikedStory(false), 1000);
+    // TODO: Send like to backend
+  };
+
+  // Share story
+  const onShare = () => {
+    // For now, just show a placeholder - could implement sharing
+    // TODO: Implement share functionality
+  };
+
   if (isLoading) {
     return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={Colors.primary} /></View>;
   }
@@ -323,8 +358,8 @@ export default function StoryViewerScreen() {
     <View style={styles.container}>
       <StatusBar hidden />
 
-      {/* Horizontal pager - SWIPE LEFT/RIGHT = CHANGE USER (native scroll) */}
-      <FlatList
+      {/* Horizontal pager with 3D cube transition */}
+      <Animated.FlatList
         ref={pagerRef}
         data={allUserStories}
         horizontal
@@ -333,33 +368,68 @@ export default function StoryViewerScreen() {
         bounces={false}
         keyExtractor={(item) => item.user_id}
         getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+          { useNativeDriver: true }
+        )}
         onScrollBeginDrag={() => { isScrolling.current = true; if (timerRef.current) clearInterval(timerRef.current); }}
         onMomentumScrollEnd={onScrollEnd}
-        renderItem={({ item, index }) => (
-          <UserStoryPage
-            userStories={item}
-            storyIdx={index === currentUserIdx ? currentStoryIdx : 0}
-            progress={index === currentUserIdx ? progress : 0}
-            isActive={index === currentUserIdx}
-            onTap={onTap}
-            onClose={onClose}
-            onSwipeUp={onSwipeUp}
-            onSwipeDown={onSwipeDown}
-          />
-        )}
+        renderItem={({ item, index }) => {
+          // 3D cube transition effect
+          const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
+          const rotateY = scrollX.interpolate({
+            inputRange,
+            outputRange: ['45deg', '0deg', '-45deg'],
+            extrapolate: 'clamp',
+          });
+          const scale = scrollX.interpolate({
+            inputRange,
+            outputRange: [0.9, 1, 0.9],
+            extrapolate: 'clamp',
+          });
+          const opacity = scrollX.interpolate({
+            inputRange,
+            outputRange: [0.6, 1, 0.6],
+            extrapolate: 'clamp',
+          });
+
+          return (
+            <Animated.View style={{
+              width,
+              height,
+              transform: [
+                { perspective: 1000 },
+                { rotateY },
+                { scale },
+              ],
+              opacity,
+            }}>
+              <UserStoryPage
+                userStories={item}
+                storyIdx={index === currentUserIdx ? currentStoryIdx : 0}
+                progress={index === currentUserIdx ? progress : 0}
+                isActive={index === currentUserIdx}
+                onTap={onTap}
+                onClose={onClose}
+                onSwipeUp={onSwipeUp}
+                onSwipeDown={onSwipeDown}
+                onSendMessage={onSendMessage}
+                onLike={onLike}
+                onShare={onShare}
+              />
+            </Animated.View>
+          );
+        }}
       />
 
+      {/* Like animation */}
+      {likedStory && (
+        <View style={styles.likeAnimation}>
+          <Animated.Text style={{ fontSize: 80 }}>❤️</Animated.Text>
+        </View>
+      )}
+
       {/* Arrow buttons for changing user */}
-      {currentUserIdx > 0 && (
-        <TouchableOpacity style={styles.arrowLeft} onPress={goPrevUser} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={30} color="rgba(255,255,255,0.8)" />
-        </TouchableOpacity>
-      )}
-      {currentUserIdx < allUserStories.length - 1 && (
-        <TouchableOpacity style={styles.arrowRight} onPress={goNextUser} activeOpacity={0.7}>
-          <Ionicons name="chevron-forward" size={30} color="rgba(255,255,255,0.8)" />
-        </TouchableOpacity>
-      )}
 
       {/* Instagram-style Reactions Modal (Swipe UP) */}
       <Modal
@@ -488,5 +558,14 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  likeAnimation: {
+    position: 'absolute',
+    top: '40%',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
   },
 });
