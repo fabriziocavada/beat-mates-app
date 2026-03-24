@@ -8,6 +8,7 @@ import {
   Text,
   TouchableOpacity,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -18,6 +19,7 @@ import AvailableTeacherCard from '../../src/components/AvailableTeacherCard';
 import ReviewsPopup from '../../src/components/ReviewsPopup';
 import GroupLessonCard from '../../src/components/GroupLessonCard';
 import PaymentModal from '../../src/components/PaymentModal';
+import RecordedLessonCard from '../../src/components/RecordedLessonCard';
 import api from '../../src/services/api';
 import { useAuthStore } from '../../src/store/authStore';
 
@@ -51,7 +53,25 @@ interface GroupLesson {
   status: string;
 }
 
-type SubTab = 'live' | 'lessons';
+type SubTab = 'live' | 'lessons' | 'recorded';
+
+// Category filters for recorded lessons
+const DANCE_CATEGORIES = [
+  { id: 'all', name: 'Tutte' },
+  { id: 'latino_americani', name: 'Latino Americani' },
+  { id: 'ballroom', name: 'Ballroom' },
+  { id: 'caraibiche', name: 'Caraibiche' },
+];
+
+interface CategoryData {
+  id: string;
+  name: string;
+  subcategories: {
+    id: string;
+    name: string;
+    lessons: any[];
+  }[];
+}
 
 export default function AvailableScreen() {
   const router = useRouter();
@@ -60,6 +80,8 @@ export default function AvailableScreen() {
   const [subTab, setSubTab] = useState<SubTab>('live');
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [groupLessons, setGroupLessons] = useState<GroupLesson[]>([]);
+  const [recordedCategories, setRecordedCategories] = useState<CategoryData[]>([]);
+  const [selectedFilter, setSelectedFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [reviewsPopup, setReviewsPopup] = useState<{ visible: boolean; userId: string; username: string }>({ visible: false, userId: '', username: '' });
@@ -89,9 +111,12 @@ export default function AvailableScreen() {
       if (subTab === 'live') {
         const response = await api.get('/available-teachers');
         setTeachers(response.data);
-      } else {
+      } else if (subTab === 'lessons') {
         const response = await api.get('/group-lessons');
         setGroupLessons(response.data);
+      } else if (subTab === 'recorded') {
+        const response = await api.get('/video-lessons/by-category');
+        setRecordedCategories(response.data);
       }
     } catch (error) {
       console.error('Failed to load data', error);
@@ -207,14 +232,92 @@ export default function AvailableScreen() {
           <Text style={styles.emptyTitle}>Nessun insegnante online</Text>
           <Text style={styles.emptyText}>Nessun insegnante è disponibile ora.{'\n'}Riprova più tardi.</Text>
         </>
-      ) : (
+      ) : subTab === 'lessons' ? (
         <>
           <Text style={styles.emptyTitle}>Nessuna lezione in programma</Text>
           <Text style={styles.emptyText}>Non ci sono lezioni di gruppo previste.{'\n'}Gli insegnanti possono crearne dal proprio profilo.</Text>
         </>
+      ) : (
+        <>
+          <Text style={styles.emptyTitle}>Nessuna lezione registrata</Text>
+          <Text style={styles.emptyText}>Non ci sono ancora lezioni registrate.{'\n'}Gli insegnanti possono caricarle dal proprio profilo.</Text>
+        </>
       )}
     </View>
   );
+
+  // Render Netflix-style carousel for a subcategory
+  const renderSubcategoryCarousel = (subcategory: { id: string; name: string; lessons: any[] }) => (
+    <View key={subcategory.id} style={styles.carouselSection}>
+      <Text style={styles.carouselTitle}>{subcategory.name}</Text>
+      <FlatList
+        horizontal
+        data={subcategory.lessons}
+        keyExtractor={(item) => item.id}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 16 }}
+        renderItem={({ item }) => (
+          <RecordedLessonCard
+            lesson={item}
+            onPress={() => router.push(`/(main)/lesson-player/${item.id}`)}
+            onInfoPress={() => Alert.alert(item.title, item.description || 'Nessuna descrizione')}
+            onUserPress={() => router.push(`/(main)/user/${item.user?.id}`)}
+          />
+        )}
+      />
+    </View>
+  );
+
+  // Render Netflix-style recorded lessons
+  const renderRecordedContent = () => {
+    // Filter categories based on selected filter
+    const filteredCategories = selectedFilter === 'all' 
+      ? recordedCategories 
+      : recordedCategories.filter(c => c.id === selectedFilter);
+
+    return (
+      <ScrollView 
+        style={{ flex: 1 }}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />
+        }
+      >
+        {/* Category filter chips */}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false} 
+          style={styles.filterContainer}
+          contentContainerStyle={{ paddingHorizontal: 16 }}
+        >
+          {DANCE_CATEGORIES.map((cat) => (
+            <TouchableOpacity
+              key={cat.id}
+              style={[styles.filterChip, selectedFilter === cat.id && styles.filterChipActive]}
+              onPress={() => setSelectedFilter(cat.id)}
+            >
+              <Text style={[styles.filterChipText, selectedFilter === cat.id && styles.filterChipTextActive]}>
+                {cat.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Netflix-style carousels */}
+        {filteredCategories.length === 0 ? (
+          renderEmpty()
+        ) : (
+          filteredCategories.map((category) => (
+            <View key={category.id} style={styles.categorySection}>
+              <Text style={styles.categoryTitle}>{category.name}</Text>
+              {category.subcategories.map(renderSubcategoryCarousel)}
+            </View>
+          ))
+        )}
+        
+        <View style={{ height: 100 }} />
+      </ScrollView>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -224,21 +327,28 @@ export default function AvailableScreen() {
         onMessagesPress={() => console.log('Messages')}
       />
 
-      {/* Sub-tabs: Live Ora / Lezioni */}
+      {/* Sub-tabs: Live Ora / Lezioni / Registrate */}
       <View style={styles.subTabs}>
         <TouchableOpacity
           style={[styles.subTab, subTab === 'live' && styles.subTabActive]}
           onPress={() => { setIsLoading(true); setSubTab('live'); }}
           data-testid="tab-live"
         >
-          <Text style={[styles.subTabText, subTab === 'live' && styles.subTabTextActive]}>Live Ora</Text>
+          <Text style={[styles.subTabText, subTab === 'live' && styles.subTabTextActive]}>Live</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.subTab, subTab === 'lessons' && styles.subTabActive]}
           onPress={() => { setIsLoading(true); setSubTab('lessons'); }}
           data-testid="tab-lessons"
         >
-          <Text style={[styles.subTabText, subTab === 'lessons' && styles.subTabTextActive]}>Lezioni</Text>
+          <Text style={[styles.subTabText, subTab === 'lessons' && styles.subTabTextActive]}>Gruppo</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.subTab, subTab === 'recorded' && styles.subTabActive]}
+          onPress={() => { setIsLoading(true); setSubTab('recorded'); }}
+          data-testid="tab-recorded"
+        >
+          <Text style={[styles.subTabText, subTab === 'recorded' && styles.subTabTextActive]}>Registrate</Text>
         </TouchableOpacity>
       </View>
 
@@ -257,7 +367,7 @@ export default function AvailableScreen() {
           }
           showsVerticalScrollIndicator={false}
         />
-      ) : (
+      ) : subTab === 'lessons' ? (
         <FlatList
           data={groupLessons}
           renderItem={renderGroupLesson}
@@ -269,6 +379,8 @@ export default function AvailableScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingVertical: 8 }}
         />
+      ) : (
+        renderRecordedContent()
       )}
 
       <TabBar activeTab="available" onTabPress={handleTabPress} />
@@ -343,5 +455,48 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     lineHeight: 24,
+  },
+  // Netflix-style carousels
+  filterContainer: {
+    paddingVertical: 12,
+  },
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    marginRight: 8,
+  },
+  filterChipActive: {
+    backgroundColor: Colors.primary,
+  },
+  filterChipText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  filterChipTextActive: {
+    color: '#fff',
+  },
+  categorySection: {
+    marginBottom: 24,
+  },
+  categoryTitle: {
+    color: Colors.primary,
+    fontSize: 20,
+    fontWeight: '700',
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  carouselSection: {
+    marginBottom: 20,
+  },
+  carouselTitle: {
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+    paddingHorizontal: 16,
+    marginBottom: 12,
   },
 });

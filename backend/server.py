@@ -2491,8 +2491,12 @@ async def create_video_lesson(
     return VideoLessonResponse(**lesson)
 
 @api_router.get("/video-lessons", response_model=List[VideoLessonResponse])
-async def list_video_lessons(user_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
-    query = {"user_id": user_id} if user_id else {}
+async def list_video_lessons(user_id: Optional[str] = None, category: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    query = {}
+    if user_id:
+        query["user_id"] = user_id
+    if category:
+        query["dance_category"] = category
     lessons = await db.video_lessons.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
     for lesson in lessons:
         u = await db.users.find_one({"id": lesson["user_id"]}, {"_id": 0, "id": 1, "username": 1, "name": 1, "profile_image": 1})
@@ -2500,6 +2504,110 @@ async def list_video_lessons(user_id: Optional[str] = None, current_user: dict =
         lesson.setdefault("reviews_count", 0)
         lesson.setdefault("avg_rating", 0.0)
     return [VideoLessonResponse(**l) for l in lessons]
+
+@api_router.get("/video-lessons/by-category")
+async def list_video_lessons_by_category(current_user: dict = Depends(get_current_user)):
+    """Get all video lessons grouped by dance category for Netflix-style display"""
+    lessons = await db.video_lessons.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    
+    # Enrich with user data
+    for lesson in lessons:
+        u = await db.users.find_one({"id": lesson["user_id"]}, {"_id": 0, "id": 1, "username": 1, "name": 1, "profile_image": 1})
+        lesson["user"] = u
+        lesson.setdefault("reviews_count", 0)
+        lesson.setdefault("avg_rating", 0.0)
+    
+    # Group by category
+    categories = {
+        "latino_americani": {
+            "name": "Latino Americani",
+            "subcategories": {
+                "samba": [],
+                "cha_cha": [],
+                "rumba": [],
+                "paso_doble": [],
+                "jive": [],
+            }
+        },
+        "ballroom": {
+            "name": "Ballroom",
+            "subcategories": {
+                "slow_waltz": [],
+                "tango": [],
+                "viennese_waltz": [],
+                "slow_foxtrot": [],
+                "quickstep": [],
+            }
+        },
+        "caraibiche": {
+            "name": "Danze Caraibiche",
+            "subcategories": {
+                "salsa_cubana": [],
+                "salsa_portoricana": [],
+                "bachata": [],
+                "rumba_cubana": [],
+                "son": [],
+                "merengue": [],
+            }
+        },
+        "other": {
+            "name": "Altre Danze",
+            "subcategories": {
+                "other": [],
+            }
+        }
+    }
+    
+    # Map dance categories to subcategories
+    category_mapping = {
+        "samba": ("latino_americani", "samba"),
+        "cha cha": ("latino_americani", "cha_cha"),
+        "cha-cha": ("latino_americani", "cha_cha"),
+        "rumba": ("latino_americani", "rumba"),
+        "paso doble": ("latino_americani", "paso_doble"),
+        "jive": ("latino_americani", "jive"),
+        "slow waltz": ("ballroom", "slow_waltz"),
+        "waltz": ("ballroom", "slow_waltz"),
+        "tango": ("ballroom", "tango"),
+        "viennese waltz": ("ballroom", "viennese_waltz"),
+        "slow foxtrot": ("ballroom", "slow_foxtrot"),
+        "foxtrot": ("ballroom", "slow_foxtrot"),
+        "quickstep": ("ballroom", "quickstep"),
+        "salsa cubana": ("caraibiche", "salsa_cubana"),
+        "salsa portoricana": ("caraibiche", "salsa_portoricana"),
+        "salsa": ("caraibiche", "salsa_cubana"),
+        "bachata": ("caraibiche", "bachata"),
+        "son": ("caraibiche", "son"),
+        "merengue": ("caraibiche", "merengue"),
+    }
+    
+    for lesson in lessons:
+        cat = (lesson.get("dance_category") or "").lower().strip()
+        if cat in category_mapping:
+            main_cat, sub_cat = category_mapping[cat]
+            categories[main_cat]["subcategories"][sub_cat].append(lesson)
+        else:
+            categories["other"]["subcategories"]["other"].append(lesson)
+    
+    # Convert to list format for frontend
+    result = []
+    for cat_id, cat_data in categories.items():
+        subcats = []
+        for sub_id, sub_lessons in cat_data["subcategories"].items():
+            if sub_lessons:  # Only include if has lessons
+                subcats.append({
+                    "id": sub_id,
+                    "name": sub_id.replace("_", " ").title(),
+                    "lessons": sub_lessons
+                })
+        if subcats:  # Only include category if has subcategories with lessons
+            result.append({
+                "id": cat_id,
+                "name": cat_data["name"],
+                "subcategories": subcats
+            })
+    
+    return result
 
 @api_router.get("/users/{user_id}/video-lessons", response_model=List[VideoLessonResponse])
 async def get_user_video_lessons(user_id: str, current_user: dict = Depends(get_current_user)):
