@@ -20,8 +20,8 @@ const REACTIONS = ['❤️', '😂', '😮', '😢', '👏', '🔥'];
 type StoryData = { id: string; media: string; thumbnail?: string; type: string; created_at: string };
 type UserStories = { user_id: string; username: string; profile_image: string | null; stories: StoryData[] };
 
-// Video player
-function StoryVideoPlayer({ url, isActive }: { url: string; isActive: boolean }) {
+// Video player with pause support
+function StoryVideoPlayer({ url, isActive, isPaused }: { url: string; isActive: boolean; isPaused?: boolean }) {
   const [loading, setLoading] = useState(true);
   return (
     <View style={StyleSheet.absoluteFill}>
@@ -29,7 +29,7 @@ function StoryVideoPlayer({ url, isActive }: { url: string; isActive: boolean })
         source={{ uri: url }}
         style={StyleSheet.absoluteFill}
         resizeMode={ResizeMode.COVER}
-        shouldPlay={isActive}
+        shouldPlay={isActive && !isPaused}
         isLooping
         isMuted={false}
         onLoad={() => setLoading(false)}
@@ -46,12 +46,13 @@ function StoryVideoPlayer({ url, isActive }: { url: string; isActive: boolean })
 
 // Single user's story page (rendered inside the horizontal pager)
 function UserStoryPage({
-  userStories, storyIdx, progress, isActive, onTap, onClose, onSwipeUp, onSwipeDown, onSendMessage, onLike, onShare
+  userStories, storyIdx, progress, isActive, onTap, onClose, onSwipeUp, onSwipeDown, onSendMessage, onLike, onShare, onHoldStart, onHoldEnd, isPaused
 }: {
   userStories: UserStories; storyIdx: number; progress: number;
   isActive: boolean; onTap: (side: 'left' | 'right') => void; onClose: () => void;
   onSwipeUp: () => void; onSwipeDown: () => void;
   onSendMessage: (message: string) => void; onLike: () => void; onShare: () => void;
+  onHoldStart: () => void; onHoldEnd: () => void; isPaused: boolean;
 }) {
   const story = userStories.stories[storyIdx];
   const [messageText, setMessageText] = useState('');
@@ -137,13 +138,13 @@ function UserStoryPage({
     <View style={{ width, height, backgroundColor: '#000' }}>
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         {isVideo ? (
-          <StoryVideoPlayer key={story.id} url={mediaUrl} isActive={isActive} />
+          <StoryVideoPlayer key={story.id} url={mediaUrl} isActive={isActive} isPaused={isPaused} />
         ) : (
           <Image source={{ uri: mediaUrl }} style={styles.fullMedia} resizeMode="cover" />
         )}
       </View>
 
-      {/* Tap zones with vertical swipe detection */}
+      {/* Tap zones with vertical swipe detection and long press for pause */}
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
         <View style={{ flexDirection: 'row', flex: 1 }}>
           <TouchableOpacity
@@ -152,13 +153,22 @@ function UserStoryPage({
             onPressIn={handlePressIn}
             onPressOut={handlePressOut}
             onPress={() => handleTap('left')}
+            onLongPress={onHoldStart}
+            delayLongPress={150}
           />
           <TouchableOpacity
             style={{ flex: 2 }}
             activeOpacity={1}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
+            onPressIn={(e) => {
+              handlePressIn(e);
+            }}
+            onPressOut={(e) => {
+              handlePressOut(e);
+              if (isPaused) onHoldEnd();
+            }}
             onPress={() => handleTap('right')}
+            onLongPress={onHoldStart}
+            delayLongPress={150}
           />
         </View>
       </View>
@@ -258,10 +268,12 @@ export default function StoryViewerScreen() {
   const [progress, setProgress] = useState(0);
   const [showReactions, setShowReactions] = useState(false);
   const [likedStory, setLikedStory] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pagerRef = useRef<FlatList>(null);
   const isScrolling = useRef(false);
   const scrollX = useRef(new Animated.Value(0)).current;
+  const pausedProgress = useRef(0);
 
   // Load stories
   useEffect(() => {
@@ -383,6 +395,32 @@ export default function StoryViewerScreen() {
     router.replace('/(main)/home');
   };
 
+  // Hold to pause (Instagram-style)
+  const onHoldStart = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      pausedProgress.current = progress;
+    }
+    setIsPaused(true);
+  };
+
+  const onHoldEnd = () => {
+    setIsPaused(false);
+    // Resume timer from where we left off
+    const story = allUserStories[currentUserIdx]?.stories[currentStoryIdx];
+    const isVid = story?.type === 'video';
+    const duration = isVid ? VIDEO_DURATION : PHOTO_DURATION;
+    let elapsed = pausedProgress.current * duration;
+    
+    timerRef.current = setInterval(() => {
+      elapsed += 50;
+      setProgress(elapsed / duration);
+      if (elapsed >= duration) {
+        goNextStory();
+      }
+    }, 50);
+  };
+
   // Handle reaction selection
   const onReactionSelect = async (emoji: string) => {
     setShowReactions(false);
@@ -499,6 +537,9 @@ export default function StoryViewerScreen() {
                 onSendMessage={onSendMessage}
                 onLike={onLike}
                 onShare={onShare}
+                onHoldStart={onHoldStart}
+                onHoldEnd={onHoldEnd}
+                isPaused={isPaused}
               />
             </Animated.View>
           );
