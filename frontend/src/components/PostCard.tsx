@@ -259,7 +259,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
                     data-testid={`carousel-tap-${post.id}-${index}`}
                   >
                     {isVid ? (
-                      <FeedVideoPlayer url={fullUrl} height={mediaHeight} isVisible={index === carouselIndex} muted={videoMuted} isPaused={isPaused} />
+                      <FeedVideoPlayer url={fullUrl} height={mediaHeight} isVisible={index === carouselIndex} muted={videoMuted} paused={isPaused} />
                     ) : (
                       <Image source={{ uri: fullUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                     )}
