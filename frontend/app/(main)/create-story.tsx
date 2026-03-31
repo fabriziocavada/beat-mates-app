@@ -72,17 +72,29 @@ export default function CreateStoryScreen() {
     }
   };
 
-  const handlePublish = async () => {
+  const handlePublish = async (data?: any) => {
     if (!mediaUri) { Alert.alert('Nessun media', 'Scegli una foto o registra un video'); return; }
     setIsLoading(true);
     try {
       const serverUrl = await uploadFile(mediaUri);
-      // Include editor data (texts, stickers, backgroundColor) if present
-      await api.post('/stories', { 
+      // Include editor data (texts, stickers, drawings, backgroundColor) if present
+      const storyData: any = { 
         media: serverUrl, 
         type: mediaType,
-        editor_data: editorData 
-      });
+      };
+      
+      // Add editor overlays if present
+      if (data) {
+        storyData.editor_data = {
+          texts: data.texts || [],
+          stickers: data.stickers || [],
+          drawings: data.drawings || [],
+          backgroundColor: data.backgroundColor || null,
+          caption: data.caption || '',
+        };
+      }
+      
+      await api.post('/stories', storyData);
       router.replace('/(main)/home');
     } catch (error: any) {
       console.error('Story error:', error.response?.data || error.message);
@@ -92,12 +104,12 @@ export default function CreateStoryScreen() {
     }
   };
 
-  // Handle editor save
+  // Handle editor save - pass data directly to avoid state timing issues
   const handleEditorSave = (data: any) => {
     setEditorData(data);
     setShowEditor(false);
-    // Auto-publish after editing
-    handlePublish();
+    // Pass data directly to handlePublish
+    handlePublish(data);
   };
 
   // Show editor when media is selected - Using Instagram-identical editor

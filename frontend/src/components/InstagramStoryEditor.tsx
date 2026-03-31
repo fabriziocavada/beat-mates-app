@@ -67,21 +67,11 @@ const STICKERS = [
   { icon: 'location-outline', label: 'Luogo', type: 'widget' },
   { icon: 'at', label: '@menzione', type: 'widget' },
   { icon: 'musical-notes', label: 'Musica', type: 'widget' },
-  { icon: 'images-outline', label: 'Foto', type: 'widget' },
-  { icon: 'search', label: 'GIF', type: 'widget' },
-  { icon: 'hand-right-outline', label: 'Tocca a te', type: 'widget' },
-  { icon: 'grid-outline', label: 'Cornice', type: 'widget' },
   { icon: 'help-circle-outline', label: 'Domande', type: 'widget' },
-  { icon: 'cut-outline', label: 'Ritagli', type: 'widget' },
-  { icon: 'star-outline', label: 'Metti in evidenza', type: 'widget' },
-  { icon: 'notifications-outline', label: 'Attiva notifiche', type: 'widget' },
-  { icon: 'person-circle-outline', label: 'Avatar', type: 'widget' },
   { icon: 'stats-chart', label: 'Sondaggio', type: 'widget' },
   { icon: 'link', label: 'Link', type: 'widget' },
-  { icon: 'pricetag', label: '#hashtag', type: 'widget' },
-  { icon: 'heart', label: 'Donazione', type: 'widget' },
-  { icon: 'cart-outline', label: 'Prodotto', type: 'widget' },
   { icon: 'timer-outline', label: 'Countdown', type: 'widget' },
+  { icon: 'pricetag', label: '#hashtag', type: 'widget' },
 ];
 
 const EMOJIS = ['❤️', '🔥', '😂', '😍', '🎉', '👏', '💯', '✨', '🙌', '💪', '🎵', '💃', '🕺', '🌟', '💖', '🥳', '😎', '🤩', '💫', '🦋'];
@@ -347,33 +337,32 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
     setActivePanel('text');
   };
 
-  // Drawing handlers
-  const drawingPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => isDrawingMode,
-      onMoveShouldSetPanResponder: () => isDrawingMode,
-      onPanResponderGrant: (evt) => {
-        const { locationX, locationY } = evt.nativeEvent;
-        setCurrentPath([{ x: locationX, y: locationY }]);
-      },
-      onPanResponderMove: (evt) => {
-        const { locationX, locationY } = evt.nativeEvent;
-        setCurrentPath(prev => [...prev, { x: locationX, y: locationY }]);
-      },
-      onPanResponderRelease: () => {
-        if (currentPath.length > 1) {
-          const pathString = currentPath.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
-          setDrawings(prev => [...prev, {
-            id: Date.now().toString(),
-            points: pathString,
-            color: drawColor,
-            width: drawWidth,
-          }]);
-        }
-        setCurrentPath([]);
-      },
-    })
-  ).current;
+  // Drawing handlers - using state-dependent approach
+  const handleDrawTouchStart = (evt: any) => {
+    if (!isDrawingMode) return;
+    const { locationX, locationY } = evt.nativeEvent;
+    setCurrentPath([{ x: locationX, y: locationY }]);
+  };
+
+  const handleDrawTouchMove = (evt: any) => {
+    if (!isDrawingMode || currentPath.length === 0) return;
+    const { locationX, locationY } = evt.nativeEvent;
+    setCurrentPath(prev => [...prev, { x: locationX, y: locationY }]);
+  };
+
+  const handleDrawTouchEnd = () => {
+    if (!isDrawingMode) return;
+    if (currentPath.length > 1) {
+      const pathString = currentPath.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
+      setDrawings(prev => [...prev, {
+        id: Date.now().toString(),
+        points: pathString,
+        color: drawColor,
+        width: drawWidth,
+      }]);
+    }
+    setCurrentPath([]);
+  };
 
   // Undo last drawing
   const undoDrawing = () => {
@@ -475,7 +464,7 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
       {backgroundColor !== 'transparent' && <View style={[StyleSheet.absoluteFill, { backgroundColor }]} />}
 
       {/* Media */}
-      <View style={styles.mediaContainer} {...(isDrawingMode ? drawingPanResponder.panHandlers : {})}>
+      <View style={styles.mediaContainer}>
         {mediaType === 'video' ? (
           <Video
             source={{ uri: mediaUri }}
@@ -491,7 +480,7 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
 
         {/* Drawing canvas */}
         {(drawings.length > 0 || currentPath.length > 0) && (
-          <Svg style={StyleSheet.absoluteFill}>
+          <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
             {drawings.map(d => (
               <Path key={d.id} d={d.points} stroke={d.color} strokeWidth={d.width} fill="none" strokeLinecap="round" strokeLinejoin="round" />
             ))}
@@ -515,6 +504,33 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
           </View>
         )}
       </View>
+
+      {/* Drawing overlay - captures touch events when drawing */}
+      {isDrawingMode && (
+        <View
+          style={[StyleSheet.absoluteFill, { zIndex: 200 }]}
+          onTouchStart={handleDrawTouchStart}
+          onTouchMove={handleDrawTouchMove}
+          onTouchEnd={handleDrawTouchEnd}
+        >
+          {/* SVG canvas for active drawing */}
+          <Svg style={StyleSheet.absoluteFill}>
+            {drawings.map(d => (
+              <Path key={d.id} d={d.points} stroke={d.color} strokeWidth={d.width} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            ))}
+            {currentPath.length > 0 && (
+              <Path
+                d={currentPath.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')}
+                stroke={drawColor}
+                strokeWidth={drawWidth}
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )}
+          </Svg>
+        </View>
+      )}
 
       {/* Rendered elements - outside media container so they're always visible */}
       {!isDrawingMode && texts.map(renderTextElement)}

@@ -17,8 +17,74 @@ const VIDEO_DURATION = 60000;
 // Instagram-style reactions
 const REACTIONS = ['❤️', '😂', '😮', '😢', '👏', '🔥'];
 
-type StoryData = { id: string; media: string; thumbnail?: string; type: string; created_at: string };
+type EditorData = {
+  texts?: { id: string; text: string; x: number; y: number; color: string; fontSize: number; fontStyle: string; backgroundColor: string | null }[];
+  stickers?: { id: string; type: string; content: string; icon?: string; x: number; y: number; scale: number }[];
+  drawings?: { id: string; points: string; color: string; width: number }[];
+  backgroundColor?: string;
+};
+
+type StoryData = { id: string; media: string; thumbnail?: string; type: string; created_at: string; editor_data?: EditorData };
 type UserStories = { user_id: string; username: string; profile_image: string | null; stories: StoryData[] };
+
+// Overlay renderer for story editor data
+function StoryOverlays({ editorData }: { editorData?: EditorData }) {
+  if (!editorData) return null;
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {/* Background color */}
+      {editorData.backgroundColor && editorData.backgroundColor !== 'transparent' && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: editorData.backgroundColor, opacity: 0.5 }]} />
+      )}
+
+      {/* Drawings */}
+      {editorData.drawings && editorData.drawings.length > 0 && (
+        <View style={StyleSheet.absoluteFill}>
+          {/* SVG would be ideal here but for simplicity we show a placeholder */}
+        </View>
+      )}
+
+      {/* Texts */}
+      {editorData.texts?.map((t) => (
+        <View
+          key={t.id}
+          style={[
+            styles.overlayText,
+            { left: t.x, top: t.y },
+            t.backgroundColor ? { backgroundColor: t.backgroundColor, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 } : null,
+          ]}
+        >
+          <Text
+            style={[
+              { color: t.color, fontSize: t.fontSize },
+              t.fontStyle === 'signature' ? { fontStyle: 'italic' } : t.fontStyle === 'modern' ? { fontWeight: '300' } : { fontWeight: 'bold' },
+              styles.overlayTextShadow,
+            ]}
+          >
+            {t.text}
+          </Text>
+        </View>
+      ))}
+
+      {/* Stickers */}
+      {editorData.stickers?.map((s) => (
+        <View key={s.id} style={[styles.overlaySticker, { left: s.x, top: s.y }]}>
+          {s.type === 'emoji' ? (
+            <Text style={{ fontSize: 60 * (s.scale || 1) }}>{s.content}</Text>
+          ) : (
+            <View style={styles.widgetStickerView}>
+              {s.icon && <Ionicons name={s.icon as any} size={18} color="#fff" />}
+              <Text style={styles.widgetStickerText} numberOfLines={1}>
+                {s.icon === 'stats-chart' ? s.content.split('|')[0] : s.content}
+              </Text>
+            </View>
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
 
 // Video player with pause support
 function StoryVideoPlayer({ url, isActive, isPaused }: { url: string; isActive: boolean; isPaused?: boolean }) {
@@ -159,6 +225,9 @@ function UserStoryPage({
           <Image source={{ uri: mediaUrl }} style={styles.fullMedia} resizeMode="cover" />
         )}
       </View>
+
+      {/* Story overlays (texts, stickers, drawings from editor) */}
+      <StoryOverlays editorData={story.editor_data} />
 
       {/* Tap zones with vertical swipe detection and hold to pause */}
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
@@ -734,5 +803,33 @@ const styles = StyleSheet.create({
   },
   reactionsText: {
     fontSize: 14,
+  },
+  // Story overlay styles
+  overlayText: {
+    position: 'absolute',
+    maxWidth: width - 40,
+  },
+  overlayTextShadow: {
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  overlaySticker: {
+    position: 'absolute',
+  },
+  widgetStickerView: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 8,
+    maxWidth: 180,
+  },
+  widgetStickerText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

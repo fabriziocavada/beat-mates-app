@@ -878,6 +878,7 @@ async def get_comments(post_id: str, current_user: dict = Depends(get_current_us
 class StoryCreate(BaseModel):
     media: str  # URL from /api/upload or base64
     type: str = "photo"  # photo or video
+    editor_data: Optional[dict] = None  # texts, stickers, drawings, backgroundColor
 
 class StoryResponse(BaseModel):
     id: str
@@ -1029,6 +1030,7 @@ async def create_story(data: StoryCreate, current_user: dict = Depends(get_curre
             "thumbnail": None,
             "type": data.type,
             "views_count": 0,
+            "editor_data": data.editor_data,  # Save overlay data (texts, stickers, drawings)
             "created_at": now,
             "expires_at": now + timedelta(hours=24),
         }
@@ -1082,6 +1084,7 @@ async def get_stories(current_user: dict = Depends(get_current_user)):
             "media": story["media"],
             "thumbnail": story.get("thumbnail"),
             "type": story["type"],
+            "editor_data": story.get("editor_data"),  # Include overlay data
             "created_at": created_at
         })
     
