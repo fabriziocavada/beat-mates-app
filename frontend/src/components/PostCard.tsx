@@ -107,6 +107,13 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
   const heartOpacity = useRef(new Animated.Value(0)).current;
   const [videoMuted, setVideoMuted] = useState(true);
   const router = useRouter();
+  
+  // Hold-to-pause state (Instagram-style)
+  const [isPaused, setIsPaused] = useState(false);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Share modal state
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const mediaUrls = (post.media_urls && post.media_urls.length > 0)
     ? post.media_urls
