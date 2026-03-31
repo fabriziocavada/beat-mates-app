@@ -151,7 +151,7 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
   const [caption, setCaption] = useState('');
 
   // Panel state
-  const [activePanel, setActivePanel] = useState<'none' | 'text' | 'stickers' | 'draw' | 'background' | 'music' | 'link' | 'poll' | 'question'>('none');
+  const [activePanel, setActivePanel] = useState<'none' | 'text' | 'stickers' | 'draw' | 'background' | 'music' | 'link' | 'poll' | 'question' | 'location' | 'countdown' | 'hashtag'>('none');
   const [showSidebar, setShowSidebar] = useState(true);
 
   // Text editing state
@@ -172,6 +172,10 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
   const [questionText, setQuestionText] = useState('');
+  const [locationText, setLocationText] = useState('');
+  const [countdownTitle, setCountdownTitle] = useState('');
+  const [countdownDate, setCountdownDate] = useState('');
+  const [hashtagText, setHashtagText] = useState('');
 
   // Open panel without resetting elements
   const openPanel = (panel: typeof activePanel) => {
@@ -237,6 +241,18 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
       openPanel('music');
       return;
     }
+    if (widget.label === 'Luogo') {
+      openPanel('location');
+      return;
+    }
+    if (widget.label === 'Countdown') {
+      openPanel('countdown');
+      return;
+    }
+    if (widget.label === '#hashtag') {
+      openPanel('hashtag');
+      return;
+    }
 
     const newSticker: StickerElement = {
       id: Date.now().toString(),
@@ -299,6 +315,59 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
     };
     setStickers(prev => [...prev, newSticker]);
     setQuestionText('');
+    setActivePanel('none');
+  };
+
+  // Add location widget
+  const addLocationWidget = () => {
+    if (!locationText.trim()) return;
+    const newSticker: StickerElement = {
+      id: Date.now().toString(),
+      type: 'widget',
+      content: locationText,
+      icon: 'location-outline',
+      x: width / 2 - 80,
+      y: height / 2 - 25,
+      scale: 1,
+    };
+    setStickers(prev => [...prev, newSticker]);
+    setLocationText('');
+    setActivePanel('none');
+  };
+
+  // Add countdown widget
+  const addCountdownWidget = () => {
+    if (!countdownTitle.trim()) return;
+    const newSticker: StickerElement = {
+      id: Date.now().toString(),
+      type: 'widget',
+      content: `${countdownTitle}|${countdownDate || 'No date'}`,
+      icon: 'timer-outline',
+      x: width / 2 - 80,
+      y: height / 2 - 40,
+      scale: 1,
+    };
+    setStickers(prev => [...prev, newSticker]);
+    setCountdownTitle('');
+    setCountdownDate('');
+    setActivePanel('none');
+  };
+
+  // Add hashtag widget
+  const addHashtagWidget = () => {
+    if (!hashtagText.trim()) return;
+    const tag = hashtagText.startsWith('#') ? hashtagText : `#${hashtagText}`;
+    const newSticker: StickerElement = {
+      id: Date.now().toString(),
+      type: 'widget',
+      content: tag,
+      icon: 'pricetag',
+      x: width / 2 - 50,
+      y: height / 2 - 20,
+      scale: 1,
+    };
+    setStickers(prev => [...prev, newSticker]);
+    setHashtagText('');
     setActivePanel('none');
   };
 
@@ -478,22 +547,12 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
           <Image source={{ uri: mediaUri }} style={styles.media} resizeMode="contain" />
         )}
 
-        {/* Drawing canvas */}
-        {(drawings.length > 0 || currentPath.length > 0) && (
+        {/* Drawing canvas - only show saved drawings when NOT in drawing mode */}
+        {!isDrawingMode && drawings.length > 0 && (
           <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
             {drawings.map(d => (
               <Path key={d.id} d={d.points} stroke={d.color} strokeWidth={d.width} fill="none" strokeLinecap="round" strokeLinejoin="round" />
             ))}
-            {currentPath.length > 0 && (
-              <Path
-                d={currentPath.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')}
-                stroke={drawColor}
-                strokeWidth={drawWidth}
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            )}
           </Svg>
         )}
 
@@ -508,7 +567,7 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
       {/* Drawing overlay - captures touch events when drawing */}
       {isDrawingMode && (
         <View
-          style={[StyleSheet.absoluteFill, { zIndex: 200 }]}
+          style={[StyleSheet.absoluteFill, { zIndex: 50 }]}
           onTouchStart={handleDrawTouchStart}
           onTouchMove={handleDrawTouchMove}
           onTouchEnd={handleDrawTouchEnd}
@@ -536,8 +595,8 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
       {!isDrawingMode && texts.map(renderTextElement)}
       {!isDrawingMode && stickers.map(renderStickerElement)}
 
-      {/* Top bar */}
-      <View style={styles.topBar}>
+      {/* Top bar - zIndex 100 to be above drawing layer */}
+      <View style={[styles.topBar, { zIndex: 100 }]}>
         <TouchableOpacity style={styles.closeButton} onPress={onClose}>
           <Ionicons name="close" size={28} color="#fff" />
         </TouchableOpacity>
@@ -588,9 +647,9 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
         </View>
       )}
 
-      {/* Drawing tools bar */}
+      {/* Drawing tools bar - zIndex 100 to be above drawing layer */}
       {isDrawingMode && (
-        <View style={styles.drawToolsBar}>
+        <View style={[styles.drawToolsBar, { zIndex: 100 }]}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.drawColorsRow}>
             {COLORS.map(c => (
               <TouchableOpacity
@@ -663,7 +722,14 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
 
           <View style={styles.textPreviewArea}>
             <TextInput
-              style={[styles.textInput, { color: textColor }, textBgColor && { backgroundColor: textBgColor, paddingHorizontal: 12 }]}
+              style={[
+                styles.textInput,
+                { color: textColor },
+                textBgColor && { backgroundColor: textBgColor, paddingHorizontal: 12 },
+                fontStyle === 'signature' && { fontStyle: 'italic' },
+                fontStyle === 'modern' && { fontWeight: '300' },
+                fontStyle === 'classic' && { fontWeight: 'bold' },
+              ]}
               value={currentText}
               onChangeText={setCurrentText}
               placeholder="Scrivi qualcosa..."
@@ -886,6 +952,95 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
             value={questionText}
             onChangeText={setQuestionText}
           />
+        </View>
+      </Modal>
+
+      {/* LOCATION PANEL */}
+      <Modal visible={activePanel === 'location'} transparent animationType="slide">
+        <View style={styles.locationPanel}>
+          <View style={styles.locationHeader}>
+            <TouchableOpacity onPress={() => { setActivePanel('none'); setLocationText(''); }}>
+              <Text style={styles.locationCancel}>Annulla</Text>
+            </TouchableOpacity>
+            <Text style={styles.locationTitle}>Luogo</Text>
+            <TouchableOpacity onPress={addLocationWidget}>
+              <Text style={styles.locationDone}>Fine</Text>
+            </TouchableOpacity>
+          </View>
+          <TextInput
+            style={styles.locationInput}
+            placeholder="Cerca un luogo..."
+            placeholderTextColor="#888"
+            value={locationText}
+            onChangeText={setLocationText}
+          />
+          <View style={styles.locationSuggestions}>
+            {['Roma, Italia', 'Milano, Italia', 'Napoli, Italia', 'Firenze, Italia'].map((loc, i) => (
+              <TouchableOpacity key={i} style={styles.locationItem} onPress={() => setLocationText(loc)}>
+                <Ionicons name="location-outline" size={20} color="#007AFF" />
+                <Text style={styles.locationItemText}>{loc}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
+
+      {/* COUNTDOWN PANEL */}
+      <Modal visible={activePanel === 'countdown'} transparent animationType="slide">
+        <View style={styles.countdownPanel}>
+          <View style={styles.countdownHeader}>
+            <TouchableOpacity onPress={() => { setActivePanel('none'); setCountdownTitle(''); setCountdownDate(''); }}>
+              <Text style={styles.countdownCancel}>Annulla</Text>
+            </TouchableOpacity>
+            <Text style={styles.countdownTitle}>Countdown</Text>
+            <TouchableOpacity onPress={addCountdownWidget}>
+              <Text style={styles.countdownDone}>Fine</Text>
+            </TouchableOpacity>
+          </View>
+          <TextInput
+            style={styles.countdownInput}
+            placeholder="Nome evento..."
+            placeholderTextColor="#888"
+            value={countdownTitle}
+            onChangeText={setCountdownTitle}
+          />
+          <TextInput
+            style={styles.countdownInput}
+            placeholder="Data (es: 25/12/2025)"
+            placeholderTextColor="#888"
+            value={countdownDate}
+            onChangeText={setCountdownDate}
+          />
+        </View>
+      </Modal>
+
+      {/* HASHTAG PANEL */}
+      <Modal visible={activePanel === 'hashtag'} transparent animationType="slide">
+        <View style={styles.hashtagPanel}>
+          <View style={styles.hashtagHeader}>
+            <TouchableOpacity onPress={() => { setActivePanel('none'); setHashtagText(''); }}>
+              <Text style={styles.hashtagCancel}>Annulla</Text>
+            </TouchableOpacity>
+            <Text style={styles.hashtagTitle}>#Hashtag</Text>
+            <TouchableOpacity onPress={addHashtagWidget}>
+              <Text style={styles.hashtagDone}>Fine</Text>
+            </TouchableOpacity>
+          </View>
+          <TextInput
+            style={styles.hashtagInput}
+            placeholder="Scrivi un hashtag..."
+            placeholderTextColor="#888"
+            value={hashtagText}
+            onChangeText={setHashtagText}
+            autoCapitalize="none"
+          />
+          <View style={styles.hashtagSuggestions}>
+            {['dance', 'balletto', 'hiphop', 'salsa', 'tango', 'beatmates'].map((tag, i) => (
+              <TouchableOpacity key={i} style={styles.hashtagItem} onPress={() => setHashtagText(tag)}>
+                <Text style={styles.hashtagItemText}>#{tag}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
       </Modal>
     </View>
@@ -1601,4 +1756,115 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 30,
   },
+  // Location panel
+  locationPanel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: height * 0.5,
+    backgroundColor: '#1c1c1e',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+  },
+  locationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  locationCancel: { color: '#fff', fontSize: 16 },
+  locationTitle: { color: '#fff', fontSize: 18, fontWeight: '600' },
+  locationDone: { color: '#007AFF', fontSize: 16, fontWeight: '600' },
+  locationInput: {
+    backgroundColor: '#2c2c2e',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 10,
+    color: '#fff',
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  locationSuggestions: { flex: 1 },
+  locationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#333',
+    gap: 12,
+  },
+  locationItemText: { color: '#fff', fontSize: 16 },
+  // Countdown panel
+  countdownPanel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#1c1c1e',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+  },
+  countdownHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  countdownCancel: { color: '#fff', fontSize: 16 },
+  countdownTitle: { color: '#fff', fontSize: 18, fontWeight: '600' },
+  countdownDone: { color: '#007AFF', fontSize: 16, fontWeight: '600' },
+  countdownInput: {
+    backgroundColor: '#2c2c2e',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 10,
+    color: '#fff',
+    fontSize: 16,
+    marginBottom: 12,
+  },
+  // Hashtag panel
+  hashtagPanel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: height * 0.45,
+    backgroundColor: '#1c1c1e',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+  },
+  hashtagHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  hashtagCancel: { color: '#fff', fontSize: 16 },
+  hashtagTitle: { color: '#fff', fontSize: 18, fontWeight: '600' },
+  hashtagDone: { color: '#007AFF', fontSize: 16, fontWeight: '600' },
+  hashtagInput: {
+    backgroundColor: '#2c2c2e',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 10,
+    color: '#fff',
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  hashtagSuggestions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  hashtagItem: {
+    backgroundColor: '#2c2c2e',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  hashtagItemText: { color: '#007AFF', fontSize: 14 },
 });
