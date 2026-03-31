@@ -151,24 +151,31 @@ function UserStoryPage({
             style={{ flex: 1 }}
             activeOpacity={1}
             onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-            onPress={() => handleTap('left')}
+            onPressOut={(e) => {
+              if (isPaused) {
+                onHoldEnd();
+              } else {
+                handlePressOut(e);
+              }
+            }}
+            onPress={() => !isPaused && handleTap('left')}
             onLongPress={onHoldStart}
-            delayLongPress={150}
+            delayLongPress={200}
           />
           <TouchableOpacity
             style={{ flex: 2 }}
             activeOpacity={1}
-            onPressIn={(e) => {
-              handlePressIn(e);
-            }}
+            onPressIn={handlePressIn}
             onPressOut={(e) => {
-              handlePressOut(e);
-              if (isPaused) onHoldEnd();
+              if (isPaused) {
+                onHoldEnd();
+              } else {
+                handlePressOut(e);
+              }
             }}
-            onPress={() => handleTap('right')}
+            onPress={() => !isPaused && handleTap('right')}
             onLongPress={onHoldStart}
-            delayLongPress={150}
+            delayLongPress={200}
           />
         </View>
       </View>

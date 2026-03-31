@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: Colors.cardBackground,
+    backgroundColor: Colors.surface,
     position: 'relative',
   },
   thumbnail: {
