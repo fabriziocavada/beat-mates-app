@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Video, ResizeMode } from 'expo-av';
 import api, { uploadFile } from '../../src/services/api';
+import StoryEditor from '../../src/components/StoryEditor';
 
 const { width } = Dimensions.get('window');
 
@@ -17,6 +18,8 @@ export default function CreateStoryScreen() {
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'photo' | 'video'>('photo');
   const [isLoading, setIsLoading] = useState(false);
+  const [showEditor, setShowEditor] = useState(false);
+  const [editorData, setEditorData] = useState<any>(null);
 
   const pickMedia = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -61,7 +64,12 @@ export default function CreateStoryScreen() {
     setIsLoading(true);
     try {
       const serverUrl = await uploadFile(mediaUri);
-      await api.post('/stories', { media: serverUrl, type: mediaType });
+      // Include editor data (texts, stickers, backgroundColor) if present
+      await api.post('/stories', { 
+        media: serverUrl, 
+        type: mediaType,
+        editor_data: editorData 
+      });
       router.replace('/(main)/home');
     } catch (error: any) {
       console.error('Story error:', error.response?.data || error.message);
@@ -70,6 +78,26 @@ export default function CreateStoryScreen() {
       setIsLoading(false);
     }
   };
+
+  // Handle editor save
+  const handleEditorSave = (data: any) => {
+    setEditorData(data);
+    setShowEditor(false);
+    // Auto-publish after editing
+    handlePublish();
+  };
+
+  // Show editor when media is selected
+  if (showEditor && mediaUri) {
+    return (
+      <StoryEditor
+        mediaUri={mediaUri}
+        mediaType={mediaType}
+        onSave={handleEditorSave}
+        onClose={() => setShowEditor(false)}
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -117,6 +145,11 @@ export default function CreateStoryScreen() {
                 <Text style={styles.videoBadgeText}>Video</Text>
               </View>
             )}
+            {/* Edit button - Opens Instagram-style editor */}
+            <TouchableOpacity style={styles.editButton} onPress={() => setShowEditor(true)}>
+              <Ionicons name="create-outline" size={24} color="#FFF" />
+              <Text style={styles.editButtonText}>Modifica</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.optionsContainer}>
@@ -160,6 +193,8 @@ const styles = StyleSheet.create({
   removeButton: { position: 'absolute', top: 20, right: 20, zIndex: 10 },
   videoBadge: { position: 'absolute', top: 20, left: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, gap: 4 },
   videoBadgeText: { color: '#FFF', fontSize: 12, fontWeight: '600' },
+  editButton: { position: 'absolute', bottom: 100, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24, gap: 8 },
+  editButtonText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
   optionsContainer: { flexDirection: 'row', gap: 24 },
   optionButton: { alignItems: 'center' },
   optionIcon: { width: 90, height: 90, borderRadius: 20, backgroundColor: '#1C1C1E', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
