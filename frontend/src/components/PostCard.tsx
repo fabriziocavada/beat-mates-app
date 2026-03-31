@@ -1,9 +1,10 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, FlatList, ScrollView, Animated, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, FlatList, ScrollView, Animated, Alert, ActivityIndicator, GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import { useRouter } from 'expo-router';
 import api, { getMediaUrl, getThumbnailUrl } from '../services/api';
+import ShareModal from './ShareModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -37,20 +38,20 @@ function isVideoPath(path: string | null | undefined): boolean {
 }
 
 // WebView video player - pure rendering, no touch handling
-function FeedVideoPlayer({ url, height, isVisible, muted }: { url: string; height: number; isVisible: boolean; muted: boolean }) {
+function FeedVideoPlayer({ url, height, isVisible, muted, isPaused }: { url: string; height: number; isVisible: boolean; muted: boolean; isPaused?: boolean }) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const videoRef = useRef<any>(null);
 
   useEffect(() => {
     if (videoRef.current) {
-      if (isVisible) {
+      if (isVisible && !isPaused) {
         videoRef.current.playAsync?.().catch(() => {});
       } else {
         videoRef.current.pauseAsync?.().catch(() => {});
       }
     }
-  }, [isVisible]);
+  }, [isVisible, isPaused]);
 
   useEffect(() => {
     if (videoRef.current) {
@@ -65,7 +66,7 @@ function FeedVideoPlayer({ url, height, isVisible, muted }: { url: string; heigh
         source={{ uri: url }}
         style={{ width: '100%', height }}
         resizeMode={ResizeMode.COVER}
-        shouldPlay={isVisible}
+        shouldPlay={isVisible && !isPaused}
         isMuted={muted}
         isLooping
         onLoad={() => setIsLoading(false)}
@@ -83,6 +84,12 @@ function FeedVideoPlayer({ url, height, isVisible, muted }: { url: string; heigh
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
           <Ionicons name="videocam-off-outline" size={40} color="#666" />
           <Text style={{ color: '#888', fontSize: 12, marginTop: 8 }}>Video non disponibile</Text>
+        </View>
+      )}
+      {/* Pause indicator overlay */}
+      {isPaused && (
+        <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)' }]} pointerEvents="none">
+          <Ionicons name="pause" size={50} color="rgba(255,255,255,0.8)" />
         </View>
       )}
     </View>
@@ -110,7 +117,30 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
 
   const isSingleVideo = !isCarousel && mediaUrls.length === 1 && isVideoPath(mediaUrls[0]);
 
+  // Hold-to-pause handlers (Instagram-style)
+  const handlePressIn = (e: GestureResponderEvent) => {
+    // Start hold timer - after 200ms, pause the video
+    holdTimerRef.current = setTimeout(() => {
+      setIsPaused(true);
+    }, 200);
+  };
+
+  const handlePressOut = (e: GestureResponderEvent) => {
+    // Clear hold timer
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    // Resume if was paused
+    if (isPaused) {
+      setIsPaused(false);
+    }
+  };
+
   const handleDoubleTap = () => {
+    // If video is paused, don't process tap
+    if (isPaused) return;
+    
     const now = Date.now();
     if (now - lastTap.current < 350) {
       if (!isLiked) handleLike();
@@ -130,6 +160,11 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
         }
       }, 350);
     }
+  };
+  
+  // Handle share button press
+  const handleSharePress = () => {
+    setShowShareModal(true);
   };
 
   const handleLike = async () => {
@@ -199,7 +234,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
       {mediaUrls.length > 0 && (
         <View style={{ height: mediaHeight, position: 'relative' }}>
           {isCarousel ? (
-            /* Carousel: ScrollView for reliable horizontal swipe */
+            /* Carousel: ScrollView for reliable horizontal swipe with hold-to-pause */
             <ScrollView
               horizontal
               pagingEnabled
@@ -214,9 +249,17 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
                 const fullUrl = getMediaUrl(url) || '';
                 const isVid = isVideoPath(url);
                 return (
-                  <TouchableOpacity key={index} activeOpacity={1} onPress={handleDoubleTap} style={{ width: SCREEN_WIDTH, height: mediaHeight }} data-testid={`carousel-tap-${post.id}-${index}`}>
+                  <TouchableOpacity 
+                    key={index} 
+                    activeOpacity={1} 
+                    onPressIn={isVid ? handlePressIn : undefined}
+                    onPressOut={isVid ? handlePressOut : undefined}
+                    onPress={handleDoubleTap} 
+                    style={{ width: SCREEN_WIDTH, height: mediaHeight }} 
+                    data-testid={`carousel-tap-${post.id}-${index}`}
+                  >
                     {isVid ? (
-                      <FeedVideoPlayer url={fullUrl} height={mediaHeight} isVisible={index === carouselIndex} muted={videoMuted} />
+                      <FeedVideoPlayer url={fullUrl} height={mediaHeight} isVisible={index === carouselIndex} muted={videoMuted} isPaused={isPaused} />
                     ) : (
                       <Image source={{ uri: fullUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                     )}
@@ -225,12 +268,14 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
               })}
             </ScrollView>
           ) : isSingleVideo ? (
-            /* Single video: tap overlay → opens in Reels */
+            /* Single video: tap overlay with hold-to-pause (Instagram-style) */
             <View style={{ width: '100%', height: mediaHeight }}>
-              <FeedVideoPlayer url={getMediaUrl(mediaUrls[0]) || ''} height={mediaHeight} isVisible={true} muted={videoMuted} />
+              <FeedVideoPlayer url={getMediaUrl(mediaUrls[0]) || ''} height={mediaHeight} isVisible={true} muted={videoMuted} isPaused={isPaused} />
               <TouchableOpacity
                 style={StyleSheet.absoluteFill}
                 activeOpacity={1}
+                onPressIn={handlePressIn}
+                onPressOut={handlePressOut}
                 onPress={handleDoubleTap}
                 data-testid={`video-tap-${post.id}`}
               />
@@ -276,7 +321,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
           <TouchableOpacity onPress={() => onCommentPress?.(post.id)} style={styles.actionBtn}>
             <Ionicons name="chatbubble-outline" size={22} color="#FFF" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => onSharePress?.(post)} style={styles.actionBtn}>
+          <TouchableOpacity onPress={handleSharePress} style={styles.actionBtn} data-testid={`share-btn-${post.id}`}>
             <Ionicons name="paper-plane-outline" size={22} color="#FFF" />
           </TouchableOpacity>
         </View>
@@ -297,6 +342,15 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
           </TouchableOpacity>
         )}
       </View>
+      
+      {/* Share Modal (Instagram-style) */}
+      <ShareModal 
+        visible={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        mediaUrl={mediaUrls[0]}
+        mediaType={isSingleVideo ? 'video' : 'photo'}
+        postId={post.id}
+      />
     </View>
   );
 }

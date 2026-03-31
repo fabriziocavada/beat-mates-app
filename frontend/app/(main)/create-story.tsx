@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Video, ResizeMode } from 'expo-av';
 import api, { uploadFile, getMediaUrl } from '../../src/services/api';
-import StoryEditor from '../../src/components/StoryEditor';
+import InstagramStoryEditor from '../../src/components/InstagramStoryEditor';
 
 const { width } = Dimensions.get('window');
 
@@ -100,10 +100,10 @@ export default function CreateStoryScreen() {
     handlePublish();
   };
 
-  // Show editor when media is selected
+  // Show editor when media is selected - Using Instagram-identical editor
   if (showEditor && mediaUri) {
     return (
-      <StoryEditor
+      <InstagramStoryEditor
         mediaUri={mediaUri}
         mediaType={mediaType}
         onSave={handleEditorSave}

@@ -6,7 +6,7 @@ Test get bookings after fix
 import requests
 import json
 
-BASE_URL = "https://coaching-live-demo-1.preview.emergentagent.com/api"
+BASE_URL = "https://lesson-marketplace-5.preview.emergentagent.com/api"
 headers = {'Content-Type': 'application/json'}
 
 # Login with the user who just made a booking

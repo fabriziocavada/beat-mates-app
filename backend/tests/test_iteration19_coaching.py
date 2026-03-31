@@ -29,7 +29,7 @@ import subprocess
 
 BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
-    BASE_URL = "https://coaching-live-demo-1.preview.emergentagent.com"
+    BASE_URL = "https://lesson-marketplace-5.preview.emergentagent.com"
 
 # Path for test video
 TEST_VIDEO_PATH = "/tmp/test_coaching.mp4"

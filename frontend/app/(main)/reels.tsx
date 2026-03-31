@@ -17,6 +17,7 @@ import { WebView } from 'react-native-webview';
 import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
 import api, { getMediaUrl, getVideoPlayerUrl } from '../../src/services/api';
+import ShareModal from '../../src/components/ShareModal';
 
 // WebView video player with loading indicator and play/pause
 function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: boolean }) {
@@ -147,6 +148,10 @@ export default function ReelsScreen() {
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [isScreenFocused, setIsScreenFocused] = useState(true);
   const flatListRef = useRef<FlatList>(null);
+  
+  // Share modal state
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareReelData, setShareReelData] = useState<ReelPost | null>(null);
 
   useEffect(() => {
     loadReels();
@@ -224,16 +229,10 @@ export default function ReelsScreen() {
     }
   };
 
-  // Share reel to story
+  // Share reel - open modal
   const handleShareToStory = (reel: ReelPost) => {
-    // Navigate to story editor with the reel media
-    const mediaUrl = getMediaUrl(reel.media);
-    if (mediaUrl) {
-      router.push({
-        pathname: '/(main)/create-story',
-        params: { sharedMedia: reel.media, sharedType: 'video' }
-      });
-    }
+    setShareReelData(reel);
+    setShowShareModal(true);
   };
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
@@ -393,6 +392,15 @@ export default function ReelsScreen() {
         />
       )}
       <TabBar activeTab="reels" onTabPress={handleTabPress} />
+      
+      {/* Share Modal (Instagram-style) */}
+      <ShareModal 
+        visible={showShareModal}
+        onClose={() => { setShowShareModal(false); setShareReelData(null); }}
+        mediaUrl={shareReelData?.media}
+        mediaType="video"
+        postId={shareReelData?.id}
+      />
     </SafeAreaView>
   );
 }
