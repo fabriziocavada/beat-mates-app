@@ -38,20 +38,20 @@ function isVideoPath(path: string | null | undefined): boolean {
 }
 
 // WebView video player - pure rendering, no touch handling
-function FeedVideoPlayer({ url, height, isVisible, muted, isPaused }: { url: string; height: number; isVisible: boolean; muted: boolean; isPaused?: boolean }) {
+function FeedVideoPlayer({ url, height, isVisible, muted, paused = false }: { url: string; height: number; isVisible: boolean; muted: boolean; paused?: boolean }) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const videoRef = useRef<any>(null);
 
   useEffect(() => {
     if (videoRef.current) {
-      if (isVisible && !isPaused) {
+      if (isVisible && !paused) {
         videoRef.current.playAsync?.().catch(() => {});
       } else {
         videoRef.current.pauseAsync?.().catch(() => {});
       }
     }
-  }, [isVisible, isPaused]);
+  }, [isVisible, paused]);
 
   useEffect(() => {
     if (videoRef.current) {
@@ -66,7 +66,7 @@ function FeedVideoPlayer({ url, height, isVisible, muted, isPaused }: { url: str
         source={{ uri: url }}
         style={{ width: '100%', height }}
         resizeMode={ResizeMode.COVER}
-        shouldPlay={isVisible && !isPaused}
+        shouldPlay={isVisible && !paused}
         isMuted={muted}
         isLooping
         onLoad={() => setIsLoading(false)}
@@ -87,7 +87,7 @@ function FeedVideoPlayer({ url, height, isVisible, muted, isPaused }: { url: str
         </View>
       )}
       {/* Pause indicator overlay */}
-      {isPaused && (
+      {paused && (
         <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)' }]} pointerEvents="none">
           <Ionicons name="pause" size={50} color="rgba(255,255,255,0.8)" />
         </View>
@@ -270,7 +270,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
           ) : isSingleVideo ? (
             /* Single video: tap overlay with hold-to-pause (Instagram-style) */
             <View style={{ width: '100%', height: mediaHeight }}>
-              <FeedVideoPlayer url={getMediaUrl(mediaUrls[0]) || ''} height={mediaHeight} isVisible={true} muted={videoMuted} isPaused={isPaused} />
+              <FeedVideoPlayer url={getMediaUrl(mediaUrls[0]) || ''} height={mediaHeight} isVisible={true} muted={videoMuted} paused={isPaused} />
               <TouchableOpacity
                 style={StyleSheet.absoluteFill}
                 activeOpacity={1}
