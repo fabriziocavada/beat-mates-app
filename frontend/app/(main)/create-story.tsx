@@ -1,25 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image, Alert,
   ActivityIndicator, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Video, ResizeMode } from 'expo-av';
-import api, { uploadFile } from '../../src/services/api';
+import api, { uploadFile, getMediaUrl } from '../../src/services/api';
 import StoryEditor from '../../src/components/StoryEditor';
 
 const { width } = Dimensions.get('window');
 
 export default function CreateStoryScreen() {
   const router = useRouter();
+  const { sharedMedia, sharedType } = useLocalSearchParams<{ sharedMedia?: string; sharedType?: string }>();
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'photo' | 'video'>('photo');
   const [isLoading, setIsLoading] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
   const [editorData, setEditorData] = useState<any>(null);
+
+  // Handle shared media from reels/posts
+  useEffect(() => {
+    if (sharedMedia) {
+      const fullUrl = getMediaUrl(sharedMedia);
+      if (fullUrl) {
+        setMediaUri(fullUrl);
+        setMediaType(sharedType === 'video' ? 'video' : 'photo');
+        setShowEditor(true); // Auto-open editor for shared content
+      }
+    }
+  }, [sharedMedia, sharedType]);
 
   const pickMedia = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();

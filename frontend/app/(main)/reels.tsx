@@ -224,6 +224,18 @@ export default function ReelsScreen() {
     }
   };
 
+  // Share reel to story
+  const handleShareToStory = (reel: ReelPost) => {
+    // Navigate to story editor with the reel media
+    const mediaUrl = getMediaUrl(reel.media);
+    if (mediaUrl) {
+      router.push({
+        pathname: '/(main)/create-story',
+        params: { sharedMedia: reel.media, sharedType: 'video' }
+      });
+    }
+  };
+
   const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
       setCurrentIndex(viewableItems[0].index || 0);
@@ -301,7 +313,10 @@ export default function ReelsScreen() {
               <Text style={styles.actionText}>{item.comments_count || 0}</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.actionBtn}>
+            <TouchableOpacity 
+              style={styles.actionBtn}
+              onPress={() => handleShareToStory(item)}
+            >
               <Ionicons name="paper-plane-outline" size={28} color="#FFF" />
               <Text style={styles.actionText}>Invia</Text>
             </TouchableOpacity>

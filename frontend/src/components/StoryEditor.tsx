@@ -11,6 +11,7 @@ import {
   Animated,
   ScrollView,
   Modal,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
@@ -101,6 +102,8 @@ export default function StoryEditor({ mediaUri, mediaType, onSave, onClose }: Pr
   // Add new text
   const addText = () => {
     if (!currentText.trim()) return;
+    
+    Keyboard.dismiss();
     
     const newText: TextElement = {
       id: Date.now().toString(),

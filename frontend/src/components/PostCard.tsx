@@ -26,6 +26,7 @@ interface PostCardProps {
   onUserPress?: (userId: string) => void;
   onCommentPress?: (postId: string) => void;
   onDeletePress?: (postId: string) => void;
+  onSharePress?: (post: Post) => void;
   currentUserId?: string;
 }
 
@@ -88,7 +89,7 @@ function FeedVideoPlayer({ url, height, isVisible, muted }: { url: string; heigh
   );
 }
 
-export default function PostCard({ post, onUserPress, onCommentPress, onDeletePress, currentUserId }: PostCardProps) {
+export default function PostCard({ post, onUserPress, onCommentPress, onDeletePress, onSharePress, currentUserId }: PostCardProps) {
   const [isLiked, setIsLiked] = useState(post.is_liked);
   const [likesCount, setLikesCount] = useState(post.likes_count);
   const [isSaved, setIsSaved] = useState(false);
@@ -275,7 +276,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
           <TouchableOpacity onPress={() => onCommentPress?.(post.id)} style={styles.actionBtn}>
             <Ionicons name="chatbubble-outline" size={22} color="#FFF" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn}>
+          <TouchableOpacity onPress={() => onSharePress?.(post)} style={styles.actionBtn}>
             <Ionicons name="paper-plane-outline" size={22} color="#FFF" />
           </TouchableOpacity>
         </View>

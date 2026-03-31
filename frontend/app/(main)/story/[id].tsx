@@ -103,26 +103,42 @@ function UserStoryPage({
   const isVideo = story.type === 'video';
   const touchY = useRef(0);
   const wasSwipe = useRef(false);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Detect vertical swipes - threshold reduced to 40px for better sensitivity
   const handlePressIn = (e: any) => {
     touchY.current = e.nativeEvent.pageY;
     wasSwipe.current = false;
+    // Start hold timer for pause
+    holdTimerRef.current = setTimeout(() => {
+      onHoldStart();
+    }, 200);
   };
 
   const handlePressOut = (e: any) => {
+    // Clear hold timer
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    
+    // If paused, resume on release
+    if (isPaused) {
+      onHoldEnd();
+      return;
+    }
+    
     const dy = e.nativeEvent.pageY - touchY.current;
     const absDy = Math.abs(dy);
-    if (absDy > 40) {  // More sensitive: 40px instead of 80px
+    if (absDy > 40) {
       wasSwipe.current = true;
-      if (dy < 0) onSwipeUp();   // swipe up → reactions
-      else onSwipeDown();         // swipe down → close
+      if (dy < 0) onSwipeUp();
+      else onSwipeDown();
     }
   };
 
   const handleTap = (side: 'left' | 'right') => {
-    // Only handle tap if it wasn't a swipe
-    if (!wasSwipe.current) {
+    if (!wasSwipe.current && !isPaused) {
       onTap(side);
     }
   };
@@ -144,38 +160,22 @@ function UserStoryPage({
         )}
       </View>
 
-      {/* Tap zones with vertical swipe detection and long press for pause */}
+      {/* Tap zones with vertical swipe detection and hold to pause */}
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
         <View style={{ flexDirection: 'row', flex: 1 }}>
           <TouchableOpacity
             style={{ flex: 1 }}
             activeOpacity={1}
             onPressIn={handlePressIn}
-            onPressOut={(e) => {
-              if (isPaused) {
-                onHoldEnd();
-              } else {
-                handlePressOut(e);
-              }
-            }}
-            onPress={() => !isPaused && handleTap('left')}
-            onLongPress={onHoldStart}
-            delayLongPress={200}
+            onPressOut={handlePressOut}
+            onPress={() => handleTap('left')}
           />
           <TouchableOpacity
             style={{ flex: 2 }}
             activeOpacity={1}
             onPressIn={handlePressIn}
-            onPressOut={(e) => {
-              if (isPaused) {
-                onHoldEnd();
-              } else {
-                handlePressOut(e);
-              }
-            }}
-            onPress={() => !isPaused && handleTap('right')}
-            onLongPress={onHoldStart}
-            delayLongPress={200}
+            onPressOut={handlePressOut}
+            onPress={() => handleTap('right')}
           />
         </View>
       </View>
