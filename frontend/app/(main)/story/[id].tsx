@@ -427,7 +427,12 @@ function UserStoryPage({
       </View>
 
       {/* Story overlays (texts, stickers, drawings from editor) */}
-      <StoryOverlays editorData={story.editor_data} />
+      {story.editor_data && (
+        <>
+          {console.log('Rendering story overlays:', JSON.stringify(story.editor_data))}
+          <StoryOverlays editorData={story.editor_data} />
+        </>
+      )}
 
       {/* Tap zones with vertical swipe detection and hold to pause */}
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">

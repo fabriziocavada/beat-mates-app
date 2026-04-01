@@ -1022,6 +1022,7 @@ async def create_story(data: StoryCreate, current_user: dict = Depends(get_curre
                     "thumbnail": thumb_url,
                     "type": "video",
                     "views_count": 0,
+                    "editor_data": data.editor_data,  # Include overlay data for video segments
                     "created_at": now,
                     "expires_at": now + timedelta(hours=24),
                 }
