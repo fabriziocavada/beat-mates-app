@@ -1038,13 +1038,13 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
               <Video
                 source={{ uri: mediaUri }}
                 style={styles.media}
-                resizeMode={ResizeMode.COVER}
+                resizeMode={ResizeMode.CONTAIN}
                 shouldPlay
                 isLooping
                 isMuted={false}
               />
             ) : (
-              <Image source={{ uri: mediaUri }} style={styles.media} resizeMode="cover" />
+              <Image source={{ uri: mediaUri }} style={styles.media} resizeMode="contain" />
             )}
           </Animated.View>
         </GestureDetector>
