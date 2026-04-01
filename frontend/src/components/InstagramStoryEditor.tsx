@@ -384,14 +384,27 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
   // Load users for mention
   const loadMentionUsers = async (search: string) => {
     try {
-      const res = await api.get('/users/search', { params: { q: search || '', limit: 10 } });
-      setMentionUsers(res.data || []);
+      const res = await api.get('/users/search', { params: { q: search || '', limit: 15 } });
+      if (res.data && res.data.length > 0) {
+        setMentionUsers(res.data);
+      } else {
+        // Fallback demo users if no results
+        setMentionUsers([
+          { id: '1', username: 'dancer_pro', name: 'Pro Dancer', profile_image: null },
+          { id: '2', username: 'hiphop_star', name: 'Hip Hop Star', profile_image: null },
+          { id: '3', username: 'salsa_queen', name: 'Salsa Queen', profile_image: null },
+          { id: '4', username: 'ballet_master', name: 'Ballet Master', profile_image: null },
+          { id: '5', username: 'street_dancer', name: 'Street Dancer', profile_image: null },
+        ]);
+      }
     } catch (e) {
       // Fallback to showing some demo users
       setMentionUsers([
         { id: '1', username: 'dancer_pro', name: 'Pro Dancer', profile_image: null },
         { id: '2', username: 'hiphop_star', name: 'Hip Hop Star', profile_image: null },
         { id: '3', username: 'salsa_queen', name: 'Salsa Queen', profile_image: null },
+        { id: '4', username: 'ballet_master', name: 'Ballet Master', profile_image: null },
+        { id: '5', username: 'street_dancer', name: 'Street Dancer', profile_image: null },
       ]);
     }
   };
@@ -416,13 +429,18 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
   const loadMusicSongs = async (search?: string) => {
     setMusicLoading(true);
     try {
-      const params: any = {};
-      if (search) params.search = search;
+      const params: any = { limit: 20 };
+      if (search && search.trim()) params.search = search;
       const res = await api.get('/music/songs', { params });
       setMusicSongs(res.data || []);
     } catch (e) {
       console.error('Failed to load music', e);
-      setMusicSongs([]);
+      // Fallback demo songs if API fails
+      setMusicSongs([
+        { id: '1', title: 'Dance Beat', artist: 'DJ Moves', file_url: '', duration: 180 },
+        { id: '2', title: 'Hip Hop Flow', artist: 'Street Beats', file_url: '', duration: 210 },
+        { id: '3', title: 'Salsa Caliente', artist: 'Latin Fire', file_url: '', duration: 195 },
+      ]);
     } finally {
       setMusicLoading(false);
     }

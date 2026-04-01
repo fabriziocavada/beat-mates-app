@@ -151,9 +151,22 @@ function StoryOverlays({ editorData }: { editorData?: EditorData }) {
   );
 }
 
-// Video player with pause support
-function StoryVideoPlayer({ url, isActive, isPaused }: { url: string; isActive: boolean; isPaused?: boolean }) {
+// Video player with pause support and optional music overlay
+function StoryVideoPlayer({ url, isActive, isPaused, musicUrl }: { url: string; isActive: boolean; isPaused?: boolean; musicUrl?: string }) {
   const [loading, setLoading] = useState(true);
+  const musicRef = useRef<any>(null);
+  
+  // Handle music playback when there's a music track
+  useEffect(() => {
+    if (musicRef.current && musicUrl) {
+      if (isActive && !isPaused) {
+        musicRef.current.playAsync?.().catch(() => {});
+      } else {
+        musicRef.current.pauseAsync?.().catch(() => {});
+      }
+    }
+  }, [isActive, isPaused, musicUrl]);
+  
   return (
     <View style={StyleSheet.absoluteFill}>
       <Video
@@ -162,10 +175,21 @@ function StoryVideoPlayer({ url, isActive, isPaused }: { url: string; isActive: 
         resizeMode={ResizeMode.COVER}
         shouldPlay={isActive && !isPaused}
         isLooping
-        isMuted={false}
+        isMuted={!!musicUrl} // Mute video if there's background music
         onLoad={() => setLoading(false)}
         onPlaybackStatusUpdate={(s: any) => { if (s.isLoaded && loading) setLoading(false); }}
       />
+      {/* Background music audio player */}
+      {musicUrl && (
+        <Video
+          ref={musicRef}
+          source={{ uri: musicUrl }}
+          style={{ width: 0, height: 0 }}
+          shouldPlay={isActive && !isPaused}
+          isLooping
+          isMuted={false}
+        />
+      )}
       {loading && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
           <ActivityIndicator size="large" color={Colors.primary} />
@@ -315,7 +339,13 @@ function UserStoryPage({
     <View style={{ width, height, backgroundColor: '#000' }}>
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         {isVideo ? (
-          <StoryVideoPlayer key={story.id} url={mediaUrl} isActive={isActive} isPaused={isPaused} />
+          <StoryVideoPlayer 
+            key={story.id} 
+            url={mediaUrl} 
+            isActive={isActive} 
+            isPaused={isPaused}
+            musicUrl={story.editor_data?.music?.file_url ? getMediaUrl(story.editor_data.music.file_url) || undefined : undefined}
+          />
         ) : (
           <StoryImageLoader key={story.id} url={mediaUrl} />
         )}
