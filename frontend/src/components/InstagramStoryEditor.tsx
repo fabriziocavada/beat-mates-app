@@ -722,8 +722,6 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
 
   // Apply animated particle effect
   const applyEffect = (effect: typeof ANIMATED_EFFECTS[0]) => {
-    setSelectedEffect(effect.id);
-    
     // Generate animated particles based on effect type
     const particleCount = 30;
     const newParticles = [];
@@ -736,13 +734,20 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
         y: effect.type === 'falling' ? -50 : effect.type === 'rising' ? height + 50 : Math.random() * height,
         opacity: 1,
         animationType: effect.type,
-        delay: Math.random() * 2000,
-        duration: 2000 + Math.random() * 2000,
+        delay: Math.random() * 500, // Reduced delay so effects appear faster
+        duration: 3000 + Math.random() * 2000, // Slower duration for preview
       };
       newParticles.push(particle);
     }
+    
+    // Set particles first, then effect ID, then close panel
     setEffectParticles(newParticles);
-    setActivePanel('none');
+    setSelectedEffect(effect.id);
+    
+    // Small delay before closing panel to ensure state updates
+    setTimeout(() => {
+      setActivePanel('none');
+    }, 100);
   };
 
   // Add animated text sticker
@@ -1031,9 +1036,9 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
       {/* Background color overlay */}
       {backgroundColor !== 'transparent' && <View style={[StyleSheet.absoluteFill, { backgroundColor }]} />}
 
-      {/* Media layer - visual only, no gestures */}
-      <View style={styles.mediaContainer} pointerEvents="none">
-        <Animated.View style={[styles.mediaInner, mainMediaAnimatedStyle]}>
+      {/* Main Media with Pinch-to-Zoom - DIRECTLY wrapping content */}
+      <GestureDetector gesture={mainMediaGesture}>
+        <Animated.View style={[styles.mediaContainer, mainMediaAnimatedStyle]}>
           {mediaType === 'video' ? (
             <Video
               source={{ uri: mediaUri }}
@@ -1047,29 +1052,22 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
             <Image source={{ uri: mediaUri }} style={styles.media} resizeMode="contain" />
           )}
         </Animated.View>
+      </GestureDetector>
 
-        {/* Drawing canvas - only show saved drawings when NOT in drawing mode */}
-        {!isDrawingMode && drawings.length > 0 && (
-          <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
-            {drawings.map(d => (
-              <Path key={d.id} d={d.points} stroke={d.color} strokeWidth={d.width} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-            ))}
-          </Svg>
-        )}
+      {/* Drawing canvas - only show saved drawings when NOT in drawing mode */}
+      {!isDrawingMode && drawings.length > 0 && (
+        <Svg style={[StyleSheet.absoluteFill, { zIndex: 10 }]} pointerEvents="none">
+          {drawings.map(d => (
+            <Path key={d.id} d={d.points} stroke={d.color} strokeWidth={d.width} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          ))}
+        </Svg>
+      )}
 
-        {/* Original poster watermark */}
-        {originalPoster && (
-          <View style={styles.watermark}>
-            <Text style={styles.watermarkText}>{originalPoster.username}</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Gesture layer for main media - captures 2-finger gestures */}
-      {!isDrawingMode && !isAnyPanelOpen && (
-        <GestureDetector gesture={mainMediaGesture}>
-          <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 5 }]} pointerEvents="box-none" />
-        </GestureDetector>
+      {/* Original poster watermark */}
+      {originalPoster && (
+        <View style={[styles.watermark, { zIndex: 15 }]} pointerEvents="none">
+          <Text style={styles.watermarkText}>{originalPoster.username}</Text>
+        </View>
       )}
 
       {/* Drawing overlay - captures touch events when drawing */}

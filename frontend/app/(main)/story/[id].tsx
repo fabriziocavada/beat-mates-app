@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, Image, TouchableOpacity, FlatList,
   Dimensions, ActivityIndicator, StatusBar, Animated, Modal, Pressable, TextInput,
@@ -40,74 +40,85 @@ function AnimatedEffectOverlay({ effectId }: { effectId: string }) {
   const effect = EFFECT_DEFINITIONS[effectId];
   if (!effect) return null;
 
-  const particleCount = 25;
-  const particles = Array.from({ length: particleCount }, (_, i) => ({
-    id: i,
-    emoji: effect.particles[Math.floor(Math.random() * effect.particles.length)],
-    x: Math.random() * width,
-    startY: effect.type === 'falling' ? -50 : effect.type === 'rising' ? height + 50 : Math.random() * height,
-    anim: useRef(new Animated.Value(0)).current,
-    delay: Math.random() * 2000,
-    duration: 2500 + Math.random() * 2000,
-    offsetX: (Math.random() - 0.5) * 40,
-  }));
-
-  useEffect(() => {
-    particles.forEach((p) => {
-      const animate = () => {
-        p.anim.setValue(0);
-        Animated.timing(p.anim, {
-          toValue: 1,
-          duration: p.duration,
-          delay: p.delay,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        }).start(() => animate());
-      };
-      animate();
-    });
-  }, []);
+  const particleCount = 20;
+  
+  // Create stable particle data with useMemo
+  const particleData = React.useMemo(() => 
+    Array.from({ length: particleCount }, (_, i) => ({
+      id: i,
+      emoji: effect.particles[Math.floor(Math.random() * effect.particles.length)],
+      x: Math.random() * width,
+      startY: effect.type === 'falling' ? -50 : effect.type === 'rising' ? height + 50 : Math.random() * height,
+      delay: Math.random() * 3000,
+      duration: 6000 + Math.random() * 4000, // MUCH SLOWER: 6-10 seconds
+      offsetX: (Math.random() - 0.5) * 60,
+      fontSize: 24 + Math.random() * 14,
+    }))
+  , [effectId]);
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {particles.map((p) => {
-        let translateY, translateX, opacity;
-        
-        if (effect.type === 'falling') {
-          translateY = p.anim.interpolate({ inputRange: [0, 1], outputRange: [-50, height + 50] });
-          translateX = p.anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, p.offsetX, 0] });
-        } else if (effect.type === 'rising') {
-          translateY = p.anim.interpolate({ inputRange: [0, 1], outputRange: [height + 50, -50] });
-          translateX = p.anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, p.offsetX, 0] });
-        } else if (effect.type === 'burst') {
-          const angle = (p.id / particleCount) * Math.PI * 2;
-          const dist = 120;
-          translateY = p.anim.interpolate({ inputRange: [0, 1], outputRange: [0, Math.sin(angle) * dist] });
-          translateX = p.anim.interpolate({ inputRange: [0, 1], outputRange: [0, Math.cos(angle) * dist] });
-        } else {
-          translateY = p.anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, -25, 0] });
-          translateX = p.anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, p.offsetX, 0] });
-        }
-        
-        opacity = p.anim.interpolate({ inputRange: [0, 0.1, 0.9, 1], outputRange: [0, 1, 1, 0] });
-
-        return (
-          <Animated.Text
-            key={p.id}
-            style={{
-              position: 'absolute',
-              left: p.x,
-              top: p.startY,
-              fontSize: 22 + Math.random() * 10,
-              transform: [{ translateY }, { translateX }],
-              opacity,
-            }}
-          >
-            {p.emoji}
-          </Animated.Text>
-        );
-      })}
+      {particleData.map((p) => (
+        <SingleParticle key={p.id} particle={p} effectType={effect.type} />
+      ))}
     </View>
+  );
+}
+
+// Separate component for each particle to avoid hook issues
+function SingleParticle({ particle, effectType }: { particle: any; effectType: string }) {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animate = () => {
+      anim.setValue(0);
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: particle.duration,
+        delay: particle.delay,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }).start(() => animate());
+    };
+    animate();
+    
+    return () => anim.stopAnimation();
+  }, []);
+
+  let translateY, translateX;
+  
+  if (effectType === 'falling') {
+    translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [-50, height + 50] });
+    translateX = anim.interpolate({ inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: [0, particle.offsetX/2, particle.offsetX, particle.offsetX/2, 0] });
+  } else if (effectType === 'rising') {
+    translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [height + 50, -50] });
+    translateX = anim.interpolate({ inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: [0, particle.offsetX/2, particle.offsetX, particle.offsetX/2, 0] });
+  } else if (effectType === 'burst') {
+    const angle = (particle.id / 20) * Math.PI * 2;
+    const dist = 150;
+    translateY = anim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0, Math.sin(angle) * dist, Math.sin(angle) * dist * 1.5] });
+    translateX = anim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0, Math.cos(angle) * dist, Math.cos(angle) * dist * 1.5] });
+  } else {
+    // floating - gentle bobbing
+    translateY = anim.interpolate({ inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: [0, -20, -35, -20, 0] });
+    translateX = anim.interpolate({ inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: [0, particle.offsetX/2, 0, -particle.offsetX/2, 0] });
+  }
+  
+  const opacity = anim.interpolate({ inputRange: [0, 0.1, 0.85, 1], outputRange: [0, 1, 1, 0] });
+
+  return (
+    <Animated.Text
+      style={{
+        position: 'absolute',
+        left: particle.x,
+        top: particle.startY,
+        fontSize: particle.fontSize,
+        transform: [{ translateY }, { translateX }],
+        opacity,
+      }}
+    >
+      {particle.emoji}
+    </Animated.Text>
   );
 }
 
