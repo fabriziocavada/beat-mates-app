@@ -92,6 +92,28 @@ const EMOJIS = ['❤️', '🔥', '😂', '😍', '🎉', '👏', '💯', '✨',
 
 const BACKGROUNDS = ['transparent', '#000000', '#1a1a2e', '#16213e', '#0f3460', '#533483', '#e94560', '#f38181', '#fce38a', '#95e1d3'];
 
+// Instagram-style Effects (Particles, GIFs, Animated overlays)
+const EFFECTS = [
+  { id: 'confetti', name: 'Coriandoli', emoji: '🎊', particles: ['🎊', '🎉', '✨', '🎀', '💫'] },
+  { id: 'hearts', name: 'Cuori', emoji: '💕', particles: ['❤️', '💕', '💖', '💗', '💝'] },
+  { id: 'stars', name: 'Stelle', emoji: '⭐', particles: ['⭐', '✨', '🌟', '💫', '✴️'] },
+  { id: 'fire', name: 'Fuoco', emoji: '🔥', particles: ['🔥', '🔥', '💥', '⚡', '✨'] },
+  { id: 'snow', name: 'Neve', emoji: '❄️', particles: ['❄️', '❅', '❆', '🌨️', '⛄'] },
+  { id: 'sparkles', name: 'Scintille', emoji: '✨', particles: ['✨', '💫', '⭐', '🌟', '✴️'] },
+  { id: 'balloons', name: 'Palloncini', emoji: '🎈', particles: ['🎈', '🎉', '🎊', '🎀', '🎁'] },
+  { id: 'rain', name: 'Pioggia', emoji: '🌧️', particles: ['💧', '💦', '🌊', '💙', '🔵'] },
+];
+
+// Animated GIF stickers
+const GIF_STICKERS = [
+  { id: 'dance1', label: 'Dance', url: 'https://media.giphy.com/media/3o7TKUn3XK2Y9jFHGM/giphy.gif' },
+  { id: 'fire1', label: 'Fire', url: 'https://media.giphy.com/media/jUwpNzg9IcyrK/giphy.gif' },
+  { id: 'heart1', label: 'Heart', url: 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif' },
+  { id: 'star1', label: 'Star', url: 'https://media.giphy.com/media/xT5LMHxhOfscxPfIfm/giphy.gif' },
+  { id: 'cool1', label: 'Cool', url: 'https://media.giphy.com/media/62PP2yEIAZF6g/giphy.gif' },
+  { id: 'party1', label: 'Party', url: 'https://media.giphy.com/media/l0MYGb1LuZ3n7dRnO/giphy.gif' },
+];
+
 interface Props {
   mediaUri: string;
   mediaType: 'photo' | 'video';
@@ -205,8 +227,12 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
   const [mainImageScale, setMainImageScale] = useState(1);
 
   // Panel state
-  const [activePanel, setActivePanel] = useState<'none' | 'text' | 'stickers' | 'draw' | 'background' | 'music' | 'link' | 'poll' | 'question' | 'location' | 'countdown' | 'hashtag' | 'mention'>('none');
+  const [activePanel, setActivePanel] = useState<'none' | 'text' | 'stickers' | 'draw' | 'background' | 'music' | 'link' | 'poll' | 'question' | 'location' | 'countdown' | 'hashtag' | 'mention' | 'effects'>('none');
   const [showSidebar, setShowSidebar] = useState(true);
+
+  // Effects state
+  const [selectedEffect, setSelectedEffect] = useState<string | null>(null);
+  const [effectParticles, setEffectParticles] = useState<{ id: string; emoji: string; x: number; y: number; opacity: number }[]>([]);
 
   // Text editing state
   const [currentText, setCurrentText] = useState('');
@@ -566,6 +592,46 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
     setOverlayImages(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
   };
 
+  // Apply particle effect
+  const applyEffect = (effect: typeof EFFECTS[0]) => {
+    setSelectedEffect(effect.id);
+    
+    // Generate random particles
+    const particles = [];
+    for (let i = 0; i < 20; i++) {
+      particles.push({
+        id: `${Date.now()}-${i}`,
+        emoji: effect.particles[Math.floor(Math.random() * effect.particles.length)],
+        x: Math.random() * width,
+        y: Math.random() * height,
+        opacity: 1,
+      });
+    }
+    setEffectParticles(particles);
+    setActivePanel('none');
+  };
+
+  // Add GIF sticker
+  const addGifSticker = (gif: typeof GIF_STICKERS[0]) => {
+    const newSticker: StickerElement = {
+      id: `gif-${Date.now()}`,
+      type: 'widget',
+      content: gif.url,
+      icon: 'gif',
+      x: width / 2 - 60,
+      y: height / 2 - 60,
+      scale: 1,
+    };
+    setStickers(prev => [...prev, newSticker]);
+    setActivePanel('none');
+  };
+
+  // Clear effect
+  const clearEffect = () => {
+    setSelectedEffect(null);
+    setEffectParticles([]);
+  };
+
   // Delete element
   const deleteText = (id: string) => {
     Alert.alert('Elimina', 'Vuoi eliminare questo testo?', [
@@ -639,9 +705,12 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
       texts,
       stickers,
       drawings,
+      overlayImages, // Include overlay images
       backgroundColor,
       caption,
       music: selectedMusic, // Include selected music
+      effect: selectedEffect, // Include selected effect
+      effectParticles, // Include effect particles
     });
   };
 
@@ -838,6 +907,7 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
       {showSidebar && !isAnyPanelOpen && !isDrawingMode && (
         <View style={styles.sidebar}>
           <SidebarTool icon="happy-outline" label="Adesivi" onPress={() => openPanel('stickers')} />
+          <SidebarTool icon="sparkles-outline" label="Effetti" onPress={() => openPanel('effects')} />
           <SidebarTool icon="image-outline" label="Immagine" onPress={addOverlayImage} />
           <SidebarTool icon="musical-note" label="Audio" onPress={() => { loadMusicSongs(); openPanel('music'); }} />
           <SidebarTool icon="at" label="Menziona" onPress={() => { loadMentionUsers(''); openPanel('mention'); }} />
@@ -1316,6 +1386,84 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
           </ScrollView>
         </View>
       </Modal>
+
+      {/* EFFECTS PANEL - Instagram-style */}
+      <Modal visible={activePanel === 'effects'} transparent animationType="slide">
+        <View style={styles.effectsPanel}>
+          <View style={styles.effectsHeader}>
+            <View style={styles.dragHandle} />
+            <TouchableOpacity style={styles.closeEffectsBtn} onPress={() => setActivePanel('none')}>
+              <Ionicons name="close" size={24} color="#fff" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.effectsContent} showsVerticalScrollIndicator={false}>
+            {/* Particle Effects */}
+            <Text style={styles.effectsSectionTitle}>Particelle</Text>
+            <View style={styles.effectsGrid}>
+              {EFFECTS.map((effect) => (
+                <TouchableOpacity 
+                  key={effect.id} 
+                  style={[styles.effectItem, selectedEffect === effect.id && styles.effectItemSelected]}
+                  onPress={() => applyEffect(effect)}
+                >
+                  <View style={styles.effectIconBg}>
+                    <Text style={{ fontSize: 28 }}>{effect.emoji}</Text>
+                  </View>
+                  <Text style={styles.effectLabel}>{effect.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* GIF Stickers */}
+            <Text style={styles.effectsSectionTitle}>GIF Animate</Text>
+            <View style={styles.gifGrid}>
+              {GIF_STICKERS.map((gif) => (
+                <TouchableOpacity 
+                  key={gif.id} 
+                  style={styles.gifItem}
+                  onPress={() => addGifSticker(gif)}
+                >
+                  <Image 
+                    source={{ uri: gif.url }} 
+                    style={styles.gifPreview}
+                    resizeMode="cover"
+                  />
+                  <Text style={styles.gifLabel}>{gif.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Clear Effects Button */}
+            {selectedEffect && (
+              <TouchableOpacity style={styles.clearEffectBtn} onPress={clearEffect}>
+                <Ionicons name="close-circle" size={20} color="#FF3B30" />
+                <Text style={styles.clearEffectText}>Rimuovi Effetto</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Particle effect overlay */}
+      {effectParticles.length > 0 && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          {effectParticles.map((p) => (
+            <Text 
+              key={p.id} 
+              style={{ 
+                position: 'absolute', 
+                left: p.x, 
+                top: p.y, 
+                fontSize: 24,
+                opacity: p.opacity,
+              }}
+            >
+              {p.emoji}
+            </Text>
+          ))}
+        </View>
+      )}
     </GestureHandlerRootView>
   );
 }
@@ -2246,4 +2394,100 @@ const styles = StyleSheet.create({
   mentionInfo: { flex: 1 },
   mentionUsername: { color: '#fff', fontSize: 16, fontWeight: '600' },
   mentionName: { color: '#888', fontSize: 14 },
+  // Effects panel
+  effectsPanel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: height * 0.7,
+    backgroundColor: '#1c1c1e',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  effectsHeader: {
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  closeEffectsBtn: {
+    position: 'absolute',
+    right: 16,
+    top: 8,
+  },
+  effectsContent: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  effectsSectionTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  effectsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  effectItem: {
+    width: (width - 80) / 4,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  effectItemSelected: {
+    opacity: 0.5,
+  },
+  effectIconBg: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: '#2c2c2e',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  effectLabel: {
+    color: '#fff',
+    fontSize: 11,
+    textAlign: 'center',
+  },
+  gifGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  gifItem: {
+    width: (width - 64) / 3,
+    marginBottom: 12,
+  },
+  gifPreview: {
+    width: '100%',
+    height: 80,
+    borderRadius: 12,
+    backgroundColor: '#2c2c2e',
+  },
+  gifLabel: {
+    color: '#fff',
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  clearEffectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2c2c2e',
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 20,
+    marginBottom: 30,
+    gap: 8,
+  },
+  clearEffectText: {
+    color: '#FF3B30',
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });

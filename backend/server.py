@@ -424,9 +424,14 @@ async def update_me(data: UserUpdate, current_user: dict = Depends(get_current_u
     return UserResponse(**{k: v for k, v in updated_user.items() if k != "password_hash"})
 
 @api_router.get("/users/search")
-async def search_users(q: str = "", current_user: dict = Depends(get_current_user)):
+async def search_users(q: str = "", limit: int = 15, current_user: dict = Depends(get_current_user)):
+    # If no query, return some users (excluding current user)
     if not q or len(q) < 1:
-        return []
+        users = await db.users.find(
+            {"id": {"$ne": current_user["id"]}},
+            {"_id": 0, "password": 0}
+        ).limit(limit).to_list(limit)
+        return users
     
     # Build a fuzzy regex pattern that handles common typos
     # Allow each character to be optional or have one character difference
@@ -2353,12 +2358,18 @@ async def upload_song(
     return SongResponse(**song)
 
 @api_router.get("/music/songs")
-async def get_songs(genre: Optional[str] = None, playlist_id: Optional[str] = None, liked_only: bool = False, current_user: dict = Depends(get_current_user)):
-    query = {"user_id": current_user["id"]}
+async def get_songs(genre: Optional[str] = None, playlist_id: Optional[str] = None, liked_only: bool = False, search: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    # Include both user's songs and demo/public songs (user_id contains 'demo' or matches current user)
+    query = {"$or": [{"user_id": current_user["id"]}, {"user_id": {"$regex": ".*"}}]}  # Show all songs for now
     if genre and genre != "ALL":
         query["genre"] = genre
     if playlist_id:
         query["playlist_id"] = playlist_id
+    if search and search.strip():
+        query["$or"] = [
+            {"title": {"$regex": search, "$options": "i"}},
+            {"artist": {"$regex": search, "$options": "i"}}
+        ]
 
     songs = await db.songs.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
 

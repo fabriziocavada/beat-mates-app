@@ -79,7 +79,11 @@ type EditorData = {
   texts?: { id: string; text: string; x: number; y: number; color: string; fontSize: number; fontStyle: string; backgroundColor: string | null }[];
   stickers?: { id: string; type: string; content: string; icon?: string; x: number; y: number; scale: number }[];
   drawings?: { id: string; points: string; color: string; width: number }[];
+  overlayImages?: { id: string; uri: string; x: number; y: number; scale: number; width: number; height: number }[];
   backgroundColor?: string;
+  music?: { id: string; title: string; artist: string; file_url: string };
+  effect?: string;
+  effectParticles?: { id: string; emoji: string; x: number; y: number; opacity: number }[];
 };
 
 type StoryData = { id: string; media: string; thumbnail?: string; type: string; created_at: string; editor_data?: EditorData };
@@ -129,9 +133,16 @@ function StoryOverlays({ editorData }: { editorData?: EditorData }) {
 
       {/* Stickers */}
       {editorData.stickers?.map((s) => (
-        <View key={s.id} style={[styles.overlaySticker, { left: s.x, top: s.y }]}>
+        <View key={s.id} style={[styles.overlaySticker, { left: s.x, top: s.y, transform: [{ scale: s.scale || 1 }] }]}>
           {s.type === 'emoji' ? (
-            <Text style={{ fontSize: 60 * (s.scale || 1) }}>{s.content}</Text>
+            <Text style={{ fontSize: 60 }}>{s.content}</Text>
+          ) : s.icon === 'gif' ? (
+            // GIF sticker
+            <Image 
+              source={{ uri: s.content }} 
+              style={{ width: 120, height: 120, borderRadius: 8 }}
+              resizeMode="cover"
+            />
           ) : s.icon === 'stats-chart' ? (
             // Interactive Poll Widget
             <InteractivePollWidget content={s.content} />
@@ -147,6 +158,43 @@ function StoryOverlays({ editorData }: { editorData?: EditorData }) {
             </View>
           )}
         </View>
+      ))}
+
+      {/* Overlay Images */}
+      {editorData.overlayImages?.map((img) => (
+        <View 
+          key={img.id} 
+          style={[
+            styles.overlayImage, 
+            { 
+              left: img.x, 
+              top: img.y,
+              transform: [{ scale: img.scale || 1 }],
+            }
+          ]}
+        >
+          <Image 
+            source={{ uri: img.uri.startsWith('http') ? img.uri : getMediaUrl(img.uri) || '' }} 
+            style={{ width: img.width, height: img.height, borderRadius: 8 }}
+            resizeMode="cover"
+          />
+        </View>
+      ))}
+
+      {/* Effect Particles */}
+      {editorData.effectParticles?.map((p) => (
+        <Text 
+          key={p.id} 
+          style={{ 
+            position: 'absolute', 
+            left: p.x, 
+            top: p.y, 
+            fontSize: 24,
+            opacity: p.opacity,
+          }}
+        >
+          {p.emoji}
+        </Text>
       ))}
     </View>
   );
@@ -1067,5 +1115,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 15,
     color: '#000',
+  },
+  // Overlay Images
+  overlayImage: {
+    position: 'absolute',
   },
 });

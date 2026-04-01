@@ -101,9 +101,12 @@ export default function CreateStoryScreen() {
           texts: data.texts || [],
           stickers: data.stickers || [],
           drawings: data.drawings || [],
+          overlayImages: data.overlayImages || [], // Include overlay images
           backgroundColor: data.backgroundColor || null,
           caption: data.caption || '',
           music: data.music || null, // Include selected music track
+          effect: data.effect || null, // Include selected effect
+          effectParticles: data.effectParticles || [], // Include effect particles
         };
       }
       
