@@ -729,6 +729,9 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
 
   // Apply animated particle effect
   const applyEffect = (effect: typeof ANIMATED_EFFECTS[0]) => {
+    // FIRST close the panel so particles are visible
+    setActivePanel('none');
+    
     // Use unique timestamp + random for each batch
     const batchId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
@@ -750,14 +753,9 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
       newParticles.push(particle);
     }
     
-    // Set effect ID and particles together to trigger re-render
+    // Set effect ID and particles AFTER closing panel
     setSelectedEffect(effect.id);
     setEffectParticles(newParticles);
-    
-    // Close panel after a short delay
-    setTimeout(() => {
-      setActivePanel('none');
-    }, 50);
   };
 
   // Add animated text sticker
@@ -1003,79 +1001,94 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
 
   const isAnyPanelOpen = activePanel !== 'none';
 
-  // Main media pinch-to-zoom gesture - REQUIRES 2 fingers for pan to avoid conflicts
-  const mainMediaScale = useSharedValue(1);
-  const savedMainScale = useSharedValue(1);
-  const mainMediaTranslateX = useSharedValue(0);
-  const mainMediaTranslateY = useSharedValue(0);
-  const savedMainTranslateX = useSharedValue(0);
-  const savedMainTranslateY = useSharedValue(0);
-
-  const mainPinchGesture = Gesture.Pinch()
-    .onStart(() => {
-      console.log('PINCH START');
-    })
-    .onUpdate((event) => {
-      console.log('PINCH UPDATE', event.scale);
-      mainMediaScale.value = Math.min(Math.max(savedMainScale.value * event.scale, 0.3), 4);
-    })
-    .onEnd(() => {
-      console.log('PINCH END');
-      savedMainScale.value = mainMediaScale.value;
-    });
-
-  // Two-finger pan for moving main media
-  const mainPanGesture = Gesture.Pan()
-    .minPointers(2) // Requires 2 fingers - allows single finger for other elements
-    .onStart(() => {
-      console.log('PAN START 2 FINGERS');
-    })
-    .onUpdate((event) => {
-      console.log('PAN UPDATE', event.translationX, event.translationY);
-      mainMediaTranslateX.value = savedMainTranslateX.value + event.translationX;
-      mainMediaTranslateY.value = savedMainTranslateY.value + event.translationY;
-    })
-    .onEnd(() => {
-      savedMainTranslateX.value = mainMediaTranslateX.value;
-      savedMainTranslateY.value = mainMediaTranslateY.value;
-    });
-
-  const mainMediaGesture = Gesture.Simultaneous(mainPinchGesture, mainPanGesture);
-
-  const mainMediaAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: mainMediaTranslateX.value },
-      { translateY: mainMediaTranslateY.value },
-      { scale: mainMediaScale.value },
-    ],
-  }));
+  // Main media pinch-to-zoom using PanResponder (more reliable on iOS)
+  const [mediaTransform, setMediaTransform] = useState({ scale: 1, translateX: 0, translateY: 0 });
+  const lastScale = useRef(1);
+  const lastDistance = useRef(0);
+  const lastTranslate = useRef({ x: 0, y: 0 });
+  
+  const getDistance = (touches: any[]) => {
+    const dx = touches[0].pageX - touches[1].pageX;
+    const dy = touches[0].pageY - touches[1].pageY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+  
+  const handleTouchStart = (e: any) => {
+    const touches = e.nativeEvent.touches;
+    if (touches.length === 2) {
+      lastDistance.current = getDistance(touches);
+      lastScale.current = mediaTransform.scale;
+      const centerX = (touches[0].pageX + touches[1].pageX) / 2;
+      const centerY = (touches[0].pageY + touches[1].pageY) / 2;
+      lastTranslate.current = { x: centerX - mediaTransform.translateX, y: centerY - mediaTransform.translateY };
+    }
+  };
+  
+  const handleTouchMove = (e: any) => {
+    const touches = e.nativeEvent.touches;
+    if (touches.length === 2) {
+      // Pinch to zoom
+      const distance = getDistance(touches);
+      if (lastDistance.current > 0) {
+        const newScale = Math.min(Math.max(lastScale.current * (distance / lastDistance.current), 0.3), 4);
+        
+        // Two-finger pan
+        const centerX = (touches[0].pageX + touches[1].pageX) / 2;
+        const centerY = (touches[0].pageY + touches[1].pageY) / 2;
+        const newTranslateX = centerX - lastTranslate.current.x;
+        const newTranslateY = centerY - lastTranslate.current.y;
+        
+        setMediaTransform({ 
+          scale: newScale, 
+          translateX: newTranslateX,
+          translateY: newTranslateY
+        });
+      }
+    }
+  };
+  
+  const handleTouchEnd = (e: any) => {
+    lastScale.current = mediaTransform.scale;
+    lastTranslate.current = { x: 0, y: 0 };
+    lastDistance.current = 0;
+  };
 
   return (
     <GestureHandlerRootView style={styles.container}>
       {/* Background color overlay */}
       {backgroundColor !== 'transparent' && <View style={[StyleSheet.absoluteFill, { backgroundColor }]} />}
 
-      {/* Main Media with Pinch-to-Zoom - DIRECTLY wrapping content */}
-      <GestureDetector gesture={mainMediaGesture}>
-        <Animated.View style={[styles.mediaContainer, mainMediaAnimatedStyle]}>
+      {/* Main Media with Pinch-to-Zoom using native touch handlers */}
+      <View 
+        style={[styles.mediaContainer]}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <View style={[
+          styles.mediaInner,
+          {
+            transform: [
+              { translateX: mediaTransform.translateX },
+              { translateY: mediaTransform.translateY },
+              { scale: mediaTransform.scale },
+            ],
+          }
+        ]}>
           {mediaType === 'video' ? (
-            <View pointerEvents="none" style={styles.media}>
-              <Video
-                source={{ uri: mediaUri }}
-                style={styles.media}
-                resizeMode={ResizeMode.CONTAIN}
-                shouldPlay
-                isLooping
-                isMuted={false}
-              />
-            </View>
+            <Video
+              source={{ uri: mediaUri }}
+              style={styles.media}
+              resizeMode={ResizeMode.CONTAIN}
+              shouldPlay
+              isLooping
+              isMuted={false}
+            />
           ) : (
-            <View pointerEvents="none" style={styles.media}>
-              <Image source={{ uri: mediaUri }} style={styles.media} resizeMode="contain" />
-            </View>
+            <Image source={{ uri: mediaUri }} style={styles.media} resizeMode="contain" />
           )}
-        </Animated.View>
-      </GestureDetector>
+        </View>
+      </View>
 
       {/* Drawing canvas - only show saved drawings when NOT in drawing mode */}
       {!isDrawingMode && drawings.length > 0 && (
@@ -1726,9 +1739,11 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
         </View>
       </Modal>
 
-      {/* Animated particle effect overlay */}
+      {/* Animated particle effect overlay - HIGH z-index to be above everything */}
       {effectParticles.length > 0 && (
-        <AnimatedParticles particles={effectParticles} />
+        <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 999 }} pointerEvents="none">
+          <AnimatedParticles particles={effectParticles} />
+        </View>
       )}
     </GestureHandlerRootView>
   );
