@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, Image, TouchableOpacity, FlatList,
   Dimensions, ActivityIndicator, StatusBar, Animated, Modal, Pressable, TextInput,
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -17,6 +18,98 @@ const VIDEO_DURATION = 60000;
 
 // Instagram-style reactions
 const REACTIONS = ['❤️', '😂', '😮', '😢', '👏', '🔥'];
+
+// Effect definitions for viewer
+const EFFECT_DEFINITIONS: { [key: string]: { type: string; particles: string[] } } = {
+  'falling_hearts': { type: 'falling', particles: ['❤️', '💕', '💖', '💗', '💝'] },
+  'rising_stars': { type: 'rising', particles: ['⭐', '✨', '🌟', '💫', '⚡'] },
+  'floating_sparkles': { type: 'floating', particles: ['✨', '💫', '🔆', '💎', '⭐'] },
+  'confetti_burst': { type: 'burst', particles: ['🎊', '🎉', '🎀', '🎈', '💫'] },
+  'snow_fall': { type: 'falling', particles: ['❄️', '❅', '❆', '🌨️', '💎'] },
+  'fire_rise': { type: 'rising', particles: ['🔥', '🔥', '💥', '⚡', '☄️'] },
+  'bubbles': { type: 'rising', particles: ['🫧', '💧', '💦', '🔵', '⚪'] },
+  'flowers_rain': { type: 'falling', particles: ['🌸', '🌺', '🌹', '🌷', '🌼'] },
+  'butterflies': { type: 'floating', particles: ['🦋', '🦋', '🦋', '✨', '💜'] },
+  'music_notes': { type: 'floating', particles: ['🎵', '🎶', '🎼', '🎤', '🎸'] },
+  'money_rain': { type: 'falling', particles: ['💰', '💵', '💸', '🤑', '💎'] },
+  'love_burst': { type: 'burst', particles: ['😍', '🥰', '😘', '💋', '❤️'] },
+};
+
+// Animated Effect Overlay for Viewer
+function AnimatedEffectOverlay({ effectId }: { effectId: string }) {
+  const effect = EFFECT_DEFINITIONS[effectId];
+  if (!effect) return null;
+
+  const particleCount = 25;
+  const particles = Array.from({ length: particleCount }, (_, i) => ({
+    id: i,
+    emoji: effect.particles[Math.floor(Math.random() * effect.particles.length)],
+    x: Math.random() * width,
+    startY: effect.type === 'falling' ? -50 : effect.type === 'rising' ? height + 50 : Math.random() * height,
+    anim: useRef(new Animated.Value(0)).current,
+    delay: Math.random() * 2000,
+    duration: 2500 + Math.random() * 2000,
+    offsetX: (Math.random() - 0.5) * 40,
+  }));
+
+  useEffect(() => {
+    particles.forEach((p) => {
+      const animate = () => {
+        p.anim.setValue(0);
+        Animated.timing(p.anim, {
+          toValue: 1,
+          duration: p.duration,
+          delay: p.delay,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }).start(() => animate());
+      };
+      animate();
+    });
+  }, []);
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {particles.map((p) => {
+        let translateY, translateX, opacity;
+        
+        if (effect.type === 'falling') {
+          translateY = p.anim.interpolate({ inputRange: [0, 1], outputRange: [-50, height + 50] });
+          translateX = p.anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, p.offsetX, 0] });
+        } else if (effect.type === 'rising') {
+          translateY = p.anim.interpolate({ inputRange: [0, 1], outputRange: [height + 50, -50] });
+          translateX = p.anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, p.offsetX, 0] });
+        } else if (effect.type === 'burst') {
+          const angle = (p.id / particleCount) * Math.PI * 2;
+          const dist = 120;
+          translateY = p.anim.interpolate({ inputRange: [0, 1], outputRange: [0, Math.sin(angle) * dist] });
+          translateX = p.anim.interpolate({ inputRange: [0, 1], outputRange: [0, Math.cos(angle) * dist] });
+        } else {
+          translateY = p.anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, -25, 0] });
+          translateX = p.anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, p.offsetX, 0] });
+        }
+        
+        opacity = p.anim.interpolate({ inputRange: [0, 0.1, 0.9, 1], outputRange: [0, 1, 1, 0] });
+
+        return (
+          <Animated.Text
+            key={p.id}
+            style={{
+              position: 'absolute',
+              left: p.x,
+              top: p.startY,
+              fontSize: 22 + Math.random() * 10,
+              transform: [{ translateY }, { translateX }],
+              opacity,
+            }}
+          >
+            {p.emoji}
+          </Animated.Text>
+        );
+      })}
+    </View>
+  );
+}
 
 // Interactive Poll Widget - users can tap to vote
 function InteractivePollWidget({ content }: { content: string }) {
