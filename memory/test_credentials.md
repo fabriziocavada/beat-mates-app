@@ -1,20 +1,18 @@
 # Test Credentials - Beat Mates App
 
-## Teacher Account
+## Main User (from test_database migration)
+- Email: `fabriziocavada@gmail.com`
+- Username: `fabry2`
+- Password: La tua password originale (ripristinata dal vecchio database)
+
+## Demo Accounts (backup)
 - Email: `demoteacher@beatmates.com`
 - Password: `password123`
 
-## Student Accounts
 - Email: `dancer_pro@beatmates.com`
 - Password: `password123`
 
 - Email: `salsa_queen@beatmates.com`
-- Password: `password123`
-
-- Email: `hiphop_star@beatmates.com`
-- Password: `password123`
-
-- Email: `ballet_master@beatmates.com`
 - Password: `password123`
 
 ## API Base URL
@@ -22,4 +20,9 @@
 
 ## Database
 - DB Name: `beatmates`
-- Collection: users, stories, songs, etc.
+- Collections: users, stories, posts, songs, etc.
+
+## Notes
+- All data was migrated from `test_database` to `beatmates`
+- Stories created AFTER the fix will have `editor_data` saved
+- Music files are stored in `/app/backend/uploads/`

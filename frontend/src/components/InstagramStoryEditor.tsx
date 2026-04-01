@@ -14,6 +14,8 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Animated as RNAnimated,
+  Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
@@ -41,12 +43,14 @@ interface TextElement {
 // Sticker element
 interface StickerElement {
   id: string;
-  type: 'emoji' | 'widget';
+  type: 'emoji' | 'widget' | 'gif' | 'animated_text';
   content: string;
   icon?: string;
   x: number;
   y: number;
   scale: number;
+  color?: string;
+  animation?: string;
 }
 
 // Drawing path
@@ -92,28 +96,32 @@ const EMOJIS = ['❤️', '🔥', '😂', '😍', '🎉', '👏', '💯', '✨',
 
 const BACKGROUNDS = ['transparent', '#000000', '#1a1a2e', '#16213e', '#0f3460', '#533483', '#e94560', '#f38181', '#fce38a', '#95e1d3'];
 
-// Instagram-style Effects (Particles, GIFs, Animated overlays) - EXPANDED
-const EFFECTS = [
-  { id: 'confetti', name: 'Coriandoli', emoji: '🎊', particles: ['🎊', '🎉', '✨', '🎀', '💫', '🌈', '🎁'] },
-  { id: 'hearts', name: 'Cuori', emoji: '💕', particles: ['❤️', '💕', '💖', '💗', '💝', '💘', '💞'] },
-  { id: 'hearts_float', name: 'Cuori Volanti', emoji: '❤️', particles: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤'] },
-  { id: 'stars', name: 'Stelle', emoji: '⭐', particles: ['⭐', '✨', '🌟', '💫', '✴️', '🌠', '⚡'] },
-  { id: 'fire', name: 'Fuoco', emoji: '🔥', particles: ['🔥', '🔥', '💥', '⚡', '✨', '🌋', '☄️'] },
-  { id: 'snow', name: 'Neve', emoji: '❄️', particles: ['❄️', '❅', '❆', '🌨️', '⛄', '🌬️', '💎'] },
-  { id: 'sparkles', name: 'Scintille', emoji: '✨', particles: ['✨', '💫', '⭐', '🌟', '✴️', '🔆', '💎'] },
-  { id: 'balloons', name: 'Palloncini', emoji: '🎈', particles: ['🎈', '🎉', '🎊', '🎀', '🎁', '🪅', '🎪'] },
-  { id: 'rain', name: 'Pioggia', emoji: '🌧️', particles: ['💧', '💦', '🌊', '💙', '🔵', '🌧️', '☔'] },
-  { id: 'flowers', name: 'Fiori', emoji: '🌸', particles: ['🌸', '🌺', '🌹', '🌷', '🌼', '💐', '🌻'] },
-  { id: 'leaves', name: 'Foglie', emoji: '🍂', particles: ['🍂', '🍁', '🍃', '🌿', '☘️', '🌱', '🪴'] },
-  { id: 'butterflies', name: 'Farfalle', emoji: '🦋', particles: ['🦋', '🦋', '✨', '💫', '🌸', '🌺', '💜'] },
-  { id: 'disco', name: 'Disco', emoji: '🪩', particles: ['🪩', '💃', '🕺', '🎵', '🎶', '✨', '⭐'] },
-  { id: 'love', name: 'Amore', emoji: '😍', particles: ['😍', '🥰', '😘', '💋', '❤️', '💕', '💖'] },
-  { id: 'party', name: 'Festa', emoji: '🥳', particles: ['🥳', '🎉', '🎊', '🎈', '🍾', '🥂', '🎆'] },
-  { id: 'magic', name: 'Magia', emoji: '🪄', particles: ['🪄', '✨', '💫', '⭐', '🌟', '🔮', '💎'] },
-  { id: 'money', name: 'Soldi', emoji: '💰', particles: ['💰', '💵', '💸', '🤑', '💎', '👑', '🏆'] },
-  { id: 'sports', name: 'Sport', emoji: '⚽', particles: ['⚽', '🏀', '🏈', '⚾', '🎾', '🏐', '🏆'] },
-  { id: 'music', name: 'Musica', emoji: '🎵', particles: ['🎵', '🎶', '🎸', '🎹', '🎺', '🥁', '🎤'] },
-  { id: 'gaming', name: 'Gaming', emoji: '🎮', particles: ['🎮', '🕹️', '👾', '🎲', '🃏', '🏆', '⭐'] },
+// Instagram-style ANIMATED Effects
+const ANIMATED_EFFECTS = [
+  { id: 'falling_hearts', name: 'Cuori Cadenti', preview: '💕', type: 'falling', particles: ['❤️', '💕', '💖', '💗', '💝'] },
+  { id: 'rising_stars', name: 'Stelle Volanti', preview: '✨', type: 'rising', particles: ['⭐', '✨', '🌟', '💫', '⚡'] },
+  { id: 'floating_sparkles', name: 'Scintille', preview: '✨', type: 'floating', particles: ['✨', '💫', '🔆', '💎', '⭐'] },
+  { id: 'confetti_burst', name: 'Coriandoli', preview: '🎊', type: 'burst', particles: ['🎊', '🎉', '🎀', '🎈', '💫'] },
+  { id: 'snow_fall', name: 'Neve', preview: '❄️', type: 'falling', particles: ['❄️', '❅', '❆', '🌨️', '💎'] },
+  { id: 'fire_rise', name: 'Fuoco', preview: '🔥', type: 'rising', particles: ['🔥', '🔥', '💥', '⚡', '☄️'] },
+  { id: 'bubbles', name: 'Bolle', preview: '🫧', type: 'rising', particles: ['🫧', '💧', '💦', '🔵', '⚪'] },
+  { id: 'flowers_rain', name: 'Fiori', preview: '🌸', type: 'falling', particles: ['🌸', '🌺', '🌹', '🌷', '🌼'] },
+  { id: 'butterflies', name: 'Farfalle', preview: '🦋', type: 'floating', particles: ['🦋', '🦋', '🦋', '✨', '💜'] },
+  { id: 'music_notes', name: 'Note', preview: '🎵', type: 'floating', particles: ['🎵', '🎶', '🎼', '🎤', '🎸'] },
+  { id: 'money_rain', name: 'Soldi', preview: '💰', type: 'falling', particles: ['💰', '💵', '💸', '🤑', '💎'] },
+  { id: 'love_burst', name: 'Amore', preview: '😍', type: 'burst', particles: ['😍', '🥰', '😘', '💋', '❤️'] },
+];
+
+// Animated text stickers (Instagram-style)
+const TEXT_STICKERS = [
+  { id: 'love_text', label: 'LOVE', color: '#FF1493', animation: 'pulse' },
+  { id: 'wow_text', label: 'WOW!', color: '#FFD700', animation: 'bounce' },
+  { id: 'fire_text', label: '🔥FIRE🔥', color: '#FF4500', animation: 'shake' },
+  { id: 'yes_text', label: 'YES!', color: '#00FF00', animation: 'pulse' },
+  { id: 'omg_text', label: 'OMG', color: '#FF69B4', animation: 'bounce' },
+  { id: 'cool_text', label: 'COOL', color: '#00BFFF', animation: 'pulse' },
+  { id: 'lol_text', label: 'LOL 😂', color: '#FFFF00', animation: 'shake' },
+  { id: 'vibes_text', label: '✨VIBES✨', color: '#9400D3', animation: 'pulse' },
 ];
 
 // Animated GIF stickers - EXPANDED with more variety
@@ -231,6 +239,108 @@ const DraggableItem = ({ children, initialX, initialY, initialScale = 1, onPosit
         {children}
       </Animated.View>
     </GestureDetector>
+  );
+};
+
+// Animated Particles Component - creates falling/rising/floating particles
+const AnimatedParticles = ({ particles }: { particles: any[] }) => {
+  const animRefs = useRef<{ [key: string]: RNAnimated.Value }>({});
+  
+  useEffect(() => {
+    particles.forEach((p) => {
+      if (!animRefs.current[p.id]) {
+        animRefs.current[p.id] = new RNAnimated.Value(0);
+      }
+      
+      const anim = animRefs.current[p.id];
+      anim.setValue(0);
+      
+      RNAnimated.loop(
+        RNAnimated.timing(anim, {
+          toValue: 1,
+          duration: p.duration || 3000,
+          delay: p.delay || 0,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
+      ).start();
+    });
+    
+    return () => {
+      Object.values(animRefs.current).forEach((anim) => anim.stopAnimation());
+    };
+  }, [particles]);
+  
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {particles.map((p) => {
+        const anim = animRefs.current[p.id] || new RNAnimated.Value(0);
+        
+        let translateY, translateX, opacity;
+        
+        if (p.animationType === 'falling') {
+          translateY = anim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [-50, height + 50],
+          });
+          translateX = anim.interpolate({
+            inputRange: [0, 0.25, 0.5, 0.75, 1],
+            outputRange: [0, 15, 0, -15, 0],
+          });
+        } else if (p.animationType === 'rising') {
+          translateY = anim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [height + 50, -50],
+          });
+          translateX = anim.interpolate({
+            inputRange: [0, 0.25, 0.5, 0.75, 1],
+            outputRange: [0, -10, 0, 10, 0],
+          });
+        } else if (p.animationType === 'burst') {
+          const angle = Math.random() * Math.PI * 2;
+          const distance = 100 + Math.random() * 150;
+          translateY = anim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, Math.sin(angle) * distance],
+          });
+          translateX = anim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, Math.cos(angle) * distance],
+          });
+        } else {
+          // floating
+          translateY = anim.interpolate({
+            inputRange: [0, 0.5, 1],
+            outputRange: [0, -30, 0],
+          });
+          translateX = anim.interpolate({
+            inputRange: [0, 0.25, 0.5, 0.75, 1],
+            outputRange: [0, 20, 0, -20, 0],
+          });
+        }
+        
+        opacity = anim.interpolate({
+          inputRange: [0, 0.1, 0.9, 1],
+          outputRange: [0, 1, 1, 0],
+        });
+        
+        return (
+          <RNAnimated.Text
+            key={p.id}
+            style={{
+              position: 'absolute',
+              left: p.x,
+              top: p.y,
+              fontSize: 24 + Math.random() * 12,
+              transform: [{ translateY }, { translateX }],
+              opacity,
+            }}
+          >
+            {p.emoji}
+          </RNAnimated.Text>
+        );
+      })}
+    </View>
   );
 };
 
@@ -610,22 +720,45 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
     setOverlayImages(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
   };
 
-  // Apply particle effect
-  const applyEffect = (effect: typeof EFFECTS[0]) => {
+  // Apply animated particle effect
+  const applyEffect = (effect: typeof ANIMATED_EFFECTS[0]) => {
     setSelectedEffect(effect.id);
     
-    // Generate random particles
-    const particles = [];
-    for (let i = 0; i < 20; i++) {
-      particles.push({
+    // Generate animated particles based on effect type
+    const particleCount = 30;
+    const newParticles = [];
+    
+    for (let i = 0; i < particleCount; i++) {
+      const particle = {
         id: `${Date.now()}-${i}`,
         emoji: effect.particles[Math.floor(Math.random() * effect.particles.length)],
         x: Math.random() * width,
-        y: Math.random() * height,
+        y: effect.type === 'falling' ? -50 : effect.type === 'rising' ? height + 50 : Math.random() * height,
         opacity: 1,
-      });
+        animationType: effect.type,
+        delay: Math.random() * 2000,
+        duration: 2000 + Math.random() * 2000,
+      };
+      newParticles.push(particle);
     }
-    setEffectParticles(particles);
+    setEffectParticles(newParticles);
+    setActivePanel('none');
+  };
+
+  // Add animated text sticker
+  const addTextSticker = (textSticker: typeof TEXT_STICKERS[0]) => {
+    const newSticker: StickerElement = {
+      id: `text-${Date.now()}`,
+      type: 'animated_text',
+      content: textSticker.label,
+      icon: 'text',
+      x: width / 2 - 50,
+      y: height / 2 - 20,
+      scale: 1,
+      color: textSticker.color,
+      animation: textSticker.animation,
+    };
+    setStickers(prev => [...prev, newSticker]);
     setActivePanel('none');
   };
 
@@ -633,9 +766,9 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
   const addGifSticker = (gif: typeof GIF_STICKERS[0]) => {
     const newSticker: StickerElement = {
       id: `gif-${Date.now()}`,
-      type: 'gif', // Use type 'gif' to identify GIF stickers
+      type: 'gif',
       content: gif.url,
-      icon: 'image', // Valid ionicon
+      icon: 'image',
       x: width / 2 - 60,
       y: height / 2 - 60,
       scale: 1,
@@ -771,10 +904,54 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
           key={item.id}
           initialX={item.x}
           initialY={item.y}
+          initialScale={item.scale || 1}
           onPositionChange={(x, y) => updateStickerPosition(item.id, x, y)}
+          onScaleChange={(scale) => setStickers(prev => prev.map(s => s.id === item.id ? { ...s, scale } : s))}
           onDelete={() => deleteSticker(item.id)}
         >
           <Text style={{ fontSize: 60 }}>{item.content}</Text>
+        </DraggableItem>
+      );
+    }
+
+    // GIF sticker - render as animated image
+    if (item.type === 'gif') {
+      return (
+        <DraggableItem
+          key={item.id}
+          initialX={item.x}
+          initialY={item.y}
+          initialScale={item.scale || 1}
+          onPositionChange={(x, y) => updateStickerPosition(item.id, x, y)}
+          onScaleChange={(scale) => setStickers(prev => prev.map(s => s.id === item.id ? { ...s, scale } : s))}
+          onDelete={() => deleteSticker(item.id)}
+        >
+          <Image
+            source={{ uri: item.content }}
+            style={{ width: 120, height: 120, borderRadius: 12 }}
+            resizeMode="cover"
+          />
+        </DraggableItem>
+      );
+    }
+
+    // Animated text sticker (LOVE, WOW, etc.)
+    if (item.type === 'animated_text') {
+      return (
+        <DraggableItem
+          key={item.id}
+          initialX={item.x}
+          initialY={item.y}
+          initialScale={item.scale || 1}
+          onPositionChange={(x, y) => updateStickerPosition(item.id, x, y)}
+          onScaleChange={(scale) => setStickers(prev => prev.map(s => s.id === item.id ? { ...s, scale } : s))}
+          onDelete={() => deleteSticker(item.id)}
+        >
+          <View style={[styles.animatedTextSticker, { borderColor: item.color || '#FF1493' }]}>
+            <Text style={[styles.animatedTextLabel, { color: item.color || '#FF1493' }]}>
+              {item.content}
+            </Text>
+          </View>
         </DraggableItem>
       );
     }
@@ -785,7 +962,9 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
         key={item.id}
         initialX={item.x}
         initialY={item.y}
+        initialScale={item.scale || 1}
         onPositionChange={(x, y) => updateStickerPosition(item.id, x, y)}
+        onScaleChange={(scale) => setStickers(prev => prev.map(s => s.id === item.id ? { ...s, scale } : s))}
         onDelete={() => deleteSticker(item.id)}
       >
         <View style={styles.widgetSticker}>
@@ -1416,17 +1595,34 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
           </View>
 
           <ScrollView style={styles.effectsContent} showsVerticalScrollIndicator={false}>
-            {/* Particle Effects */}
-            <Text style={styles.effectsSectionTitle}>Particelle</Text>
+            {/* Animated Text Stickers */}
+            <Text style={styles.effectsSectionTitle}>Scritte Animate</Text>
             <View style={styles.effectsGrid}>
-              {EFFECTS.map((effect) => (
+              {TEXT_STICKERS.map((ts) => (
+                <TouchableOpacity 
+                  key={ts.id} 
+                  style={styles.effectItem}
+                  onPress={() => addTextSticker(ts)}
+                >
+                  <View style={[styles.effectIconBg, { borderWidth: 2, borderColor: ts.color }]}>
+                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: ts.color }}>{ts.label}</Text>
+                  </View>
+                  <Text style={styles.effectLabel}>{ts.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Animated Particle Effects */}
+            <Text style={styles.effectsSectionTitle}>Effetti Animati</Text>
+            <View style={styles.effectsGrid}>
+              {ANIMATED_EFFECTS.map((effect) => (
                 <TouchableOpacity 
                   key={effect.id} 
                   style={[styles.effectItem, selectedEffect === effect.id && styles.effectItemSelected]}
                   onPress={() => applyEffect(effect)}
                 >
                   <View style={styles.effectIconBg}>
-                    <Text style={{ fontSize: 28 }}>{effect.emoji}</Text>
+                    <Text style={{ fontSize: 28 }}>{effect.preview}</Text>
                   </View>
                   <Text style={styles.effectLabel}>{effect.name}</Text>
                 </TouchableOpacity>
@@ -1463,24 +1659,9 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
         </View>
       </Modal>
 
-      {/* Particle effect overlay */}
+      {/* Animated particle effect overlay */}
       {effectParticles.length > 0 && (
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          {effectParticles.map((p) => (
-            <Text 
-              key={p.id} 
-              style={{ 
-                position: 'absolute', 
-                left: p.x, 
-                top: p.y, 
-                fontSize: 24,
-                opacity: p.opacity,
-              }}
-            >
-              {p.emoji}
-            </Text>
-          ))}
-        </View>
+        <AnimatedParticles particles={effectParticles} />
       )}
     </GestureHandlerRootView>
   );
@@ -2507,5 +2688,18 @@ const styles = StyleSheet.create({
     color: '#FF3B30',
     fontSize: 14,
     fontWeight: '600',
+  },
+  // Animated text sticker styles
+  animatedTextSticker: {
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 2,
+  },
+  animatedTextLabel: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
 });
