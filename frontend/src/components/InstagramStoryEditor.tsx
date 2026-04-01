@@ -989,25 +989,65 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
 
   const isAnyPanelOpen = activePanel !== 'none';
 
+  // Main media pinch-to-zoom gesture
+  const mainMediaScale = useSharedValue(1);
+  const savedMainScale = useSharedValue(1);
+  const mainMediaTranslateX = useSharedValue(0);
+  const mainMediaTranslateY = useSharedValue(0);
+  const savedMainTranslateX = useSharedValue(0);
+  const savedMainTranslateY = useSharedValue(0);
+
+  const mainPinchGesture = Gesture.Pinch()
+    .onUpdate((event) => {
+      mainMediaScale.value = Math.min(Math.max(savedMainScale.value * event.scale, 0.5), 3);
+    })
+    .onEnd(() => {
+      savedMainScale.value = mainMediaScale.value;
+    });
+
+  const mainPanGesture = Gesture.Pan()
+    .onUpdate((event) => {
+      mainMediaTranslateX.value = savedMainTranslateX.value + event.translationX;
+      mainMediaTranslateY.value = savedMainTranslateY.value + event.translationY;
+    })
+    .onEnd(() => {
+      savedMainTranslateX.value = mainMediaTranslateX.value;
+      savedMainTranslateY.value = mainMediaTranslateY.value;
+    });
+
+  const mainMediaGesture = Gesture.Simultaneous(mainPinchGesture, mainPanGesture);
+
+  const mainMediaAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: mainMediaTranslateX.value },
+      { translateY: mainMediaTranslateY.value },
+      { scale: mainMediaScale.value },
+    ],
+  }));
+
   return (
     <GestureHandlerRootView style={styles.container}>
       {/* Background color overlay */}
       {backgroundColor !== 'transparent' && <View style={[StyleSheet.absoluteFill, { backgroundColor }]} />}
 
-      {/* Media - fullscreen without gray borders */}
+      {/* Media - fullscreen with pinch-to-zoom */}
       <View style={styles.mediaContainer}>
-        {mediaType === 'video' ? (
-          <Video
-            source={{ uri: mediaUri }}
-            style={styles.media}
-            resizeMode={ResizeMode.COVER}
-            shouldPlay
-            isLooping
-            isMuted={false}
-          />
-        ) : (
-          <Image source={{ uri: mediaUri }} style={styles.media} resizeMode="cover" />
-        )}
+        <GestureDetector gesture={mainMediaGesture}>
+          <Animated.View style={[styles.mediaInner, mainMediaAnimatedStyle]}>
+            {mediaType === 'video' ? (
+              <Video
+                source={{ uri: mediaUri }}
+                style={styles.media}
+                resizeMode={ResizeMode.COVER}
+                shouldPlay
+                isLooping
+                isMuted={false}
+              />
+            ) : (
+              <Image source={{ uri: mediaUri }} style={styles.media} resizeMode="cover" />
+            )}
+          </Animated.View>
+        </GestureDetector>
 
         {/* Drawing canvas - only show saved drawings when NOT in drawing mode */}
         {!isDrawingMode && drawings.length > 0 && (
@@ -1676,6 +1716,10 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     overflow: 'hidden',
     backgroundColor: '#000',
+  },
+  mediaInner: {
+    width: '100%',
+    height: '100%',
   },
   media: {
     width: '100%',
