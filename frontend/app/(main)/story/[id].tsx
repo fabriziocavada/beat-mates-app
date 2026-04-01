@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import api, { getMediaUrl } from '../../../src/services/api';
 import Colors from '../../../src/constants/colors';
+import ShareModal from '../../../src/components/ShareModal';
 
 const { width, height } = Dimensions.get('window');
 const PHOTO_DURATION = 6000;
@@ -501,6 +502,9 @@ export default function StoryViewerScreen() {
   const isScrolling = useRef(false);
   const scrollX = useRef(new Animated.Value(0)).current;
   const pausedProgress = useRef(0);
+  
+  // Share modal state
+  const [showShareModal, setShowShareModal] = useState(false);
 
   // Load stories
   useEffect(() => {
@@ -694,8 +698,7 @@ export default function StoryViewerScreen() {
 
   // Share story
   const onShare = () => {
-    // For now, just show a placeholder - could implement sharing
-    // TODO: Implement share functionality
+    setShowShareModal(true);
   };
 
   if (isLoading) {
@@ -807,6 +810,17 @@ export default function StoryViewerScreen() {
           </View>
         </Pressable>
       </Modal>
+      
+      {/* Share Modal */}
+      {allUserStories[currentUserIdx] && (
+        <ShareModal
+          visible={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          mediaUrl={allUserStories[currentUserIdx]?.stories?.[currentStoryIdx]?.media}
+          mediaType={allUserStories[currentUserIdx]?.stories?.[currentStoryIdx]?.type === 'video' ? 'video' : 'photo'}
+          postId={allUserStories[currentUserIdx]?.stories?.[currentStoryIdx]?.id}
+        />
+      )}
     </View>
   );
 }

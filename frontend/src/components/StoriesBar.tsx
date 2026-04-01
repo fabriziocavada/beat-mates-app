@@ -59,6 +59,8 @@ export default function StoriesBar({ stories, onStoryPress, onAddStoryPress }: S
               ? getMediaUrl(story.profile_image) 
               : null;
         
+        const isVideo = firstStory?.type === 'video';
+        
         return (
           <TouchableOpacity
             key={story.user_id}
@@ -70,10 +72,21 @@ export default function StoriesBar({ stories, onStoryPress, onAddStoryPress }: S
               story.has_unread ? styles.storyThumbActive : styles.storyThumbSeen,
             ]}>
               {thumbUri ? (
-                <Image source={{ uri: thumbUri }} style={styles.storyImage} />
+                <>
+                  <Image 
+                    source={{ uri: thumbUri, cache: 'force-cache' }} 
+                    style={styles.storyImage}
+                    defaultSource={{ uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' }}
+                  />
+                  {isVideo && (
+                    <View style={styles.videoIndicator}>
+                      <Ionicons name="play" size={12} color="#fff" />
+                    </View>
+                  )}
+                </>
               ) : (
                 <View style={styles.placeholderImage}>
-                  <Ionicons name="person" size={24} color="#8E8E93" />
+                  <Ionicons name={isVideo ? "videocam" : "image"} size={24} color="#8E8E93" />
                 </View>
               )}
             </View>
@@ -148,6 +161,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#1C1C1E',
+  },
+  videoIndicator: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   storyUsername: {
     color: '#FFFFFF',
