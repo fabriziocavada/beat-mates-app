@@ -17,6 +17,63 @@ const VIDEO_DURATION = 60000;
 // Instagram-style reactions
 const REACTIONS = ['❤️', '😂', '😮', '😢', '👏', '🔥'];
 
+// Interactive Poll Widget - users can tap to vote
+function InteractivePollWidget({ content }: { content: string }) {
+  const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const parts = content.split('|');
+  const question = parts[0];
+  const options = parts.slice(1);
+
+  return (
+    <View style={styles.pollWidget}>
+      <Text style={styles.pollQuestion}>{question}</Text>
+      {options.map((opt, idx) => (
+        <TouchableOpacity
+          key={idx}
+          style={[
+            styles.pollOption,
+            selectedOption === idx && styles.pollOptionSelected,
+          ]}
+          onPress={() => setSelectedOption(idx)}
+        >
+          <Text style={[styles.pollOptionText, selectedOption === idx && styles.pollOptionTextSelected]}>
+            {opt}
+          </Text>
+          {selectedOption === idx && (
+            <Ionicons name="checkmark-circle" size={20} color="#34C759" />
+          )}
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
+// Interactive Question Widget - users can tap to respond
+function InteractiveQuestionWidget({ content }: { content: string }) {
+  const [showInput, setShowInput] = useState(false);
+  const [response, setResponse] = useState('');
+
+  return (
+    <View style={styles.questionWidget}>
+      <Text style={styles.questionWidgetTitle}>{content}</Text>
+      {!showInput ? (
+        <TouchableOpacity style={styles.questionInputButton} onPress={() => setShowInput(true)}>
+          <Text style={styles.questionInputPlaceholder}>Scrivi una risposta...</Text>
+        </TouchableOpacity>
+      ) : (
+        <TextInput
+          style={styles.questionInput}
+          placeholder="Scrivi qui..."
+          placeholderTextColor="#888"
+          value={response}
+          onChangeText={setResponse}
+          autoFocus
+        />
+      )}
+    </View>
+  );
+}
+
 type EditorData = {
   texts?: { id: string; text: string; x: number; y: number; color: string; fontSize: number; fontStyle: string; backgroundColor: string | null }[];
   stickers?: { id: string; type: string; content: string; icon?: string; x: number; y: number; scale: number }[];
@@ -31,11 +88,13 @@ type UserStories = { user_id: string; username: string; profile_image: string | 
 function StoryOverlays({ editorData }: { editorData?: EditorData }) {
   if (!editorData) return null;
 
+  const hasInteractiveWidgets = editorData.stickers?.some(s => s.icon === 'stats-chart' || s.icon === 'help-circle-outline');
+
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <View style={StyleSheet.absoluteFill} pointerEvents={hasInteractiveWidgets ? 'box-none' : 'none'}>
       {/* Background color */}
       {editorData.backgroundColor && editorData.backgroundColor !== 'transparent' && (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: editorData.backgroundColor, opacity: 0.5 }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: editorData.backgroundColor, opacity: 0.5 }]} pointerEvents="none" />
       )}
 
       {/* Drawings */}
@@ -72,11 +131,17 @@ function StoryOverlays({ editorData }: { editorData?: EditorData }) {
         <View key={s.id} style={[styles.overlaySticker, { left: s.x, top: s.y }]}>
           {s.type === 'emoji' ? (
             <Text style={{ fontSize: 60 * (s.scale || 1) }}>{s.content}</Text>
+          ) : s.icon === 'stats-chart' ? (
+            // Interactive Poll Widget
+            <InteractivePollWidget content={s.content} />
+          ) : s.icon === 'help-circle-outline' ? (
+            // Question Widget
+            <InteractiveQuestionWidget content={s.content} />
           ) : (
             <View style={styles.widgetStickerView}>
               {s.icon && <Ionicons name={s.icon as any} size={18} color="#fff" />}
               <Text style={styles.widgetStickerText} numberOfLines={1}>
-                {s.icon === 'stats-chart' ? s.content.split('|')[0] : s.content}
+                {s.content}
               </Text>
             </View>
           )}
@@ -831,5 +896,76 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  // Interactive Poll Widget styles
+  pollWidget: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 16,
+    padding: 16,
+    minWidth: 200,
+    maxWidth: 280,
+  },
+  pollQuestion: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  pollOption: {
+    backgroundColor: '#f0f0f0',
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  pollOptionSelected: {
+    backgroundColor: '#e8f5e9',
+    borderWidth: 2,
+    borderColor: '#34C759',
+  },
+  pollOptionText: {
+    fontSize: 15,
+    color: '#333',
+  },
+  pollOptionTextSelected: {
+    fontWeight: '600',
+    color: '#34C759',
+  },
+  // Interactive Question Widget styles
+  questionWidget: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 16,
+    padding: 16,
+    minWidth: 220,
+    maxWidth: 300,
+  },
+  questionWidgetTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  questionInputButton: {
+    backgroundColor: '#f0f0f0',
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  questionInputPlaceholder: {
+    fontSize: 15,
+    color: '#888',
+  },
+  questionInput: {
+    backgroundColor: '#f0f0f0',
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    color: '#000',
   },
 });

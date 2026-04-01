@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import Svg, { Path } from 'react-native-svg';
 import Colors from '../constants/colors';
+import api, { getMediaUrl } from '../services/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -151,7 +152,7 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
   const [caption, setCaption] = useState('');
 
   // Panel state
-  const [activePanel, setActivePanel] = useState<'none' | 'text' | 'stickers' | 'draw' | 'background' | 'music' | 'link' | 'poll' | 'question' | 'location' | 'countdown' | 'hashtag'>('none');
+  const [activePanel, setActivePanel] = useState<'none' | 'text' | 'stickers' | 'draw' | 'background' | 'music' | 'link' | 'poll' | 'question' | 'location' | 'countdown' | 'hashtag' | 'mention'>('none');
   const [showSidebar, setShowSidebar] = useState(true);
 
   // Text editing state
@@ -176,6 +177,8 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
   const [countdownTitle, setCountdownTitle] = useState('');
   const [countdownDate, setCountdownDate] = useState('');
   const [hashtagText, setHashtagText] = useState('');
+  const [mentionSearch, setMentionSearch] = useState('');
+  const [mentionUsers, setMentionUsers] = useState<{id: string; username: string; name: string; profile_image: string | null}[]>([]);
 
   // Open panel without resetting elements
   const openPanel = (panel: typeof activePanel) => {
@@ -368,6 +371,37 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
     };
     setStickers(prev => [...prev, newSticker]);
     setHashtagText('');
+    setActivePanel('none');
+  };
+
+  // Load users for mention
+  const loadMentionUsers = async (search: string) => {
+    try {
+      const res = await api.get('/users/search', { params: { q: search || '', limit: 10 } });
+      setMentionUsers(res.data || []);
+    } catch (e) {
+      // Fallback to showing some demo users
+      setMentionUsers([
+        { id: '1', username: 'dancer_pro', name: 'Pro Dancer', profile_image: null },
+        { id: '2', username: 'hiphop_star', name: 'Hip Hop Star', profile_image: null },
+        { id: '3', username: 'salsa_queen', name: 'Salsa Queen', profile_image: null },
+      ]);
+    }
+  };
+
+  // Add mention widget
+  const addMentionWidget = (user: typeof mentionUsers[0]) => {
+    const newSticker: StickerElement = {
+      id: Date.now().toString(),
+      type: 'widget',
+      content: `@${user.username}`,
+      icon: 'at',
+      x: width / 2 - 60,
+      y: height / 2 - 20,
+      scale: 1,
+    };
+    setStickers(prev => [...prev, newSticker]);
+    setMentionSearch('');
     setActivePanel('none');
   };
 
@@ -625,18 +659,7 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
         <View style={styles.sidebar}>
           <SidebarTool icon="happy-outline" label="Adesivi" onPress={() => openPanel('stickers')} />
           <SidebarTool icon="musical-note" label="Audio" onPress={() => openPanel('music')} />
-          <SidebarTool icon="at" label="Menziona" onPress={() => {
-            const newSticker: StickerElement = {
-              id: Date.now().toString(),
-              type: 'widget',
-              content: '@username',
-              icon: 'at',
-              x: width / 2 - 60,
-              y: height / 2 - 20,
-              scale: 1,
-            };
-            setStickers(prev => [...prev, newSticker]);
-          }} />
+          <SidebarTool icon="at" label="Menziona" onPress={() => { loadMentionUsers(''); openPanel('mention'); }} />
           <SidebarTool icon="color-palette-outline" label="Sfondo" onPress={() => openPanel('background')} />
           <SidebarTool icon="brush-outline" label="Disegna" onPress={() => setIsDrawingMode(true)} />
           <SidebarTool icon="download-outline" label="Scarica" onPress={() => Alert.alert('Scarica', 'Funzione di download in arrivo!')} />
@@ -1041,6 +1064,43 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
               </TouchableOpacity>
             ))}
           </View>
+        </View>
+      </Modal>
+
+      {/* MENTION PANEL */}
+      <Modal visible={activePanel === 'mention'} transparent animationType="slide">
+        <View style={styles.mentionPanel}>
+          <View style={styles.mentionHeader}>
+            <TouchableOpacity onPress={() => { setActivePanel('none'); setMentionSearch(''); }}>
+              <Text style={styles.mentionCancel}>Annulla</Text>
+            </TouchableOpacity>
+            <Text style={styles.mentionTitle}>@Menziona</Text>
+            <View style={{ width: 60 }} />
+          </View>
+          <TextInput
+            style={styles.mentionSearch}
+            placeholder="Cerca utente..."
+            placeholderTextColor="#888"
+            value={mentionSearch}
+            onChangeText={(text) => { setMentionSearch(text); loadMentionUsers(text); }}
+          />
+          <ScrollView style={styles.mentionList}>
+            {mentionUsers.map((user) => (
+              <TouchableOpacity key={user.id} style={styles.mentionItem} onPress={() => addMentionWidget(user)}>
+                <View style={styles.mentionAvatar}>
+                  {user.profile_image ? (
+                    <Image source={{ uri: getMediaUrl(user.profile_image) || '' }} style={styles.mentionAvatarImg} />
+                  ) : (
+                    <Ionicons name="person" size={20} color="#fff" />
+                  )}
+                </View>
+                <View style={styles.mentionInfo}>
+                  <Text style={styles.mentionUsername}>@{user.username}</Text>
+                  <Text style={styles.mentionName}>{user.name}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
       </Modal>
     </View>
@@ -1867,4 +1927,55 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   hashtagItemText: { color: '#007AFF', fontSize: 14 },
+  // Mention panel
+  mentionPanel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: height * 0.6,
+    backgroundColor: '#1c1c1e',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+  },
+  mentionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  mentionCancel: { color: '#fff', fontSize: 16 },
+  mentionTitle: { color: '#fff', fontSize: 18, fontWeight: '600' },
+  mentionSearch: {
+    backgroundColor: '#2c2c2e',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 10,
+    color: '#fff',
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  mentionList: { flex: 1 },
+  mentionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#333',
+    gap: 12,
+  },
+  mentionAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#2c2c2e',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  mentionAvatarImg: { width: 44, height: 44 },
+  mentionInfo: { flex: 1 },
+  mentionUsername: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  mentionName: { color: '#888', fontSize: 14 },
 });

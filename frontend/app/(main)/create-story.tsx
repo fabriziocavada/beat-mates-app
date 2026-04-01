@@ -25,7 +25,18 @@ export default function CreateStoryScreen() {
   // Handle shared media from reels/posts
   useEffect(() => {
     if (sharedMedia) {
-      const fullUrl = getMediaUrl(sharedMedia);
+      // For shared media, it's already a path like 'xxx.jpg' or '/api/uploads/xxx.jpg'
+      // We need to get the full URL for display
+      let fullUrl: string | null = null;
+      
+      if (sharedMedia.startsWith('http')) {
+        fullUrl = sharedMedia;
+      } else {
+        fullUrl = getMediaUrl(sharedMedia);
+      }
+      
+      console.log('Shared media received:', sharedMedia, '-> Full URL:', fullUrl);
+      
       if (fullUrl) {
         setMediaUri(fullUrl);
         setMediaType(sharedType === 'video' ? 'video' : 'photo');
