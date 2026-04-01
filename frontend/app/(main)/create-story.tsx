@@ -102,6 +102,7 @@ export default function CreateStoryScreen() {
           drawings: data.drawings || [],
           backgroundColor: data.backgroundColor || null,
           caption: data.caption || '',
+          music: data.music || null, // Include selected music track
         };
       }
       
