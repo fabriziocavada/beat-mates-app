@@ -154,18 +154,55 @@ function StoryOverlays({ editorData }: { editorData?: EditorData }) {
 // Video player with pause support and optional music overlay
 function StoryVideoPlayer({ url, isActive, isPaused, musicUrl }: { url: string; isActive: boolean; isPaused?: boolean; musicUrl?: string }) {
   const [loading, setLoading] = useState(true);
-  const musicRef = useRef<any>(null);
+  const [musicSound, setMusicSound] = useState<any>(null);
   
-  // Handle music playback when there's a music track
+  // Debug log
   useEffect(() => {
-    if (musicRef.current && musicUrl) {
+    if (musicUrl) {
+      console.log('Story has music URL:', musicUrl);
+    }
+  }, [musicUrl]);
+  
+  // Handle music playback using Audio API
+  useEffect(() => {
+    let sound: any = null;
+    
+    const loadAndPlayMusic = async () => {
+      if (!musicUrl) return;
+      
+      try {
+        const { Audio } = require('expo-av');
+        const { sound: audioSound } = await Audio.Sound.createAsync(
+          { uri: musicUrl },
+          { shouldPlay: isActive && !isPaused, isLooping: true, volume: 1.0 }
+        );
+        sound = audioSound;
+        setMusicSound(audioSound);
+        console.log('Music loaded successfully');
+      } catch (error) {
+        console.error('Failed to load music:', error);
+      }
+    };
+    
+    loadAndPlayMusic();
+    
+    return () => {
+      if (sound) {
+        sound.unloadAsync();
+      }
+    };
+  }, [musicUrl]);
+  
+  // Control music playback based on active/paused state
+  useEffect(() => {
+    if (musicSound) {
       if (isActive && !isPaused) {
-        musicRef.current.playAsync?.().catch(() => {});
+        musicSound.playAsync().catch(console.error);
       } else {
-        musicRef.current.pauseAsync?.().catch(() => {});
+        musicSound.pauseAsync().catch(console.error);
       }
     }
-  }, [isActive, isPaused, musicUrl]);
+  }, [isActive, isPaused, musicSound]);
   
   return (
     <View style={StyleSheet.absoluteFill}>
@@ -179,17 +216,6 @@ function StoryVideoPlayer({ url, isActive, isPaused, musicUrl }: { url: string; 
         onLoad={() => setLoading(false)}
         onPlaybackStatusUpdate={(s: any) => { if (s.isLoaded && loading) setLoading(false); }}
       />
-      {/* Background music audio player */}
-      {musicUrl && (
-        <Video
-          ref={musicRef}
-          source={{ uri: musicUrl }}
-          style={{ width: 0, height: 0 }}
-          shouldPlay={isActive && !isPaused}
-          isLooping
-          isMuted={false}
-        />
-      )}
       {loading && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
           <ActivityIndicator size="large" color={Colors.primary} />

@@ -96,6 +96,7 @@ export default function CreateStoryScreen() {
       
       // Add editor overlays if present
       if (data) {
+        console.log('Saving story with editor data:', JSON.stringify(data.music));
         storyData.editor_data = {
           texts: data.texts || [],
           stickers: data.stickers || [],
