@@ -1,21 +1,25 @@
-# Test Credentials - BEAT MATES
+# Test Credentials - Beat Mates App
 
-## User Accounts
+## Teacher Account
+- Email: `demoteacher@beatmates.com`
+- Password: `password123`
 
-### Teacher Account
-- **Email**: tutor@test.com
-- **Password**: password123
-- **Role**: Teacher (can create lessons, live sessions)
+## Student Accounts
+- Email: `dancer_pro@beatmates.com`
+- Password: `password123`
 
-### Student Account
-- **Email**: mario@test.com
-- **Password**: password123
-- **Role**: Student (can enroll in lessons, view content)
+- Email: `salsa_queen@beatmates.com`
+- Password: `password123`
 
-## API Testing
-- Backend URL: Check `REACT_APP_BACKEND_URL` in `/app/frontend/.env`
-- All API routes prefixed with `/api/`
+- Email: `hiphop_star@beatmates.com`
+- Password: `password123`
 
-## Notes
-- These are test accounts seeded in the database
-- Passwords are hashed with bcrypt
+- Email: `ballet_master@beatmates.com`
+- Password: `password123`
+
+## API Base URL
+`https://lesson-marketplace-5.preview.emergentagent.com`
+
+## Database
+- DB Name: `beatmates`
+- Collection: users, stories, songs, etc.

@@ -136,8 +136,8 @@ function StoryOverlays({ editorData }: { editorData?: EditorData }) {
         <View key={s.id} style={[styles.overlaySticker, { left: s.x, top: s.y, transform: [{ scale: s.scale || 1 }] }]}>
           {s.type === 'emoji' ? (
             <Text style={{ fontSize: 60 }}>{s.content}</Text>
-          ) : s.icon === 'gif' ? (
-            // GIF sticker
+          ) : s.type === 'gif' ? (
+            // GIF sticker - render as animated image
             <Image 
               source={{ uri: s.content }} 
               style={{ width: 120, height: 120, borderRadius: 8 }}

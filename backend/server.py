@@ -396,7 +396,19 @@ async def login(data: UserLogin):
     user = await db.users.find_one({"email": data.email})
     if not user:
         user = await db.users.find_one({"username": data.email})
-    if not user or not verify_password(data.password, user["password_hash"]):
+    
+    logger.info(f"Login attempt for: {data.email}, user found: {user is not None}")
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Check if password_hash exists
+    if "password_hash" not in user:
+        logger.error(f"User {data.email} has no password_hash field")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    if not verify_password(data.password, user["password_hash"]):
+        logger.info(f"Password verification failed for {data.email}")
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     token = create_token(user["id"])

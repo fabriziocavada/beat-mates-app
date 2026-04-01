@@ -92,19 +92,31 @@ const EMOJIS = ['❤️', '🔥', '😂', '😍', '🎉', '👏', '💯', '✨',
 
 const BACKGROUNDS = ['transparent', '#000000', '#1a1a2e', '#16213e', '#0f3460', '#533483', '#e94560', '#f38181', '#fce38a', '#95e1d3'];
 
-// Instagram-style Effects (Particles, GIFs, Animated overlays)
+// Instagram-style Effects (Particles, GIFs, Animated overlays) - EXPANDED
 const EFFECTS = [
-  { id: 'confetti', name: 'Coriandoli', emoji: '🎊', particles: ['🎊', '🎉', '✨', '🎀', '💫'] },
-  { id: 'hearts', name: 'Cuori', emoji: '💕', particles: ['❤️', '💕', '💖', '💗', '💝'] },
-  { id: 'stars', name: 'Stelle', emoji: '⭐', particles: ['⭐', '✨', '🌟', '💫', '✴️'] },
-  { id: 'fire', name: 'Fuoco', emoji: '🔥', particles: ['🔥', '🔥', '💥', '⚡', '✨'] },
-  { id: 'snow', name: 'Neve', emoji: '❄️', particles: ['❄️', '❅', '❆', '🌨️', '⛄'] },
-  { id: 'sparkles', name: 'Scintille', emoji: '✨', particles: ['✨', '💫', '⭐', '🌟', '✴️'] },
-  { id: 'balloons', name: 'Palloncini', emoji: '🎈', particles: ['🎈', '🎉', '🎊', '🎀', '🎁'] },
-  { id: 'rain', name: 'Pioggia', emoji: '🌧️', particles: ['💧', '💦', '🌊', '💙', '🔵'] },
+  { id: 'confetti', name: 'Coriandoli', emoji: '🎊', particles: ['🎊', '🎉', '✨', '🎀', '💫', '🌈', '🎁'] },
+  { id: 'hearts', name: 'Cuori', emoji: '💕', particles: ['❤️', '💕', '💖', '💗', '💝', '💘', '💞'] },
+  { id: 'hearts_float', name: 'Cuori Volanti', emoji: '❤️', particles: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤'] },
+  { id: 'stars', name: 'Stelle', emoji: '⭐', particles: ['⭐', '✨', '🌟', '💫', '✴️', '🌠', '⚡'] },
+  { id: 'fire', name: 'Fuoco', emoji: '🔥', particles: ['🔥', '🔥', '💥', '⚡', '✨', '🌋', '☄️'] },
+  { id: 'snow', name: 'Neve', emoji: '❄️', particles: ['❄️', '❅', '❆', '🌨️', '⛄', '🌬️', '💎'] },
+  { id: 'sparkles', name: 'Scintille', emoji: '✨', particles: ['✨', '💫', '⭐', '🌟', '✴️', '🔆', '💎'] },
+  { id: 'balloons', name: 'Palloncini', emoji: '🎈', particles: ['🎈', '🎉', '🎊', '🎀', '🎁', '🪅', '🎪'] },
+  { id: 'rain', name: 'Pioggia', emoji: '🌧️', particles: ['💧', '💦', '🌊', '💙', '🔵', '🌧️', '☔'] },
+  { id: 'flowers', name: 'Fiori', emoji: '🌸', particles: ['🌸', '🌺', '🌹', '🌷', '🌼', '💐', '🌻'] },
+  { id: 'leaves', name: 'Foglie', emoji: '🍂', particles: ['🍂', '🍁', '🍃', '🌿', '☘️', '🌱', '🪴'] },
+  { id: 'butterflies', name: 'Farfalle', emoji: '🦋', particles: ['🦋', '🦋', '✨', '💫', '🌸', '🌺', '💜'] },
+  { id: 'disco', name: 'Disco', emoji: '🪩', particles: ['🪩', '💃', '🕺', '🎵', '🎶', '✨', '⭐'] },
+  { id: 'love', name: 'Amore', emoji: '😍', particles: ['😍', '🥰', '😘', '💋', '❤️', '💕', '💖'] },
+  { id: 'party', name: 'Festa', emoji: '🥳', particles: ['🥳', '🎉', '🎊', '🎈', '🍾', '🥂', '🎆'] },
+  { id: 'magic', name: 'Magia', emoji: '🪄', particles: ['🪄', '✨', '💫', '⭐', '🌟', '🔮', '💎'] },
+  { id: 'money', name: 'Soldi', emoji: '💰', particles: ['💰', '💵', '💸', '🤑', '💎', '👑', '🏆'] },
+  { id: 'sports', name: 'Sport', emoji: '⚽', particles: ['⚽', '🏀', '🏈', '⚾', '🎾', '🏐', '🏆'] },
+  { id: 'music', name: 'Musica', emoji: '🎵', particles: ['🎵', '🎶', '🎸', '🎹', '🎺', '🥁', '🎤'] },
+  { id: 'gaming', name: 'Gaming', emoji: '🎮', particles: ['🎮', '🕹️', '👾', '🎲', '🃏', '🏆', '⭐'] },
 ];
 
-// Animated GIF stickers
+// Animated GIF stickers - EXPANDED with more variety
 const GIF_STICKERS = [
   { id: 'dance1', label: 'Dance', url: 'https://media.giphy.com/media/3o7TKUn3XK2Y9jFHGM/giphy.gif' },
   { id: 'fire1', label: 'Fire', url: 'https://media.giphy.com/media/jUwpNzg9IcyrK/giphy.gif' },
@@ -112,6 +124,12 @@ const GIF_STICKERS = [
   { id: 'star1', label: 'Star', url: 'https://media.giphy.com/media/xT5LMHxhOfscxPfIfm/giphy.gif' },
   { id: 'cool1', label: 'Cool', url: 'https://media.giphy.com/media/62PP2yEIAZF6g/giphy.gif' },
   { id: 'party1', label: 'Party', url: 'https://media.giphy.com/media/l0MYGb1LuZ3n7dRnO/giphy.gif' },
+  { id: 'sparkle1', label: 'Sparkle', url: 'https://media.giphy.com/media/xUPGGDNsLvqsBOhuU0/giphy.gif' },
+  { id: 'rainbow1', label: 'Rainbow', url: 'https://media.giphy.com/media/SKGo6OYe24EBG/giphy.gif' },
+  { id: 'confetti1', label: 'Confetti', url: 'https://media.giphy.com/media/26tOZ42Mg6pbTUPHW/giphy.gif' },
+  { id: 'love1', label: 'Love', url: 'https://media.giphy.com/media/l4pTdcifPZLpDjL1e/giphy.gif' },
+  { id: 'wow1', label: 'Wow', url: 'https://media.giphy.com/media/5VKbvrjxpVJCM/giphy.gif' },
+  { id: 'yes1', label: 'Yes', url: 'https://media.giphy.com/media/l0HlvtIPzPdt2usKs/giphy.gif' },
 ];
 
 interface Props {
@@ -615,9 +633,9 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
   const addGifSticker = (gif: typeof GIF_STICKERS[0]) => {
     const newSticker: StickerElement = {
       id: `gif-${Date.now()}`,
-      type: 'widget',
+      type: 'gif', // Use type 'gif' to identify GIF stickers
       content: gif.url,
-      icon: 'gif',
+      icon: 'image', // Valid ionicon
       x: width / 2 - 60,
       y: height / 2 - 60,
       scale: 1,
