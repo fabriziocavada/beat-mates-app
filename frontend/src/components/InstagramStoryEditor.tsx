@@ -244,103 +244,111 @@ const DraggableItem = ({ children, initialX, initialY, initialScale = 1, onPosit
 
 // Animated Particles Component - creates falling/rising/floating particles
 const AnimatedParticles = ({ particles }: { particles: any[] }) => {
-  const animRefs = useRef<{ [key: string]: RNAnimated.Value }>({});
+  // Force re-render when particles change by using key
+  const [renderKey, setRenderKey] = useState(0);
   
   useEffect(() => {
-    particles.forEach((p) => {
-      if (!animRefs.current[p.id]) {
-        animRefs.current[p.id] = new RNAnimated.Value(0);
-      }
-      
-      const anim = animRefs.current[p.id];
+    // When particles change, force a complete re-render
+    setRenderKey(prev => prev + 1);
+  }, [particles.length]);
+  
+  if (particles.length === 0) return null;
+  
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none" key={renderKey}>
+      {particles.map((p, index) => (
+        <SingleAnimatedParticle key={`${p.id}-${renderKey}`} particle={p} index={index} />
+      ))}
+    </View>
+  );
+};
+
+// Each particle has its own animation
+const SingleAnimatedParticle = ({ particle, index }: { particle: any; index: number }) => {
+  const anim = useRef(new RNAnimated.Value(0)).current;
+  
+  useEffect(() => {
+    // Start animation immediately
+    const startAnimation = () => {
       anim.setValue(0);
-      
       RNAnimated.loop(
         RNAnimated.timing(anim, {
           toValue: 1,
-          duration: p.duration || 3000,
-          delay: p.delay || 0,
+          duration: particle.duration || 4000,
+          delay: index * 100, // Stagger by index
           easing: Easing.linear,
           useNativeDriver: true,
         })
       ).start();
-    });
-    
-    return () => {
-      Object.values(animRefs.current).forEach((anim) => anim.stopAnimation());
     };
-  }, [particles]);
+    
+    startAnimation();
+    
+    return () => anim.stopAnimation();
+  }, []);
+  
+  let translateY, translateX;
+  const p = particle;
+  
+  if (p.animationType === 'falling') {
+    translateY = anim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [-50, height + 50],
+    });
+    translateX = anim.interpolate({
+      inputRange: [0, 0.25, 0.5, 0.75, 1],
+      outputRange: [0, 15, 0, -15, 0],
+    });
+  } else if (p.animationType === 'rising') {
+    translateY = anim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [height + 50, -50],
+    });
+    translateX = anim.interpolate({
+      inputRange: [0, 0.25, 0.5, 0.75, 1],
+      outputRange: [0, -10, 0, 10, 0],
+    });
+  } else if (p.animationType === 'burst') {
+    const angle = (index / 25) * Math.PI * 2;
+    const distance = 100 + Math.random() * 150;
+    translateY = anim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, Math.sin(angle) * distance],
+    });
+    translateX = anim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, Math.cos(angle) * distance],
+    });
+  } else {
+    // floating
+    translateY = anim.interpolate({
+      inputRange: [0, 0.5, 1],
+      outputRange: [0, -30, 0],
+    });
+    translateX = anim.interpolate({
+      inputRange: [0, 0.25, 0.5, 0.75, 1],
+      outputRange: [0, 20, 0, -20, 0],
+    });
+  }
+  
+  const opacity = anim.interpolate({
+    inputRange: [0, 0.1, 0.9, 1],
+    outputRange: [0, 1, 1, 0],
+  });
   
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {particles.map((p) => {
-        const anim = animRefs.current[p.id] || new RNAnimated.Value(0);
-        
-        let translateY, translateX, opacity;
-        
-        if (p.animationType === 'falling') {
-          translateY = anim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [-50, height + 50],
-          });
-          translateX = anim.interpolate({
-            inputRange: [0, 0.25, 0.5, 0.75, 1],
-            outputRange: [0, 15, 0, -15, 0],
-          });
-        } else if (p.animationType === 'rising') {
-          translateY = anim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [height + 50, -50],
-          });
-          translateX = anim.interpolate({
-            inputRange: [0, 0.25, 0.5, 0.75, 1],
-            outputRange: [0, -10, 0, 10, 0],
-          });
-        } else if (p.animationType === 'burst') {
-          const angle = Math.random() * Math.PI * 2;
-          const distance = 100 + Math.random() * 150;
-          translateY = anim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [0, Math.sin(angle) * distance],
-          });
-          translateX = anim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [0, Math.cos(angle) * distance],
-          });
-        } else {
-          // floating
-          translateY = anim.interpolate({
-            inputRange: [0, 0.5, 1],
-            outputRange: [0, -30, 0],
-          });
-          translateX = anim.interpolate({
-            inputRange: [0, 0.25, 0.5, 0.75, 1],
-            outputRange: [0, 20, 0, -20, 0],
-          });
-        }
-        
-        opacity = anim.interpolate({
-          inputRange: [0, 0.1, 0.9, 1],
-          outputRange: [0, 1, 1, 0],
-        });
-        
-        return (
-          <RNAnimated.Text
-            key={p.id}
-            style={{
-              position: 'absolute',
-              left: p.x,
-              top: p.y,
-              fontSize: 24 + Math.random() * 12,
-              transform: [{ translateY }, { translateX }],
-              opacity,
-            }}
-          >
-            {p.emoji}
-          </RNAnimated.Text>
-        );
-      })}
-    </View>
+    <RNAnimated.Text
+      style={{
+        position: 'absolute',
+        left: p.x,
+        top: p.y,
+        fontSize: 28,
+        transform: [{ translateY }, { translateX }],
+        opacity,
+      }}
+    >
+      {p.emoji}
+    </RNAnimated.Text>
   );
 };
 
@@ -1058,13 +1066,8 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
       {/* Background color overlay */}
       {backgroundColor !== 'transparent' && <View style={[StyleSheet.absoluteFill, { backgroundColor }]} />}
 
-      {/* Main Media with Pinch-to-Zoom using native touch handlers */}
-      <View 
-        style={[styles.mediaContainer]}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
+      {/* Main Media - NO touch handlers here, just visual */}
+      <View style={[styles.mediaContainer]} pointerEvents="none">
         <View style={[
           styles.mediaInner,
           {
@@ -1089,6 +1092,15 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
           )}
         </View>
       </View>
+
+      {/* PINCH GESTURE LAYER - Above media, below other elements */}
+      <View 
+        style={[StyleSheet.absoluteFill, { zIndex: 5 }]}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        pointerEvents="box-none"
+      />
 
       {/* Drawing canvas - only show saved drawings when NOT in drawing mode */}
       {!isDrawingMode && drawings.length > 0 && (

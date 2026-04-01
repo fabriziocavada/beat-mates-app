@@ -37,8 +37,13 @@ const EFFECT_DEFINITIONS: { [key: string]: { type: string; particles: string[] }
 
 // Animated Effect Overlay for Viewer
 function AnimatedEffectOverlay({ effectId }: { effectId: string }) {
+  console.log('Rendering AnimatedEffectOverlay with effectId:', effectId);
   const effect = EFFECT_DEFINITIONS[effectId];
-  if (!effect) return null;
+  if (!effect) {
+    console.log('Effect not found in definitions:', effectId);
+    return null;
+  }
+  console.log('Found effect definition:', effect.name);
 
   const particleCount = 20;
   
