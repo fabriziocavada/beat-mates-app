@@ -860,8 +860,7 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
       backgroundColor,
       caption,
       music: selectedMusic, // Include selected music
-      effect: selectedEffect, // Include selected effect
-      effectParticles, // Include effect particles
+      effect: selectedEffect, // Include selected effect (ID only, animations done in viewer)
     });
   };
 
@@ -989,7 +988,7 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
 
   const isAnyPanelOpen = activePanel !== 'none';
 
-  // Main media pinch-to-zoom gesture
+  // Main media pinch-to-zoom gesture - REQUIRES 2 fingers for pan to avoid conflicts
   const mainMediaScale = useSharedValue(1);
   const savedMainScale = useSharedValue(1);
   const mainMediaTranslateX = useSharedValue(0);
@@ -999,13 +998,15 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
 
   const mainPinchGesture = Gesture.Pinch()
     .onUpdate((event) => {
-      mainMediaScale.value = Math.min(Math.max(savedMainScale.value * event.scale, 0.5), 3);
+      mainMediaScale.value = Math.min(Math.max(savedMainScale.value * event.scale, 0.3), 4);
     })
     .onEnd(() => {
       savedMainScale.value = mainMediaScale.value;
     });
 
+  // Two-finger pan for moving main media
   const mainPanGesture = Gesture.Pan()
+    .minPointers(2) // Requires 2 fingers - allows single finger for other elements
     .onUpdate((event) => {
       mainMediaTranslateX.value = savedMainTranslateX.value + event.translationX;
       mainMediaTranslateY.value = savedMainTranslateY.value + event.translationY;
@@ -1030,24 +1031,22 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
       {/* Background color overlay */}
       {backgroundColor !== 'transparent' && <View style={[StyleSheet.absoluteFill, { backgroundColor }]} />}
 
-      {/* Media - fullscreen with pinch-to-zoom */}
-      <View style={styles.mediaContainer}>
-        <GestureDetector gesture={mainMediaGesture}>
-          <Animated.View style={[styles.mediaInner, mainMediaAnimatedStyle]}>
-            {mediaType === 'video' ? (
-              <Video
-                source={{ uri: mediaUri }}
-                style={styles.media}
-                resizeMode={ResizeMode.CONTAIN}
-                shouldPlay
-                isLooping
-                isMuted={false}
-              />
-            ) : (
-              <Image source={{ uri: mediaUri }} style={styles.media} resizeMode="contain" />
-            )}
-          </Animated.View>
-        </GestureDetector>
+      {/* Media layer - visual only, no gestures */}
+      <View style={styles.mediaContainer} pointerEvents="none">
+        <Animated.View style={[styles.mediaInner, mainMediaAnimatedStyle]}>
+          {mediaType === 'video' ? (
+            <Video
+              source={{ uri: mediaUri }}
+              style={styles.media}
+              resizeMode={ResizeMode.CONTAIN}
+              shouldPlay
+              isLooping
+              isMuted={false}
+            />
+          ) : (
+            <Image source={{ uri: mediaUri }} style={styles.media} resizeMode="contain" />
+          )}
+        </Animated.View>
 
         {/* Drawing canvas - only show saved drawings when NOT in drawing mode */}
         {!isDrawingMode && drawings.length > 0 && (
@@ -1065,6 +1064,13 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
           </View>
         )}
       </View>
+
+      {/* Gesture layer for main media - captures 2-finger gestures */}
+      {!isDrawingMode && !isAnyPanelOpen && (
+        <GestureDetector gesture={mainMediaGesture}>
+          <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 5 }]} pointerEvents="box-none" />
+        </GestureDetector>
+      )}
 
       {/* Drawing overlay - captures touch events when drawing */}
       {isDrawingMode && (

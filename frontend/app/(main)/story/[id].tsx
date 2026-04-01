@@ -274,21 +274,10 @@ function StoryOverlays({ editorData }: { editorData?: EditorData }) {
         </View>
       ))}
 
-      {/* Effect Particles */}
-      {editorData.effectParticles?.map((p) => (
-        <Text 
-          key={p.id} 
-          style={{ 
-            position: 'absolute', 
-            left: p.x, 
-            top: p.y, 
-            fontSize: 24,
-            opacity: p.opacity,
-          }}
-        >
-          {p.emoji}
-        </Text>
-      ))}
+      {/* Animated Effect Overlay - uses effect ID for real animations */}
+      {editorData.effect && (
+        <AnimatedEffectOverlay effectId={editorData.effect} />
+      )}
     </View>
   );
 }
