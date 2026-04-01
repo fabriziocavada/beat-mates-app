@@ -737,9 +737,6 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
 
   // Apply animated particle effect
   const applyEffect = (effect: typeof ANIMATED_EFFECTS[0]) => {
-    // FIRST close the panel so particles are visible
-    setActivePanel('none');
-    
     // Use unique timestamp + random for each batch
     const batchId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
@@ -755,15 +752,20 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
         y: effect.type === 'falling' ? -50 : effect.type === 'rising' ? height + 50 : Math.random() * height,
         opacity: 1,
         animationType: effect.type,
-        delay: i * 50, // Staggered delay for visual effect
-        duration: 4000 + Math.random() * 2000,
+        delay: i * 80, // Staggered delay for visual effect
+        duration: 5000 + Math.random() * 3000, // 5-8 seconds
       };
       newParticles.push(particle);
     }
     
-    // Set effect ID and particles AFTER closing panel
+    // Set effect ID and particles FIRST
     setSelectedEffect(effect.id);
     setEffectParticles(newParticles);
+    
+    // THEN close panel after particles are set
+    setTimeout(() => {
+      setActivePanel('none');
+    }, 50);
   };
 
   // Add animated text sticker

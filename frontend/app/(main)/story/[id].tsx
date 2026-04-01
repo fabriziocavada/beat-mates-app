@@ -37,15 +37,12 @@ const EFFECT_DEFINITIONS: { [key: string]: { type: string; particles: string[] }
 
 // Animated Effect Overlay for Viewer
 function AnimatedEffectOverlay({ effectId }: { effectId: string }) {
-  console.log('Rendering AnimatedEffectOverlay with effectId:', effectId);
   const effect = EFFECT_DEFINITIONS[effectId];
   if (!effect) {
-    console.log('Effect not found in definitions:', effectId);
     return null;
   }
-  console.log('Found effect definition:', effect.name);
 
-  const particleCount = 20;
+  const particleCount = 15; // Fewer particles, more visible
   
   // Create stable particle data with useMemo
   const particleData = React.useMemo(() => 
@@ -54,10 +51,10 @@ function AnimatedEffectOverlay({ effectId }: { effectId: string }) {
       emoji: effect.particles[Math.floor(Math.random() * effect.particles.length)],
       x: Math.random() * width,
       startY: effect.type === 'falling' ? -50 : effect.type === 'rising' ? height + 50 : Math.random() * height,
-      delay: Math.random() * 3000,
-      duration: 6000 + Math.random() * 4000, // MUCH SLOWER: 6-10 seconds
-      offsetX: (Math.random() - 0.5) * 60,
-      fontSize: 24 + Math.random() * 14,
+      delay: i * 400, // More staggered: 400ms between each
+      duration: 12000 + Math.random() * 6000, // VERY SLOW: 12-18 seconds per cycle
+      offsetX: (Math.random() - 0.5) * 40,
+      fontSize: 28 + Math.random() * 12,
     }))
   , [effectId]);
 
@@ -79,7 +76,7 @@ function SingleParticle({ particle, effectType }: { particle: any; effectType: s
       anim.setValue(0);
       Animated.timing(anim, {
         toValue: 1,
-        duration: particle.duration,
+        duration: particle.duration, // 12-18 seconds
         delay: particle.delay,
         easing: Easing.linear,
         useNativeDriver: true,
@@ -99,14 +96,14 @@ function SingleParticle({ particle, effectType }: { particle: any; effectType: s
     translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [height + 50, -50] });
     translateX = anim.interpolate({ inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: [0, particle.offsetX/2, particle.offsetX, particle.offsetX/2, 0] });
   } else if (effectType === 'burst') {
-    const angle = (particle.id / 20) * Math.PI * 2;
-    const dist = 150;
-    translateY = anim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0, Math.sin(angle) * dist, Math.sin(angle) * dist * 1.5] });
-    translateX = anim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0, Math.cos(angle) * dist, Math.cos(angle) * dist * 1.5] });
+    const angle = (particle.id / 15) * Math.PI * 2;
+    const dist = 120;
+    translateY = anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, Math.sin(angle) * dist, Math.sin(angle) * dist * 0.8] });
+    translateX = anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, Math.cos(angle) * dist, Math.cos(angle) * dist * 0.8] });
   } else {
-    // floating - gentle bobbing
-    translateY = anim.interpolate({ inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: [0, -20, -35, -20, 0] });
-    translateX = anim.interpolate({ inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: [0, particle.offsetX/2, 0, -particle.offsetX/2, 0] });
+    // floating - very gentle bobbing
+    translateY = anim.interpolate({ inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: [0, -15, -25, -15, 0] });
+    translateX = anim.interpolate({ inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: [0, particle.offsetX/3, 0, -particle.offsetX/3, 0] });
   }
   
   const opacity = anim.interpolate({ inputRange: [0, 0.1, 0.85, 1], outputRange: [0, 1, 1, 0] });
