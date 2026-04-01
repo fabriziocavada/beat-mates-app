@@ -1009,75 +1009,54 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
 
   const isAnyPanelOpen = activePanel !== 'none';
 
-  // Main media pinch-to-zoom using PanResponder (more reliable on iOS)
+  // Main media pinch-to-zoom using state
   const [mediaTransform, setMediaTransform] = useState({ scale: 1, translateX: 0, translateY: 0 });
-  const lastScale = useRef(1);
-  const lastDistance = useRef(0);
-  const lastTranslate = useRef({ x: 0, y: 0 });
-  
-  const getDistance = (touches: any[]) => {
-    const dx = touches[0].pageX - touches[1].pageX;
-    const dy = touches[0].pageY - touches[1].pageY;
-    return Math.sqrt(dx * dx + dy * dy);
-  };
-  
-  const handleTouchStart = (e: any) => {
-    const touches = e.nativeEvent.touches;
-    if (touches.length === 2) {
-      lastDistance.current = getDistance(touches);
-      lastScale.current = mediaTransform.scale;
-      const centerX = (touches[0].pageX + touches[1].pageX) / 2;
-      const centerY = (touches[0].pageY + touches[1].pageY) / 2;
-      lastTranslate.current = { x: centerX - mediaTransform.translateX, y: centerY - mediaTransform.translateY };
-    }
-  };
-  
-  const handleTouchMove = (e: any) => {
-    const touches = e.nativeEvent.touches;
-    if (touches.length === 2) {
-      // Pinch to zoom
-      const distance = getDistance(touches);
-      if (lastDistance.current > 0) {
-        const newScale = Math.min(Math.max(lastScale.current * (distance / lastDistance.current), 0.3), 4);
-        
-        // Two-finger pan
-        const centerX = (touches[0].pageX + touches[1].pageX) / 2;
-        const centerY = (touches[0].pageY + touches[1].pageY) / 2;
-        const newTranslateX = centerX - lastTranslate.current.x;
-        const newTranslateY = centerY - lastTranslate.current.y;
-        
-        setMediaTransform({ 
-          scale: newScale, 
-          translateX: newTranslateX,
-          translateY: newTranslateY
-        });
-      }
-    }
-  };
-  
-  const handleTouchEnd = (e: any) => {
-    lastScale.current = mediaTransform.scale;
-    lastTranslate.current = { x: 0, y: 0 };
-    lastDistance.current = 0;
-  };
+
+  // Pinch gesture handler using reanimated for MAIN MEDIA
+  const mediaScale = useSharedValue(1);
+  const savedMediaScale = useSharedValue(1);
+  const mediaTranslateX = useSharedValue(0);
+  const mediaTranslateY = useSharedValue(0);
+  const savedMediaTranslateX = useSharedValue(0);
+  const savedMediaTranslateY = useSharedValue(0);
+
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((event) => {
+      mediaScale.value = Math.min(Math.max(savedMediaScale.value * event.scale, 0.3), 4);
+    })
+    .onEnd(() => {
+      savedMediaScale.value = mediaScale.value;
+    });
+
+  const panGesture = Gesture.Pan()
+    .minPointers(2)
+    .onUpdate((event) => {
+      mediaTranslateX.value = savedMediaTranslateX.value + event.translationX;
+      mediaTranslateY.value = savedMediaTranslateY.value + event.translationY;
+    })
+    .onEnd(() => {
+      savedMediaTranslateX.value = mediaTranslateX.value;
+      savedMediaTranslateY.value = mediaTranslateY.value;
+    });
+
+  const composedGesture = Gesture.Simultaneous(pinchGesture, panGesture);
+
+  const animatedMediaStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: mediaTranslateX.value },
+      { translateY: mediaTranslateY.value },
+      { scale: mediaScale.value },
+    ],
+  }));
 
   return (
     <GestureHandlerRootView style={styles.container}>
       {/* Background color overlay */}
       {backgroundColor !== 'transparent' && <View style={[StyleSheet.absoluteFill, { backgroundColor }]} />}
 
-      {/* Main Media - NO touch handlers here, just visual */}
-      <View style={[styles.mediaContainer]} pointerEvents="none">
-        <View style={[
-          styles.mediaInner,
-          {
-            transform: [
-              { translateX: mediaTransform.translateX },
-              { translateY: mediaTransform.translateY },
-              { scale: mediaTransform.scale },
-            ],
-          }
-        ]}>
+      {/* Main Media with Gesture - use GestureDetector at the TOP level */}
+      <GestureDetector gesture={composedGesture}>
+        <Animated.View style={[styles.mediaContainer, animatedMediaStyle]}>
           {mediaType === 'video' ? (
             <Video
               source={{ uri: mediaUri }}
@@ -1090,17 +1069,8 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
           ) : (
             <Image source={{ uri: mediaUri }} style={styles.media} resizeMode="contain" />
           )}
-        </View>
-      </View>
-
-      {/* PINCH GESTURE LAYER - Above media, below other elements */}
-      <View 
-        style={[StyleSheet.absoluteFill, { zIndex: 5 }]}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        pointerEvents="box-none"
-      />
+        </Animated.View>
+      </GestureDetector>
 
       {/* Drawing canvas - only show saved drawings when NOT in drawing mode */}
       {!isDrawingMode && drawings.length > 0 && (
