@@ -12,7 +12,6 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
-  PanResponder,
   Animated as RNAnimated,
   Alert,
   ActivityIndicator,
@@ -21,6 +20,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import Svg, { Path } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import Colors from '../constants/colors';
 import api, { getMediaUrl } from '../services/api';
 
@@ -100,7 +101,7 @@ interface Props {
   onClose: () => void;
 }
 
-// Draggable Element Component with pinch-to-zoom support
+// Draggable Element Component with pinch-to-zoom support (Instagram-style)
 const DraggableItem = ({ children, initialX, initialY, initialScale = 1, onPositionChange, onScaleChange, onDelete, onTap }: {
   children: React.ReactNode;
   initialX: number;
@@ -111,87 +112,64 @@ const DraggableItem = ({ children, initialX, initialY, initialScale = 1, onPosit
   onDelete?: () => void;
   onTap?: () => void;
 }) => {
-  const pan = useRef(new RNAnimated.ValueXY({ x: initialX, y: initialY })).current;
-  const scaleAnim = useRef(new RNAnimated.Value(initialScale)).current;
-  const lastPosition = useRef({ x: initialX, y: initialY });
-  const lastScale = useRef(initialScale);
-  const baseScale = useRef(initialScale);
-  const pinchScale = useRef(1);
-  const lastDistance = useRef(0);
+  const translateX = useSharedValue(initialX);
+  const translateY = useSharedValue(initialY);
+  const scale = useSharedValue(initialScale);
+  const savedScale = useSharedValue(initialScale);
+  const savedTranslateX = useSharedValue(initialX);
+  const savedTranslateY = useSharedValue(initialY);
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return gestureState.numberActiveTouches >= 1;
-      },
-      onPanResponderGrant: (evt) => {
-        pan.setOffset({
-          x: lastPosition.current.x,
-          y: lastPosition.current.y,
-        });
-        pan.setValue({ x: 0, y: 0 });
-        baseScale.current = lastScale.current;
-        
-        // Initialize pinch distance if 2 fingers
-        if (evt.nativeEvent.touches.length === 2) {
-          const touch1 = evt.nativeEvent.touches[0];
-          const touch2 = evt.nativeEvent.touches[1];
-          lastDistance.current = Math.sqrt(
-            Math.pow(touch2.pageX - touch1.pageX, 2) + Math.pow(touch2.pageY - touch1.pageY, 2)
-          );
-        }
-      },
-      onPanResponderMove: (evt, gestureState) => {
-        // Handle pinch-to-zoom with 2 fingers
-        if (evt.nativeEvent.touches.length === 2) {
-          const touch1 = evt.nativeEvent.touches[0];
-          const touch2 = evt.nativeEvent.touches[1];
-          const currentDistance = Math.sqrt(
-            Math.pow(touch2.pageX - touch1.pageX, 2) + Math.pow(touch2.pageY - touch1.pageY, 2)
-          );
-          
-          if (lastDistance.current > 0) {
-            pinchScale.current = currentDistance / lastDistance.current;
-            const newScale = Math.min(Math.max(baseScale.current * pinchScale.current, 0.3), 3);
-            scaleAnim.setValue(newScale);
-          }
-        } else {
-          // Single finger drag
-          pan.setValue({ x: gestureState.dx, y: gestureState.dy });
-        }
-      },
-      onPanResponderRelease: (evt, gestureState) => {
-        pan.flattenOffset();
-        const newX = lastPosition.current.x + gestureState.dx;
-        const newY = lastPosition.current.y + gestureState.dy;
-        lastPosition.current = { x: newX, y: newY };
-        onPositionChange?.(newX, newY);
-        
-        // Save final scale
-        const finalScale = Math.min(Math.max(baseScale.current * pinchScale.current, 0.3), 3);
-        lastScale.current = finalScale;
-        onScaleChange?.(finalScale);
-        pinchScale.current = 1;
-        lastDistance.current = 0;
-      },
+  const panGesture = Gesture.Pan()
+    .onUpdate((event) => {
+      translateX.value = savedTranslateX.value + event.translationX;
+      translateY.value = savedTranslateY.value + event.translationY;
     })
-  ).current;
+    .onEnd(() => {
+      savedTranslateX.value = translateX.value;
+      savedTranslateY.value = translateY.value;
+      onPositionChange?.(translateX.value, translateY.value);
+    });
+
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((event) => {
+      scale.value = Math.min(Math.max(savedScale.value * event.scale, 0.3), 4);
+    })
+    .onEnd(() => {
+      savedScale.value = scale.value;
+      onScaleChange?.(scale.value);
+    });
+
+  const tapGesture = Gesture.Tap()
+    .onEnd(() => {
+      onTap?.();
+    });
+
+  const longPressGesture = Gesture.LongPress()
+    .minDuration(500)
+    .onEnd(() => {
+      onDelete?.();
+    });
+
+  const composedGesture = Gesture.Simultaneous(
+    panGesture,
+    pinchGesture,
+    Gesture.Exclusive(longPressGesture, tapGesture)
+  );
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
 
   return (
-    <RNAnimated.View
-      {...panResponder.panHandlers}
-      style={[
-        styles.draggableElement,
-        {
-          transform: [{ translateX: pan.x }, { translateY: pan.y }, { scale: scaleAnim }],
-        },
-      ]}
-    >
-      <TouchableOpacity onLongPress={onDelete} onPress={onTap} delayLongPress={500} activeOpacity={0.9}>
+    <GestureDetector gesture={composedGesture}>
+      <Animated.View style={[styles.draggableElement, animatedStyle]}>
         {children}
-      </TouchableOpacity>
-    </RNAnimated.View>
+      </Animated.View>
+    </GestureDetector>
   );
 };
 
