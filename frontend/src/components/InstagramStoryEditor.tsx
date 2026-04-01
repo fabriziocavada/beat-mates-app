@@ -15,6 +15,7 @@ import {
   PanResponder,
   Animated as RNAnimated,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
@@ -179,6 +180,12 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
   const [hashtagText, setHashtagText] = useState('');
   const [mentionSearch, setMentionSearch] = useState('');
   const [mentionUsers, setMentionUsers] = useState<{id: string; username: string; name: string; profile_image: string | null}[]>([]);
+  
+  // Music state
+  const [musicSongs, setMusicSongs] = useState<{id: string; title: string; artist: string; file_url: string; duration: number}[]>([]);
+  const [musicSearch, setMusicSearch] = useState('');
+  const [selectedMusic, setSelectedMusic] = useState<{id: string; title: string; artist: string; file_url: string} | null>(null);
+  const [musicLoading, setMusicLoading] = useState(false);
 
   // Open panel without resetting elements
   const openPanel = (panel: typeof activePanel) => {
@@ -405,6 +412,51 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
     setActivePanel('none');
   };
 
+  // Load music from library
+  const loadMusicSongs = async (search?: string) => {
+    setMusicLoading(true);
+    try {
+      const params: any = {};
+      if (search) params.search = search;
+      const res = await api.get('/music/songs', { params });
+      setMusicSongs(res.data || []);
+    } catch (e) {
+      console.error('Failed to load music', e);
+      setMusicSongs([]);
+    } finally {
+      setMusicLoading(false);
+    }
+  };
+
+  // Select music for story
+  const selectMusic = (song: typeof musicSongs[0]) => {
+    setSelectedMusic({
+      id: song.id,
+      title: song.title,
+      artist: song.artist,
+      file_url: song.file_url,
+    });
+    // Add music sticker to show on story
+    const newSticker: StickerElement = {
+      id: `music-${Date.now()}`,
+      type: 'widget',
+      content: `${song.title} - ${song.artist}`,
+      icon: 'musical-notes',
+      x: width / 2 - 80,
+      y: height - 200,
+      scale: 1,
+    };
+    setStickers(prev => [...prev.filter(s => !s.id.startsWith('music-')), newSticker]);
+    setActivePanel('none');
+  };
+
+  // Format duration
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   // Delete element
   const deleteText = (id: string) => {
     Alert.alert('Elimina', 'Vuoi eliminare questo testo?', [
@@ -480,6 +532,7 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
       drawings,
       backgroundColor,
       caption,
+      music: selectedMusic, // Include selected music
     });
   };
 
@@ -658,7 +711,7 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
       {showSidebar && !isAnyPanelOpen && !isDrawingMode && (
         <View style={styles.sidebar}>
           <SidebarTool icon="happy-outline" label="Adesivi" onPress={() => openPanel('stickers')} />
-          <SidebarTool icon="musical-note" label="Audio" onPress={() => openPanel('music')} />
+          <SidebarTool icon="musical-note" label="Audio" onPress={() => { loadMusicSongs(); openPanel('music'); }} />
           <SidebarTool icon="at" label="Menziona" onPress={() => { loadMentionUsers(''); openPanel('mention'); }} />
           <SidebarTool icon="color-palette-outline" label="Sfondo" onPress={() => openPanel('background')} />
           <SidebarTool icon="brush-outline" label="Disegna" onPress={() => setIsDrawingMode(true)} />
@@ -881,15 +934,49 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
             <Text style={styles.musicTitle}>Musica</Text>
             <View style={{ width: 28 }} />
           </View>
-          <TextInput style={styles.musicSearch} placeholder="Cerca brani..." placeholderTextColor="#888" />
-          <View style={styles.musicList}>
-            {['Per te', 'Popolari', 'Nuove uscite'].map((cat, i) => (
-              <TouchableOpacity key={i} style={styles.musicCat}>
-                <Text style={styles.musicCatText}>{cat}</Text>
+          <TextInput 
+            style={styles.musicSearch} 
+            placeholder="Cerca brani..." 
+            placeholderTextColor="#888"
+            value={musicSearch}
+            onChangeText={(text) => { setMusicSearch(text); loadMusicSongs(text); }}
+          />
+          
+          {/* Selected music indicator */}
+          {selectedMusic && (
+            <View style={styles.selectedMusicBanner}>
+              <Ionicons name="musical-notes" size={18} color="#34C759" />
+              <Text style={styles.selectedMusicText} numberOfLines={1}>{selectedMusic.title} - {selectedMusic.artist}</Text>
+              <TouchableOpacity onPress={() => { setSelectedMusic(null); setStickers(prev => prev.filter(s => !s.id.startsWith('music-'))); }}>
+                <Ionicons name="close-circle" size={20} color="#888" />
               </TouchableOpacity>
-            ))}
-            <Text style={styles.musicPlaceholder}>I brani verranno mostrati qui</Text>
-          </View>
+            </View>
+          )}
+          
+          <ScrollView style={styles.musicList}>
+            {musicLoading ? (
+              <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />
+            ) : musicSongs.length > 0 ? (
+              musicSongs.map((song) => (
+                <TouchableOpacity key={song.id} style={styles.musicSongItem} onPress={() => selectMusic(song)}>
+                  <View style={styles.musicSongIcon}>
+                    <Ionicons name="musical-notes" size={20} color="#fff" />
+                  </View>
+                  <View style={styles.musicSongInfo}>
+                    <Text style={styles.musicSongTitle} numberOfLines={1}>{song.title}</Text>
+                    <Text style={styles.musicSongArtist} numberOfLines={1}>{song.artist} • {formatDuration(song.duration)}</Text>
+                  </View>
+                  <Ionicons name="add-circle-outline" size={24} color="#007AFF" />
+                </TouchableOpacity>
+              ))
+            ) : (
+              <View style={styles.musicEmpty}>
+                <Ionicons name="musical-notes-outline" size={50} color="#666" />
+                <Text style={styles.musicEmptyText}>Nessun brano trovato</Text>
+                <Text style={styles.musicEmptySubtext}>Aggiungi musica dalla pagina Musica</Text>
+              </View>
+            )}
+          </ScrollView>
         </View>
       </Modal>
 
@@ -1680,6 +1767,66 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     marginTop: 40,
+  },
+  selectedMusicBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2c2c2e',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginBottom: 12,
+    gap: 10,
+  },
+  selectedMusicText: {
+    flex: 1,
+    color: '#34C759',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  musicSongItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#333',
+    gap: 12,
+  },
+  musicSongIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  musicSongInfo: {
+    flex: 1,
+  },
+  musicSongTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  musicSongArtist: {
+    color: '#888',
+    fontSize: 14,
+    marginTop: 2,
+  },
+  musicEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  musicEmptyText: {
+    color: '#888',
+    fontSize: 16,
+    marginTop: 16,
+  },
+  musicEmptySubtext: {
+    color: '#666',
+    fontSize: 14,
+    marginTop: 4,
   },
   // Link panel
   linkPanel: {

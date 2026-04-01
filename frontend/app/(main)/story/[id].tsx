@@ -175,6 +175,36 @@ function StoryVideoPlayer({ url, isActive, isPaused }: { url: string; isActive: 
   );
 }
 
+// Optimized Image loader with fast loading
+function StoryImageLoader({ url }: { url: string }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  
+  return (
+    <View style={StyleSheet.absoluteFill}>
+      <Image 
+        source={{ uri: url, cache: 'force-cache' }} 
+        style={styles.fullMedia} 
+        resizeMode="cover"
+        onLoadStart={() => setLoading(true)}
+        onLoad={() => setLoading(false)}
+        onError={() => { setLoading(false); setError(true); }}
+      />
+      {loading && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      )}
+      {error && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#1c1c1e', alignItems: 'center', justifyContent: 'center' }]}>
+          <Ionicons name="image-outline" size={40} color="#666" />
+          <Text style={{ color: '#888', fontSize: 12, marginTop: 8 }}>Immagine non disponibile</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 // Single user's story page (rendered inside the horizontal pager)
 function UserStoryPage({
   userStories, storyIdx, progress, isActive, onTap, onClose, onSwipeUp, onSwipeDown, onSendMessage, onLike, onShare, onHoldStart, onHoldEnd, isPaused
@@ -287,7 +317,7 @@ function UserStoryPage({
         {isVideo ? (
           <StoryVideoPlayer key={story.id} url={mediaUrl} isActive={isActive} isPaused={isPaused} />
         ) : (
-          <Image source={{ uri: mediaUrl }} style={styles.fullMedia} resizeMode="cover" />
+          <StoryImageLoader key={story.id} url={mediaUrl} />
         )}
       </View>
 
