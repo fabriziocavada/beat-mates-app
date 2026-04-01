@@ -12,7 +12,6 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
-  Animated as RNAnimated,
   Alert,
   ActivityIndicator,
 } from 'react-native';
@@ -20,8 +19,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import Svg, { Path } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
-import { GestureDetector, Gesture } from 'react-native-gesture-handler';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
 import Colors from '../constants/colors';
 import api, { getMediaUrl } from '../services/api';
 
@@ -119,6 +118,20 @@ const DraggableItem = ({ children, initialX, initialY, initialScale = 1, onPosit
   const savedTranslateX = useSharedValue(initialX);
   const savedTranslateY = useSharedValue(initialY);
 
+  // Callback wrappers for worklet -> JS thread
+  const notifyPositionChange = (x: number, y: number) => {
+    onPositionChange?.(x, y);
+  };
+  const notifyScaleChange = (s: number) => {
+    onScaleChange?.(s);
+  };
+  const notifyDelete = () => {
+    onDelete?.();
+  };
+  const notifyTap = () => {
+    onTap?.();
+  };
+
   const panGesture = Gesture.Pan()
     .onUpdate((event) => {
       translateX.value = savedTranslateX.value + event.translationX;
@@ -127,7 +140,9 @@ const DraggableItem = ({ children, initialX, initialY, initialScale = 1, onPosit
     .onEnd(() => {
       savedTranslateX.value = translateX.value;
       savedTranslateY.value = translateY.value;
-      onPositionChange?.(translateX.value, translateY.value);
+      if (onPositionChange) {
+        runOnJS(notifyPositionChange)(translateX.value, translateY.value);
+      }
     });
 
   const pinchGesture = Gesture.Pinch()
@@ -136,18 +151,24 @@ const DraggableItem = ({ children, initialX, initialY, initialScale = 1, onPosit
     })
     .onEnd(() => {
       savedScale.value = scale.value;
-      onScaleChange?.(scale.value);
+      if (onScaleChange) {
+        runOnJS(notifyScaleChange)(scale.value);
+      }
     });
 
   const tapGesture = Gesture.Tap()
     .onEnd(() => {
-      onTap?.();
+      if (onTap) {
+        runOnJS(notifyTap)();
+      }
     });
 
   const longPressGesture = Gesture.LongPress()
     .minDuration(500)
     .onEnd(() => {
-      onDelete?.();
+      if (onDelete) {
+        runOnJS(notifyDelete)();
+      }
     });
 
   const composedGesture = Gesture.Simultaneous(
@@ -703,23 +724,23 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
   const isAnyPanelOpen = activePanel !== 'none';
 
   return (
-    <View style={styles.container}>
+    <GestureHandlerRootView style={styles.container}>
       {/* Background color overlay */}
       {backgroundColor !== 'transparent' && <View style={[StyleSheet.absoluteFill, { backgroundColor }]} />}
 
-      {/* Media */}
+      {/* Media - fullscreen without gray borders */}
       <View style={styles.mediaContainer}>
         {mediaType === 'video' ? (
           <Video
             source={{ uri: mediaUri }}
             style={styles.media}
-            resizeMode={ResizeMode.CONTAIN}
+            resizeMode={ResizeMode.COVER}
             shouldPlay
             isLooping
             isMuted={false}
           />
         ) : (
-          <Image source={{ uri: mediaUri }} style={styles.media} resizeMode="contain" />
+          <Image source={{ uri: mediaUri }} style={styles.media} resizeMode="cover" />
         )}
 
         {/* Drawing canvas - only show saved drawings when NOT in drawing mode */}
@@ -1295,7 +1316,7 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
           </ScrollView>
         </View>
       </Modal>
-    </View>
+    </GestureHandlerRootView>
   );
 }
 
@@ -1305,14 +1326,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   mediaContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginVertical: 60,
-    marginHorizontal: 10,
-    borderRadius: 16,
+    ...StyleSheet.absoluteFillObject,
     overflow: 'hidden',
-    backgroundColor: '#1c1c1e',
+    backgroundColor: '#000',
   },
   media: {
     width: '100%',
