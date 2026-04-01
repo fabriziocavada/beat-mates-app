@@ -344,6 +344,13 @@ const AnimatedParticles = ({ particles }: { particles: any[] }) => {
   );
 };
 
+// Helper to generate unique IDs
+let idCounter = 0;
+const generateUniqueId = (prefix: string = '') => {
+  idCounter++;
+  return `${prefix}${Date.now()}-${idCounter}-${Math.random().toString(36).substr(2, 6)}`;
+};
+
 export default function InstagramStoryEditor({ mediaUri, mediaType, originalPoster, onSave, onClose }: Props) {
   // Core state - persists across panel changes
   const [texts, setTexts] = useState<TextElement[]>([]);
@@ -722,32 +729,35 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
 
   // Apply animated particle effect
   const applyEffect = (effect: typeof ANIMATED_EFFECTS[0]) => {
+    // Use unique timestamp + random for each batch
+    const batchId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
     // Generate animated particles based on effect type
-    const particleCount = 30;
+    const particleCount = 25;
     const newParticles = [];
     
     for (let i = 0; i < particleCount; i++) {
       const particle = {
-        id: `${Date.now()}-${i}`,
+        id: `${batchId}-${i}`, // Unique key per batch
         emoji: effect.particles[Math.floor(Math.random() * effect.particles.length)],
         x: Math.random() * width,
         y: effect.type === 'falling' ? -50 : effect.type === 'rising' ? height + 50 : Math.random() * height,
         opacity: 1,
         animationType: effect.type,
-        delay: Math.random() * 500, // Reduced delay so effects appear faster
-        duration: 3000 + Math.random() * 2000, // Slower duration for preview
+        delay: i * 50, // Staggered delay for visual effect
+        duration: 4000 + Math.random() * 2000,
       };
       newParticles.push(particle);
     }
     
-    // Set particles first, then effect ID, then close panel
-    setEffectParticles(newParticles);
+    // Set effect ID and particles together to trigger re-render
     setSelectedEffect(effect.id);
+    setEffectParticles(newParticles);
     
-    // Small delay before closing panel to ensure state updates
+    // Close panel after a short delay
     setTimeout(() => {
       setActivePanel('none');
-    }, 100);
+    }, 50);
   };
 
   // Add animated text sticker
@@ -1002,17 +1012,26 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
   const savedMainTranslateY = useSharedValue(0);
 
   const mainPinchGesture = Gesture.Pinch()
+    .onStart(() => {
+      console.log('PINCH START');
+    })
     .onUpdate((event) => {
+      console.log('PINCH UPDATE', event.scale);
       mainMediaScale.value = Math.min(Math.max(savedMainScale.value * event.scale, 0.3), 4);
     })
     .onEnd(() => {
+      console.log('PINCH END');
       savedMainScale.value = mainMediaScale.value;
     });
 
   // Two-finger pan for moving main media
   const mainPanGesture = Gesture.Pan()
     .minPointers(2) // Requires 2 fingers - allows single finger for other elements
+    .onStart(() => {
+      console.log('PAN START 2 FINGERS');
+    })
     .onUpdate((event) => {
+      console.log('PAN UPDATE', event.translationX, event.translationY);
       mainMediaTranslateX.value = savedMainTranslateX.value + event.translationX;
       mainMediaTranslateY.value = savedMainTranslateY.value + event.translationY;
     })
@@ -1040,16 +1059,20 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
       <GestureDetector gesture={mainMediaGesture}>
         <Animated.View style={[styles.mediaContainer, mainMediaAnimatedStyle]}>
           {mediaType === 'video' ? (
-            <Video
-              source={{ uri: mediaUri }}
-              style={styles.media}
-              resizeMode={ResizeMode.CONTAIN}
-              shouldPlay
-              isLooping
-              isMuted={false}
-            />
+            <View pointerEvents="none" style={styles.media}>
+              <Video
+                source={{ uri: mediaUri }}
+                style={styles.media}
+                resizeMode={ResizeMode.CONTAIN}
+                shouldPlay
+                isLooping
+                isMuted={false}
+              />
+            </View>
           ) : (
-            <Image source={{ uri: mediaUri }} style={styles.media} resizeMode="contain" />
+            <View pointerEvents="none" style={styles.media}>
+              <Image source={{ uri: mediaUri }} style={styles.media} resizeMode="contain" />
+            </View>
           )}
         </Animated.View>
       </GestureDetector>
