@@ -20,6 +20,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import Svg, { Path } from 'react-native-svg';
+import * as ImagePicker from 'expo-image-picker';
 import Colors from '../constants/colors';
 import api, { getMediaUrl } from '../services/api';
 
@@ -56,6 +57,17 @@ interface DrawPath {
   width: number;
 }
 
+// Overlay image
+interface OverlayImage {
+  id: string;
+  uri: string;
+  x: number;
+  y: number;
+  scale: number;
+  width: number;
+  height: number;
+}
+
 const COLORS = ['#FFFFFF', '#000000', '#FF6978', '#FF9500', '#FFCC00', '#34C759', '#007AFF', '#5856D6', '#AF52DE', '#FF2D55'];
 
 const FONT_STYLES = [
@@ -88,41 +100,80 @@ interface Props {
   onClose: () => void;
 }
 
-// Draggable Element Component - defined outside main component
-const DraggableItem = ({ children, initialX, initialY, onPositionChange, onDelete, onTap }: {
+// Draggable Element Component with pinch-to-zoom support
+const DraggableItem = ({ children, initialX, initialY, initialScale = 1, onPositionChange, onScaleChange, onDelete, onTap }: {
   children: React.ReactNode;
   initialX: number;
   initialY: number;
+  initialScale?: number;
   onPositionChange?: (x: number, y: number) => void;
+  onScaleChange?: (scale: number) => void;
   onDelete?: () => void;
   onTap?: () => void;
 }) => {
   const pan = useRef(new RNAnimated.ValueXY({ x: initialX, y: initialY })).current;
-  const scale = useRef(new RNAnimated.Value(1)).current;
+  const scaleAnim = useRef(new RNAnimated.Value(initialScale)).current;
   const lastPosition = useRef({ x: initialX, y: initialY });
+  const lastScale = useRef(initialScale);
+  const baseScale = useRef(initialScale);
+  const pinchScale = useRef(1);
+  const lastDistance = useRef(0);
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2;
+        return gestureState.numberActiveTouches >= 1;
       },
-      onPanResponderGrant: () => {
+      onPanResponderGrant: (evt) => {
         pan.setOffset({
           x: lastPosition.current.x,
           y: lastPosition.current.y,
         });
         pan.setValue({ x: 0, y: 0 });
-        RNAnimated.spring(scale, { toValue: 1.1, useNativeDriver: true }).start();
+        baseScale.current = lastScale.current;
+        
+        // Initialize pinch distance if 2 fingers
+        if (evt.nativeEvent.touches.length === 2) {
+          const touch1 = evt.nativeEvent.touches[0];
+          const touch2 = evt.nativeEvent.touches[1];
+          lastDistance.current = Math.sqrt(
+            Math.pow(touch2.pageX - touch1.pageX, 2) + Math.pow(touch2.pageY - touch1.pageY, 2)
+          );
+        }
       },
-      onPanResponderMove: RNAnimated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
-      onPanResponderRelease: (_, gestureState) => {
+      onPanResponderMove: (evt, gestureState) => {
+        // Handle pinch-to-zoom with 2 fingers
+        if (evt.nativeEvent.touches.length === 2) {
+          const touch1 = evt.nativeEvent.touches[0];
+          const touch2 = evt.nativeEvent.touches[1];
+          const currentDistance = Math.sqrt(
+            Math.pow(touch2.pageX - touch1.pageX, 2) + Math.pow(touch2.pageY - touch1.pageY, 2)
+          );
+          
+          if (lastDistance.current > 0) {
+            pinchScale.current = currentDistance / lastDistance.current;
+            const newScale = Math.min(Math.max(baseScale.current * pinchScale.current, 0.3), 3);
+            scaleAnim.setValue(newScale);
+          }
+        } else {
+          // Single finger drag
+          pan.setValue({ x: gestureState.dx, y: gestureState.dy });
+        }
+      },
+      onPanResponderRelease: (evt, gestureState) => {
         pan.flattenOffset();
         const newX = lastPosition.current.x + gestureState.dx;
         const newY = lastPosition.current.y + gestureState.dy;
         lastPosition.current = { x: newX, y: newY };
         onPositionChange?.(newX, newY);
-        RNAnimated.spring(scale, { toValue: 1, useNativeDriver: true }).start();
+        
+        // Save final scale
+        const finalScale = Math.min(Math.max(baseScale.current * pinchScale.current, 0.3), 3);
+        lastScale.current = finalScale;
+        onScaleChange?.(finalScale);
+        pinchScale.current = 1;
+        lastDistance.current = 0;
       },
     })
   ).current;
@@ -133,7 +184,7 @@ const DraggableItem = ({ children, initialX, initialY, onPositionChange, onDelet
       style={[
         styles.draggableElement,
         {
-          transform: [{ translateX: pan.x }, { translateY: pan.y }, { scale }],
+          transform: [{ translateX: pan.x }, { translateY: pan.y }, { scale: scaleAnim }],
         },
       ]}
     >
@@ -149,8 +200,10 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
   const [texts, setTexts] = useState<TextElement[]>([]);
   const [stickers, setStickers] = useState<StickerElement[]>([]);
   const [drawings, setDrawings] = useState<DrawPath[]>([]);
+  const [overlayImages, setOverlayImages] = useState<OverlayImage[]>([]);
   const [backgroundColor, setBackgroundColor] = useState<string>('transparent');
   const [caption, setCaption] = useState('');
+  const [mainImageScale, setMainImageScale] = useState(1);
 
   // Panel state
   const [activePanel, setActivePanel] = useState<'none' | 'text' | 'stickers' | 'draw' | 'background' | 'music' | 'link' | 'poll' | 'question' | 'location' | 'countdown' | 'hashtag' | 'mention'>('none');
@@ -475,6 +528,45 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Add overlay image from gallery
+  const addOverlayImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      const imgWidth = Math.min(150, asset.width || 150);
+      const imgHeight = asset.height ? (imgWidth * asset.height / asset.width) : 150;
+      
+      const newImage: OverlayImage = {
+        id: Date.now().toString(),
+        uri: asset.uri,
+        x: width / 2 - imgWidth / 2,
+        y: height / 2 - imgHeight / 2,
+        scale: 1,
+        width: imgWidth,
+        height: imgHeight,
+      };
+      setOverlayImages(prev => [...prev, newImage]);
+    }
+  };
+
+  // Delete overlay image
+  const deleteOverlayImage = (id: string) => {
+    Alert.alert('Elimina', 'Vuoi eliminare questa immagine?', [
+      { text: 'Annulla', style: 'cancel' },
+      { text: 'Elimina', style: 'destructive', onPress: () => setOverlayImages(prev => prev.filter(i => i.id !== id)) },
+    ]);
+  };
+
+  // Update overlay image position/scale
+  const updateOverlayImage = (id: string, updates: Partial<OverlayImage>) => {
+    setOverlayImages(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
+  };
+
   // Delete element
   const deleteText = (id: string) => {
     Alert.alert('Elimina', 'Vuoi eliminare questo testo?', [
@@ -699,6 +791,24 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
       {/* Rendered elements - outside media container so they're always visible */}
       {!isDrawingMode && texts.map(renderTextElement)}
       {!isDrawingMode && stickers.map(renderStickerElement)}
+      {/* Overlay images */}
+      {!isDrawingMode && overlayImages.map((img) => (
+        <DraggableItem
+          key={img.id}
+          initialX={img.x}
+          initialY={img.y}
+          initialScale={img.scale}
+          onPositionChange={(x, y) => updateOverlayImage(img.id, { x, y })}
+          onScaleChange={(scale) => updateOverlayImage(img.id, { scale })}
+          onDelete={() => deleteOverlayImage(img.id)}
+        >
+          <Image
+            source={{ uri: img.uri }}
+            style={{ width: img.width, height: img.height, borderRadius: 8 }}
+            resizeMode="cover"
+          />
+        </DraggableItem>
+      ))}
 
       {/* Top bar - zIndex 100 to be above drawing layer */}
       <View style={[styles.topBar, { zIndex: 100 }]}>
@@ -729,12 +839,11 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
       {showSidebar && !isAnyPanelOpen && !isDrawingMode && (
         <View style={styles.sidebar}>
           <SidebarTool icon="happy-outline" label="Adesivi" onPress={() => openPanel('stickers')} />
+          <SidebarTool icon="image-outline" label="Immagine" onPress={addOverlayImage} />
           <SidebarTool icon="musical-note" label="Audio" onPress={() => { loadMusicSongs(); openPanel('music'); }} />
           <SidebarTool icon="at" label="Menziona" onPress={() => { loadMentionUsers(''); openPanel('mention'); }} />
           <SidebarTool icon="color-palette-outline" label="Sfondo" onPress={() => openPanel('background')} />
           <SidebarTool icon="brush-outline" label="Disegna" onPress={() => setIsDrawingMode(true)} />
-          <SidebarTool icon="download-outline" label="Scarica" onPress={() => Alert.alert('Scarica', 'Funzione di download in arrivo!')} />
-          <SidebarTool icon="ellipsis-horizontal" label="Altro" onPress={() => Alert.alert('Altro', 'Altre opzioni in arrivo!')} />
           <TouchableOpacity style={styles.collapseButton} onPress={() => setShowSidebar(false)}>
             <Ionicons name="chevron-up" size={20} color="#fff" />
           </TouchableOpacity>
