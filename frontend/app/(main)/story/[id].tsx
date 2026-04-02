@@ -11,6 +11,7 @@ import { Video, ResizeMode } from 'expo-av';
 import api, { getMediaUrl } from '../../../src/services/api';
 import Colors from '../../../src/constants/colors';
 import ShareModal from '../../../src/components/ShareModal';
+import StoryAd from '../../../src/components/StoryAd';
 
 const { width, height } = Dimensions.get('window');
 const PHOTO_DURATION = 6000;
@@ -653,6 +654,11 @@ export default function StoryViewerScreen() {
   
   // Share modal state
   const [showShareModal, setShowShareModal] = useState(false);
+  
+  // Story Ad state - show after every 3 users
+  const [showStoryAd, setShowStoryAd] = useState(false);
+  const [storyAd, setStoryAd] = useState<any>(null);
+  const usersViewedBeforeAd = useRef(0);
 
   // Load stories
   useEffect(() => {
@@ -723,8 +729,42 @@ export default function StoryViewerScreen() {
   };
 
   // Navigate between users (scroll the pager)
-  const goNextUser = () => {
+  const goNextUser = async () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    
+    // Increment counter and check if we should show an ad
+    usersViewedBeforeAd.current += 1;
+    
+    // Show ad every 3 users (first ad after 3 users)
+    if (usersViewedBeforeAd.current >= 3 && !showStoryAd) {
+      try {
+        const res = await api.get('/ads/serve/story');
+        if (res.data && res.data.id) {
+          setStoryAd(res.data);
+          setShowStoryAd(true);
+          usersViewedBeforeAd.current = 0; // Reset counter
+          return; // Don't navigate yet, show ad first
+        }
+      } catch (e) {
+        console.log('No story ad available');
+      }
+    }
+    
+    if (currentUserIdx < allUserStories.length - 1) {
+      const nextIdx = currentUserIdx + 1;
+      setCurrentUserIdx(nextIdx);
+      setCurrentStoryIdx(0);
+      pagerRef.current?.scrollToOffset({ offset: nextIdx * width, animated: true });
+    } else {
+      router.replace('/(main)/home');
+    }
+  };
+  
+  // Called when story ad is complete or skipped
+  const onStoryAdComplete = () => {
+    setShowStoryAd(false);
+    setStoryAd(null);
+    // Now navigate to next user
     if (currentUserIdx < allUserStories.length - 1) {
       const nextIdx = currentUserIdx + 1;
       setCurrentUserIdx(nextIdx);
@@ -851,6 +891,18 @@ export default function StoryViewerScreen() {
 
   if (isLoading) {
     return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={Colors.primary} /></View>;
+  }
+
+  // Show Story Ad full screen
+  if (showStoryAd && storyAd) {
+    return (
+      <StoryAd 
+        ad={storyAd} 
+        onComplete={onStoryAdComplete}
+        onSkip={onStoryAdComplete}
+        duration={6}
+      />
+    );
   }
 
   return (

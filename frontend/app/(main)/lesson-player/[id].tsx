@@ -10,6 +10,7 @@ import { WebView } from 'react-native-webview';
 import Colors from '../../../src/constants/colors';
 import api, { getMediaUrl, getVideoPlayerUrl } from '../../../src/services/api';
 import { useAuthStore } from '../../../src/store/authStore';
+import PrerollAd from '../../../src/components/PrerollAd';
 
 const { width, height } = Dimensions.get('window');
 
@@ -36,6 +37,11 @@ export default function LessonPlayerScreen() {
   const [hasPurchased, setHasPurchased] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
+  
+  // Pre-roll ad state
+  const [showPrerollAd, setShowPrerollAd] = useState(false);
+  const [prerollAd, setPrerollAd] = useState<any>(null);
+  const [adWatched, setAdWatched] = useState(false);
 
   useEffect(() => { loadLesson(); }, [lessonId]);
 
@@ -57,9 +63,25 @@ export default function LessonPlayerScreen() {
             setHasPurchased(false);
           }
         }
+        
+        // Load pre-roll ad (show before video plays)
+        try {
+          const adRes = await api.get('/ads/serve/preroll');
+          if (adRes.data && adRes.data.id) {
+            setPrerollAd(adRes.data);
+            setShowPrerollAd(true);
+          }
+        } catch (e) {
+          console.log('No preroll ad available');
+        }
       }
     } catch (e) { console.error('Failed to load lesson', e); }
     finally { setIsLoading(false); }
+  };
+  
+  const onPrerollAdComplete = () => {
+    setShowPrerollAd(false);
+    setAdWatched(true);
   };
 
   const handleMockPurchase = () => {
@@ -226,8 +248,19 @@ export default function LessonPlayerScreen() {
     );
   }
 
-  // Purchased - show video
+  // Purchased - show video (or preroll ad first)
   const lessonPlayerUrl = videoUrl ? getVideoPlayerUrl(videoUrl, { controls: true, muted: false, autoplay: true }) : '';
+
+  // Show pre-roll ad first if available and not yet watched
+  if (showPrerollAd && prerollAd && hasPurchased) {
+    return (
+      <PrerollAd 
+        ad={prerollAd} 
+        onComplete={onPrerollAdComplete}
+        skipAfterSeconds={10}
+      />
+    );
+  }
 
   return (
     <View style={styles.container}>

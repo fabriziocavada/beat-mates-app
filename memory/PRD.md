@@ -104,10 +104,10 @@ Social media mobile app for dancers built with Expo (React Native) + FastAPI + M
 | 🥇 Business | 20,000 | €299 | 30 days |
 | 💎 Premium | 100,000 | €999 | 60 days |
 
-**Ad Placements:**
-- Feed: Between posts (every 5 posts)
-- Stories: Between user stories
-- Pre-roll: Before video lessons (skip after 10 sec)
+**Ad Placements - FULLY INTEGRATED:**
+- ✅ Feed: Between posts (every 5 posts) - `home.tsx` + `AdCard.tsx`
+- ✅ Stories: Between user stories (every 3 users) - `story/[id].tsx` + `StoryAd.tsx`
+- ✅ Pre-roll: Before video lessons (skip after 10 sec) - `lesson-player/[id].tsx` + `PrerollAd.tsx`
 
 **Frontend Components:**
 - `AdCard.tsx` - Instagram-style feed ad card
