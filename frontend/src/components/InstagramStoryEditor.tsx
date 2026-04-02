@@ -2597,16 +2597,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   locationItemText: { color: '#fff', fontSize: 16 },
-  // Countdown panel
+  // Countdown panel - inside KeyboardAvoidingView, no absolute positioning
   countdownPanel: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     backgroundColor: '#1c1c1e',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
+    paddingBottom: 40, // Extra padding for home indicator
   },
   countdownHeader: {
     flexDirection: 'row',

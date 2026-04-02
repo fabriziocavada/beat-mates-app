@@ -101,21 +101,23 @@ export default function CreateStoryScreen() {
         // Upload overlay images to server (they have local file:// URIs)
         let uploadedOverlayImages: any[] = [];
         if (data.overlayImages && data.overlayImages.length > 0) {
-          console.log('Uploading', data.overlayImages.length, 'overlay images...');
+          console.log('=== UPLOADING', data.overlayImages.length, 'overlay images... ===');
           for (const img of data.overlayImages) {
+            console.log('Processing overlay image:', img.uri.substring(0, 50));
             try {
               // Upload the local file to server
               const uploadedUrl = await uploadFile(img.uri);
+              console.log('Upload SUCCESS:', uploadedUrl);
               uploadedOverlayImages.push({
                 ...img,
                 uri: uploadedUrl, // Replace local URI with server URL
               });
-              console.log('Uploaded overlay image:', uploadedUrl);
-            } catch (e) {
-              console.error('Failed to upload overlay image:', e);
+            } catch (e: any) {
+              console.error('=== UPLOAD FAILED ===', e.message || e);
               // Skip failed uploads
             }
           }
+          console.log('=== FINISHED UPLOADING, got', uploadedOverlayImages.length, 'images ===');
         }
         
         storyData.editor_data = {
