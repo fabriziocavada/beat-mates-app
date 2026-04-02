@@ -408,6 +408,46 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
   const [selectedMusic, setSelectedMusic] = useState<{id: string; title: string; artist: string; file_url: string} | null>(null);
   const [musicLoading, setMusicLoading] = useState(false);
 
+  // Undo stack - stores previous states
+  const [undoStack, setUndoStack] = useState<Array<{
+    texts: TextElement[];
+    stickers: StickerElement[];
+    drawings: DrawingPath[];
+    overlayImages: OverlayImage[];
+    selectedEffect: string | null;
+    effectParticles: any[];
+    backgroundColor: string;
+  }>>([]);
+
+  // Save current state to undo stack before making changes
+  const saveToUndoStack = () => {
+    setUndoStack(prev => [...prev.slice(-19), { // Keep last 20 states
+      texts: [...texts],
+      stickers: [...stickers],
+      drawings: [...drawings],
+      overlayImages: [...overlayImages],
+      selectedEffect,
+      effectParticles: [...effectParticles],
+      backgroundColor,
+    }]);
+  };
+
+  // Undo last action
+  const undoLastAction = () => {
+    if (undoStack.length === 0) return;
+    
+    const lastState = undoStack[undoStack.length - 1];
+    setTexts(lastState.texts);
+    setStickers(lastState.stickers);
+    setDrawings(lastState.drawings);
+    setOverlayImages(lastState.overlayImages);
+    setSelectedEffect(lastState.selectedEffect);
+    setEffectParticles(lastState.effectParticles);
+    setBackgroundColor(lastState.backgroundColor);
+    
+    setUndoStack(prev => prev.slice(0, -1));
+  };
+
   // Open panel without resetting elements
   const openPanel = (panel: typeof activePanel) => {
     setActivePanel(panel);
@@ -737,6 +777,9 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
 
   // Apply animated particle effect
   const applyEffect = (effect: typeof ANIMATED_EFFECTS[0]) => {
+    // Save current state before making changes
+    saveToUndoStack();
+    
     // Use unique timestamp + random for each batch
     const batchId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
@@ -1063,13 +1106,13 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
             <Video
               source={{ uri: mediaUri }}
               style={styles.media}
-              resizeMode={ResizeMode.CONTAIN}
+              resizeMode={ResizeMode.COVER}
               shouldPlay
               isLooping
               isMuted={false}
             />
           ) : (
-            <Image source={{ uri: mediaUri }} style={styles.media} resizeMode="contain" />
+            <Image source={{ uri: mediaUri }} style={styles.media} resizeMode="cover" />
           )}
         </Animated.View>
       </GestureDetector>
@@ -1139,11 +1182,18 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
         </DraggableItem>
       ))}
 
-      {/* Top bar - zIndex 100 to be above drawing layer */}
-      <View style={[styles.topBar, { zIndex: 100 }]}>
+      {/* Top bar - zIndex 200 to be above gesture layer */}
+      <View style={[styles.topBar, { zIndex: 200 }]}>
         <TouchableOpacity style={styles.closeButton} onPress={onClose}>
           <Ionicons name="close" size={28} color="#fff" />
         </TouchableOpacity>
+
+        {/* Undo button - always visible when there's something to undo */}
+        {!isDrawingMode && undoStack.length > 0 && (
+          <TouchableOpacity style={styles.undoButton} onPress={undoLastAction}>
+            <Ionicons name="arrow-undo" size={24} color="#fff" />
+          </TouchableOpacity>
+        )}
 
         {isDrawingMode ? (
           <View style={styles.drawingTopBar}>
@@ -1164,9 +1214,9 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
         )}
       </View>
 
-      {/* Right sidebar */}
+      {/* Right sidebar - zIndex 200 to be above gesture layer */}
       {showSidebar && !isAnyPanelOpen && !isDrawingMode && (
-        <View style={styles.sidebar}>
+        <View style={[styles.sidebar, { zIndex: 200 }]}>
           <SidebarTool icon="happy-outline" label="Adesivi" onPress={() => openPanel('stickers')} />
           <SidebarTool icon="sparkles-outline" label="Effetti" onPress={() => openPanel('effects')} />
           <SidebarTool icon="image-outline" label="Immagine" onPress={addOverlayImage} />
@@ -1206,16 +1256,16 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
         </View>
       )}
 
-      {/* Expand sidebar button */}
+      {/* Expand sidebar button - zIndex 200 */}
       {!showSidebar && !isAnyPanelOpen && !isDrawingMode && (
-        <TouchableOpacity style={styles.expandButton} onPress={() => setShowSidebar(true)}>
+        <TouchableOpacity style={[styles.expandButton, { zIndex: 200 }]} onPress={() => setShowSidebar(true)}>
           <Ionicons name="chevron-down" size={20} color="#fff" />
         </TouchableOpacity>
       )}
 
-      {/* Bottom bar */}
+      {/* Bottom bar - zIndex 200 */}
       {!isAnyPanelOpen && !isDrawingMode && (
-        <View style={styles.bottomBar}>
+        <View style={[styles.bottomBar, { zIndex: 200 }]}>
           <TextInput
             style={styles.captionInput}
             placeholder="Aggiungi una didascalia..."
