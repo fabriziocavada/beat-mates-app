@@ -1602,14 +1602,14 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
         </View>
       </Modal>
 
-      {/* COUNTDOWN PANEL - with KeyboardAvoidingView */}
-      <Modal visible={activePanel === 'countdown'} transparent animationType="slide">
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-          style={{ flex: 1, justifyContent: 'flex-end' }}
-          keyboardVerticalOffset={0}
+      {/* COUNTDOWN PANEL - centered on screen */}
+      <Modal visible={activePanel === 'countdown'} transparent animationType="fade">
+        <TouchableOpacity 
+          style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)' }}
+          activeOpacity={1}
+          onPress={() => { setActivePanel('none'); setCountdownTitle(''); setCountdownDate(''); }}
         >
-          <View style={styles.countdownPanel}>
+          <TouchableOpacity activeOpacity={1} style={styles.countdownPanelCentered}>
             <View style={styles.countdownHeader}>
               <TouchableOpacity onPress={() => { setActivePanel('none'); setCountdownTitle(''); setCountdownDate(''); }}>
                 <Text style={styles.countdownCancel}>Annulla</Text>
@@ -1633,8 +1633,8 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
               value={countdownDate}
               onChangeText={setCountdownDate}
             />
-          </View>
-        </KeyboardAvoidingView>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* HASHTAG PANEL */}
