@@ -407,6 +407,36 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
   const [musicSearch, setMusicSearch] = useState('');
   const [selectedMusic, setSelectedMusic] = useState<{id: string; title: string; artist: string; file_url: string} | null>(null);
   const [musicLoading, setMusicLoading] = useState(false);
+  const [musicLoaded, setMusicLoaded] = useState(false);
+
+  // Load music when panel opens
+  useEffect(() => {
+    if (activePanel === 'music' && !musicLoaded) {
+      loadMusicSongsInitial();
+    }
+  }, [activePanel]);
+
+  const loadMusicSongsInitial = async () => {
+    setMusicLoading(true);
+    try {
+      const res = await api.get('/music/songs', { params: { limit: 20 } });
+      setMusicSongs(res.data || []);
+      setMusicLoaded(true);
+    } catch (e) {
+      console.error('Failed to load music', e);
+      // Fallback demo songs if API fails
+      setMusicSongs([
+        { id: '1', title: 'Dance Beat', artist: 'DJ Moves', file_url: '', duration: 180 },
+        { id: '2', title: 'Hip Hop Flow', artist: 'Street Beats', file_url: '', duration: 210 },
+        { id: '3', title: 'Salsa Caliente', artist: 'Latin Fire', file_url: '', duration: 195 },
+        { id: '4', title: 'Bachata Romance', artist: 'Caribbean Soul', file_url: '', duration: 200 },
+        { id: '5', title: 'Reggaeton Fire', artist: 'Urban Kings', file_url: '', duration: 185 },
+      ]);
+      setMusicLoaded(true);
+    } finally {
+      setMusicLoading(false);
+    }
+  };
 
   // Undo stack - stores previous states
   const [undoStack, setUndoStack] = useState<Array<{
