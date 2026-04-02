@@ -1219,5 +1219,6 @@ const styles = StyleSheet.create({
   // Overlay Images
   overlayImage: {
     position: 'absolute',
+    zIndex: 15, // Above media, below effects
   },
 });
