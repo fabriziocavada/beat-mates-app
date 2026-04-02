@@ -97,11 +97,32 @@ export default function CreateStoryScreen() {
       // Add editor overlays if present
       if (data) {
         console.log('Saving story with editor data:', JSON.stringify(data.music));
+        
+        // Upload overlay images to server (they have local file:// URIs)
+        let uploadedOverlayImages: any[] = [];
+        if (data.overlayImages && data.overlayImages.length > 0) {
+          console.log('Uploading', data.overlayImages.length, 'overlay images...');
+          for (const img of data.overlayImages) {
+            try {
+              // Upload the local file to server
+              const uploadedUrl = await uploadFile(img.uri);
+              uploadedOverlayImages.push({
+                ...img,
+                uri: uploadedUrl, // Replace local URI with server URL
+              });
+              console.log('Uploaded overlay image:', uploadedUrl);
+            } catch (e) {
+              console.error('Failed to upload overlay image:', e);
+              // Skip failed uploads
+            }
+          }
+        }
+        
         storyData.editor_data = {
           texts: data.texts || [],
           stickers: data.stickers || [],
           drawings: data.drawings || [],
-          overlayImages: data.overlayImages || [], // Include overlay images
+          overlayImages: uploadedOverlayImages, // Use uploaded URLs
           backgroundColor: data.backgroundColor || null,
           caption: data.caption || '',
           music: data.music || null, // Include selected music track

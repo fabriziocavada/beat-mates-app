@@ -1602,33 +1602,39 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
         </View>
       </Modal>
 
-      {/* COUNTDOWN PANEL */}
+      {/* COUNTDOWN PANEL - with KeyboardAvoidingView */}
       <Modal visible={activePanel === 'countdown'} transparent animationType="slide">
-        <View style={styles.countdownPanel}>
-          <View style={styles.countdownHeader}>
-            <TouchableOpacity onPress={() => { setActivePanel('none'); setCountdownTitle(''); setCountdownDate(''); }}>
-              <Text style={styles.countdownCancel}>Annulla</Text>
-            </TouchableOpacity>
-            <Text style={styles.countdownTitle}>Countdown</Text>
-            <TouchableOpacity onPress={addCountdownWidget}>
-              <Text style={styles.countdownDone}>Fine</Text>
-            </TouchableOpacity>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+          style={{ flex: 1, justifyContent: 'flex-end' }}
+          keyboardVerticalOffset={0}
+        >
+          <View style={styles.countdownPanel}>
+            <View style={styles.countdownHeader}>
+              <TouchableOpacity onPress={() => { setActivePanel('none'); setCountdownTitle(''); setCountdownDate(''); }}>
+                <Text style={styles.countdownCancel}>Annulla</Text>
+              </TouchableOpacity>
+              <Text style={styles.countdownTitle}>Countdown</Text>
+              <TouchableOpacity onPress={addCountdownWidget}>
+                <Text style={styles.countdownDone}>Fine</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={styles.countdownInput}
+              placeholder="Nome evento..."
+              placeholderTextColor="#888"
+              value={countdownTitle}
+              onChangeText={setCountdownTitle}
+            />
+            <TextInput
+              style={styles.countdownInput}
+              placeholder="Data (es: 25/12/2025)"
+              placeholderTextColor="#888"
+              value={countdownDate}
+              onChangeText={setCountdownDate}
+            />
           </View>
-          <TextInput
-            style={styles.countdownInput}
-            placeholder="Nome evento..."
-            placeholderTextColor="#888"
-            value={countdownTitle}
-            onChangeText={setCountdownTitle}
-          />
-          <TextInput
-            style={styles.countdownInput}
-            placeholder="Data (es: 25/12/2025)"
-            placeholderTextColor="#888"
-            value={countdownDate}
-            onChangeText={setCountdownDate}
-          />
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* HASHTAG PANEL */}
