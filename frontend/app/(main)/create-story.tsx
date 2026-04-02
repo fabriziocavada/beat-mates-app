@@ -96,28 +96,33 @@ export default function CreateStoryScreen() {
       
       // Add editor overlays if present
       if (data) {
-        console.log('Saving story with editor data:', JSON.stringify(data.music));
+        console.log('=== PUBLISH START ===');
+        console.log('Editor data received, overlayImages count:', data.overlayImages?.length || 0);
         
         // Upload overlay images to server (they have local file:// URIs)
         let uploadedOverlayImages: any[] = [];
         if (data.overlayImages && data.overlayImages.length > 0) {
-          console.log('=== UPLOADING', data.overlayImages.length, 'overlay images... ===');
-          for (const img of data.overlayImages) {
-            console.log('Processing overlay image:', img.uri.substring(0, 50));
+          console.log('=== UPLOADING', data.overlayImages.length, 'overlay images ===');
+          
+          // Use Promise.all to ensure ALL uploads complete before continuing
+          const uploadPromises = data.overlayImages.map(async (img: any, index: number) => {
+            console.log(`[${index}] Processing overlay: ${img.uri.substring(0, 80)}...`);
             try {
-              // Upload the local file to server
               const uploadedUrl = await uploadFile(img.uri);
-              console.log('Upload SUCCESS:', uploadedUrl);
-              uploadedOverlayImages.push({
+              console.log(`[${index}] Upload SUCCESS: ${uploadedUrl}`);
+              return {
                 ...img,
                 uri: uploadedUrl, // Replace local URI with server URL
-              });
+              };
             } catch (e: any) {
-              console.error('=== UPLOAD FAILED ===', e.message || e);
-              // Skip failed uploads
+              console.error(`[${index}] UPLOAD FAILED:`, e.message || e);
+              return null; // Mark as failed
             }
-          }
-          console.log('=== FINISHED UPLOADING, got', uploadedOverlayImages.length, 'images ===');
+          });
+          
+          const results = await Promise.all(uploadPromises);
+          uploadedOverlayImages = results.filter(r => r !== null); // Remove failed uploads
+          console.log('=== UPLOAD COMPLETE:', uploadedOverlayImages.length, '/', data.overlayImages.length, 'succeeded ===');
         }
         
         storyData.editor_data = {
@@ -131,9 +136,13 @@ export default function CreateStoryScreen() {
           effect: data.effect || null, // Include selected effect
           effectParticles: data.effectParticles || [], // Include effect particles
         };
+        
+        console.log('=== FINAL STORY DATA ===');
+        console.log('overlayImages in storyData:', JSON.stringify(storyData.editor_data.overlayImages));
       }
       
       await api.post('/stories', storyData);
+      console.log('=== STORY PUBLISHED SUCCESSFULLY ===');
       router.replace('/(main)/home');
     } catch (error: any) {
       console.error('Story error:', error.response?.data || error.message);

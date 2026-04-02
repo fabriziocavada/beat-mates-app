@@ -412,7 +412,7 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
   const [undoStack, setUndoStack] = useState<Array<{
     texts: TextElement[];
     stickers: StickerElement[];
-    drawings: DrawingPath[];
+    drawings: DrawPath[];
     overlayImages: OverlayImage[];
     selectedEffect: string | null;
     effectParticles: any[];
@@ -1550,26 +1550,33 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
         </View>
       </Modal>
 
-      {/* QUESTION PANEL */}
-      <Modal visible={activePanel === 'question'} transparent animationType="slide">
-        <View style={styles.questionPanel}>
-          <View style={styles.questionHeader}>
-            <TouchableOpacity onPress={() => { setActivePanel('none'); setQuestionText(''); }}>
-              <Text style={styles.questionCancel}>Annulla</Text>
-            </TouchableOpacity>
-            <Text style={styles.questionTitle}>Domande</Text>
-            <TouchableOpacity onPress={addQuestionWidget}>
-              <Text style={styles.questionDone}>Fine</Text>
-            </TouchableOpacity>
-          </View>
-          <TextInput
-            style={styles.questionInput}
-            placeholder="Fammi una domanda"
-            placeholderTextColor="#888"
-            value={questionText}
-            onChangeText={setQuestionText}
-          />
-        </View>
+      {/* QUESTION PANEL - centered on screen to avoid keyboard */}
+      <Modal visible={activePanel === 'question'} transparent animationType="fade">
+        <TouchableOpacity 
+          style={styles.centeredModalOverlay}
+          activeOpacity={1}
+          onPress={() => { setActivePanel('none'); setQuestionText(''); }}
+        >
+          <TouchableOpacity activeOpacity={1} style={styles.centeredPanel}>
+            <View style={styles.questionHeader}>
+              <TouchableOpacity onPress={() => { setActivePanel('none'); setQuestionText(''); }}>
+                <Text style={styles.questionCancel}>Annulla</Text>
+              </TouchableOpacity>
+              <Text style={styles.questionTitle}>Domande</Text>
+              <TouchableOpacity onPress={addQuestionWidget}>
+                <Text style={styles.questionDone}>Fine</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={styles.questionInput}
+              placeholder="Fammi una domanda"
+              placeholderTextColor="#888"
+              value={questionText}
+              onChangeText={setQuestionText}
+              autoFocus
+            />
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* LOCATION PANEL */}
@@ -1602,14 +1609,14 @@ export default function InstagramStoryEditor({ mediaUri, mediaType, originalPost
         </View>
       </Modal>
 
-      {/* COUNTDOWN PANEL - centered on screen */}
+      {/* COUNTDOWN PANEL - centered on screen to avoid keyboard */}
       <Modal visible={activePanel === 'countdown'} transparent animationType="fade">
         <TouchableOpacity 
-          style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)' }}
+          style={styles.centeredModalOverlay}
           activeOpacity={1}
           onPress={() => { setActivePanel('none'); setCountdownTitle(''); setCountdownDate(''); }}
         >
-          <TouchableOpacity activeOpacity={1} style={styles.countdownPanelCentered}>
+          <TouchableOpacity activeOpacity={1} style={styles.centeredPanel}>
             <View style={styles.countdownHeader}>
               <TouchableOpacity onPress={() => { setActivePanel('none'); setCountdownTitle(''); setCountdownDate(''); }}>
                 <Text style={styles.countdownCancel}>Annulla</Text>
@@ -1979,17 +1986,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Text editing
+  // Text editing - centered to avoid keyboard
   textEditOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.9)',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
   },
   textEditHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 50,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
   },
   cancelText: {
     color: '#fff',
@@ -2005,6 +2017,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
+    paddingTop: 80, // Space for header
+    paddingBottom: 150, // Space for tools at bottom
   },
   textInput: {
     fontSize: 28,
@@ -2014,8 +2028,11 @@ const styles = StyleSheet.create({
     maxWidth: width - 40,
   },
   fontStylesRow: {
+    position: 'absolute',
+    bottom: 80,
+    left: 0,
+    right: 0,
     paddingHorizontal: 16,
-    marginBottom: 16,
   },
   fontStyleBtn: {
     paddingHorizontal: 16,
@@ -2035,10 +2052,13 @@ const styles = StyleSheet.create({
     color: '#000',
   },
   textToolsRow: {
+    position: 'absolute',
+    bottom: 30,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingBottom: 30,
     gap: 12,
   },
   textToolItem: {
@@ -2517,7 +2537,21 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 30,
   },
-  // Question panel
+  // Centered modal overlay (for keyboard avoidance)
+  centeredModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+  },
+  centeredPanel: {
+    backgroundColor: '#1c1c1e',
+    borderRadius: 20,
+    padding: 20,
+    width: width - 40,
+    maxWidth: 400,
+  },
+  // Question panel (now uses centeredPanel)
   questionPanel: {
     position: 'absolute',
     bottom: 0,

@@ -25,6 +25,8 @@ export async function uploadFile(uri: string): Promise<string> {
   const token = api.defaults.headers.common['Authorization'] as string;
   const formData = new FormData();
 
+  console.log('[uploadFile] Starting upload for:', uri.substring(0, 60));
+
   if (Platform.OS === 'web') {
     // Web: fetch the URI (blob: or data:) and append as Blob
     const res = await fetch(uri);
@@ -37,9 +39,27 @@ export async function uploadFile(uri: string): Promise<string> {
     formData.append('file', blob, `upload.${ext}`);
   } else {
     // Native (iOS/Android): use file URI directly with RN FormData
-    const isVideo = uri.toLowerCase().includes('.mp4') || uri.toLowerCase().includes('.mov') || uri.toLowerCase().includes('video');
-    const ext = isVideo ? 'mp4' : 'jpg';
-    const mimeType = isVideo ? 'video/mp4' : 'image/jpeg';
+    const lowerUri = uri.toLowerCase();
+    const isVideo = lowerUri.includes('.mp4') || lowerUri.includes('.mov') || lowerUri.includes('video');
+    const isPng = lowerUri.includes('.png');
+    const isGif = lowerUri.includes('.gif');
+    
+    let ext = 'jpg';
+    let mimeType = 'image/jpeg';
+    
+    if (isVideo) {
+      ext = 'mp4';
+      mimeType = 'video/mp4';
+    } else if (isPng) {
+      ext = 'png';
+      mimeType = 'image/png';
+    } else if (isGif) {
+      ext = 'gif';
+      mimeType = 'image/gif';
+    }
+    
+    console.log('[uploadFile] Native upload - ext:', ext, 'mimeType:', mimeType);
+    
     formData.append('file', {
       uri: uri,
       type: mimeType,
@@ -55,9 +75,11 @@ export async function uploadFile(uri: string): Promise<string> {
 
   if (!response.ok) {
     const err = await response.text();
+    console.error('[uploadFile] FAILED:', err);
     throw new Error(`Upload failed: ${err}`);
   }
   const data = await response.json();
+  console.log('[uploadFile] SUCCESS - Server URL:', data.url);
   return data.url;
 }
 

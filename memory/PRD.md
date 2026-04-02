@@ -26,19 +26,22 @@ Social media mobile app for dancers built with Expo (React Native) + FastAPI + M
 - 3D cube transition effect
 - Bottom bar with message input + icons
 - Viewer section with animated reactions
+- Full Story Editor with sidebar tools
+- Text, Stickers, Effects, Drawing tools
+- Overlay images (PNG/GIF on top of media)
+- Music selection for stories
+- Animated effects (falling hearts, rising stars, etc.)
+- Pinch-to-zoom for main media
+- Undo button for editor actions
 
-**In Progress:**
-- Full Story Editor (Instagram-identical):
-  - Sidebar with: Testo, Adesivi, Audio, Menziona, Sfondo, Disegna, Scarica
-  - Text editor with fonts (Modern/Classic/Signature)
-  - Stickers panel with widgets
-  - Draggable elements
-  - Drawing tool
+**Fixed (Dec 2025):**
+- Centered Text/Countdown/Question panels to avoid iPhone keyboard
+- Improved overlay images upload with PNG/GIF support
+- Added extensive logging for debugging uploads
 
 ### 4. Reels
 - Vertical scrolling video feed
 - Like, comment, share functionality
-- Hold to pause (pending for home feed)
 
 ### 5. Direct Messaging (Chat)
 - 1-to-1 conversations
@@ -86,15 +89,15 @@ Social media mobile app for dancers built with Expo (React Native) + FastAPI + M
 │   ├── home.tsx          # Feed
 │   ├── reels.tsx         # Reels viewer
 │   ├── available.tsx     # Lessons (Live/Group/Recorded tabs)
-│   ├── story/[id].tsx    # Story viewer (rewritten with FlatList)
-│   ├── create-story.tsx  # Story creation + editor
+│   ├── story/[id].tsx    # Story viewer (3D cube transitions)
+│   ├── create-story.tsx  # Story creation + overlay upload
 │   └── ...
 ├── src/components/
-│   ├── StoryEditor.tsx   # Instagram-style editor (in progress)
+│   ├── InstagramStoryEditor.tsx  # Full Instagram-style editor (~2800 lines)
 │   ├── PostCard.tsx      # Feed post card
 │   ├── RecordedLessonCard.tsx  # Netflix lesson card
 │   └── ...
-└── src/services/api.ts   # API client
+└── src/services/api.ts   # API client with uploadFile for PNG/GIF support
 ```
 
 ### Backend (FastAPI)
