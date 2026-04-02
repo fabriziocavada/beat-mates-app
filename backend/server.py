@@ -309,6 +309,97 @@ class GroupLessonResponse(BaseModel):
     room_url: Optional[str] = None
     created_at: str
 
+# ==================== SPONSORIZZATE/ADS MODELS ====================
+
+# Ad packages with pricing
+AD_PACKAGES = {
+    "starter": {
+        "id": "starter",
+        "name": "Starter",
+        "emoji": "🥉",
+        "impressions": 1000,
+        "price": 29.00,
+        "currency": "EUR",
+        "duration_days": 7,
+        "description": "Perfetto per iniziare"
+    },
+    "pro": {
+        "id": "pro", 
+        "name": "Pro",
+        "emoji": "🥈",
+        "impressions": 5000,
+        "price": 99.00,
+        "currency": "EUR",
+        "duration_days": 14,
+        "description": "Per crescere velocemente"
+    },
+    "business": {
+        "id": "business",
+        "name": "Business",
+        "emoji": "🥇",
+        "impressions": 20000,
+        "price": 299.00,
+        "currency": "EUR",
+        "duration_days": 30,
+        "description": "Massima visibilità"
+    },
+    "premium": {
+        "id": "premium",
+        "name": "Premium",
+        "emoji": "💎",
+        "impressions": 100000,
+        "price": 999.00,
+        "currency": "EUR",
+        "duration_days": 60,
+        "description": "Per brand e aziende"
+    }
+}
+
+class AdCreate(BaseModel):
+    title: str
+    media_url: str  # Already uploaded media URL
+    media_type: str = "image"  # image or video
+    link_type: str = "external"  # external or lesson
+    link_url: str  # External URL or lesson ID
+    link_text: str = "Scopri di più"  # CTA button text
+    placement: List[str] = ["feed"]  # feed, story, preroll
+    package_id: str = "starter"
+
+class AdUpdate(BaseModel):
+    title: Optional[str] = None
+    link_text: Optional[str] = None
+    status: Optional[str] = None  # active, paused
+
+class AdResponse(BaseModel):
+    id: str
+    user_id: str
+    user: Optional[dict] = None
+    title: str
+    media_url: str
+    media_type: str
+    link_type: str
+    link_url: str
+    link_text: str
+    placement: List[str]
+    package_id: str
+    package: Optional[dict] = None
+    impressions_bought: int
+    impressions_used: int
+    clicks: int
+    status: str  # active, paused, completed, pending
+    created_at: datetime
+    expires_at: datetime
+
+class AdPackageResponse(BaseModel):
+    id: str
+    name: str
+    emoji: str
+    impressions: int
+    price: float
+    currency: str
+    duration_days: int
+    description: str
+
 # ==================== AUTH HELPERS ====================
 
 def hash_password(password: str) -> str:
@@ -3220,6 +3311,274 @@ async def mute_all_students(lesson_id: str, current_user: dict = Depends(get_cur
     return {"message": "All muted, teacher has control"}
 
 
+# ==================== SPONSORIZZATE/ADS ENDPOINTS ====================
+
+@api_router.get("/ads/packages")
+async def get_ad_packages():
+    """Get all available ad packages"""
+    return list(AD_PACKAGES.values())
+
+@api_router.get("/ads/my")
+async def get_my_ads(current_user: dict = Depends(get_current_user)):
+    """Get all ads created by the current user"""
+    ads = await db.ads.find({"user_id": current_user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    for ad in ads:
+        ad["package"] = AD_PACKAGES.get(ad.get("package_id", "starter"))
+        # Get user info
+        user = await db.users.find_one({"id": ad["user_id"]}, {"_id": 0, "id": 1, "username": 1, "name": 1, "profile_image": 1})
+        ad["user"] = user
+    return clean_doc(ads)
+
+@api_router.post("/ads")
+async def create_ad(ad_data: AdCreate, current_user: dict = Depends(get_current_user)):
+    """Create a new ad/sponsorship"""
+    package = AD_PACKAGES.get(ad_data.package_id)
+    if not package:
+        raise HTTPException(status_code=400, detail="Invalid package ID")
+    
+    now = datetime.utcnow()
+    ad_id = str(uuid.uuid4())
+    
+    ad = {
+        "id": ad_id,
+        "user_id": current_user["id"],
+        "title": ad_data.title,
+        "media_url": ad_data.media_url,
+        "media_type": ad_data.media_type,
+        "link_type": ad_data.link_type,
+        "link_url": ad_data.link_url,
+        "link_text": ad_data.link_text,
+        "placement": ad_data.placement,
+        "package_id": ad_data.package_id,
+        "impressions_bought": package["impressions"],
+        "impressions_used": 0,
+        "clicks": 0,
+        "status": "active",  # In production, set to "pending" for review
+        "created_at": now,
+        "expires_at": now + timedelta(days=package["duration_days"])
+    }
+    
+    await db.ads.insert_one(ad)
+    ad.pop("_id", None)
+    ad["package"] = package
+    
+    return ad
+
+@api_router.get("/ads/{ad_id}")
+async def get_ad(ad_id: str, current_user: dict = Depends(get_current_user)):
+    """Get a specific ad"""
+    ad = await db.ads.find_one({"id": ad_id}, {"_id": 0})
+    if not ad:
+        raise HTTPException(status_code=404, detail="Ad not found")
+    ad["package"] = AD_PACKAGES.get(ad.get("package_id", "starter"))
+    return clean_doc(ad)
+
+@api_router.patch("/ads/{ad_id}")
+async def update_ad(ad_id: str, update: AdUpdate, current_user: dict = Depends(get_current_user)):
+    """Update an ad (pause/resume, edit title, etc.)"""
+    ad = await db.ads.find_one({"id": ad_id}, {"_id": 0})
+    if not ad:
+        raise HTTPException(status_code=404, detail="Ad not found")
+    if ad["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    update_data = {k: v for k, v in update.dict().items() if v is not None}
+    if update_data:
+        await db.ads.update_one({"id": ad_id}, {"$set": update_data})
+    
+    return {"message": "Ad updated"}
+
+@api_router.delete("/ads/{ad_id}")
+async def delete_ad(ad_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete an ad"""
+    ad = await db.ads.find_one({"id": ad_id}, {"_id": 0})
+    if not ad:
+        raise HTTPException(status_code=404, detail="Ad not found")
+    if ad["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    await db.ads.delete_one({"id": ad_id})
+    return {"message": "Ad deleted"}
+
+@api_router.get("/ads/serve/feed")
+async def serve_feed_ad(current_user: dict = Depends(get_current_user)):
+    """Get an ad to display in the feed"""
+    now = datetime.utcnow()
+    # Find active ads for feed placement
+    ad = await db.ads.find_one({
+        "status": "active",
+        "placement": "feed",
+        "expires_at": {"$gt": now},
+        "$expr": {"$lt": ["$impressions_used", "$impressions_bought"]}
+    }, {"_id": 0})
+    
+    if ad:
+        # Increment impression count
+        await db.ads.update_one({"id": ad["id"]}, {"$inc": {"impressions_used": 1}})
+        # Check if ad is exhausted
+        if ad["impressions_used"] + 1 >= ad["impressions_bought"]:
+            await db.ads.update_one({"id": ad["id"]}, {"$set": {"status": "completed"}})
+        
+        # Get advertiser info
+        user = await db.users.find_one({"id": ad["user_id"]}, {"_id": 0, "id": 1, "username": 1, "name": 1, "profile_image": 1})
+        ad["user"] = user
+        ad["package"] = AD_PACKAGES.get(ad.get("package_id", "starter"))
+    
+    return clean_doc(ad)
+
+@api_router.get("/ads/serve/story")
+async def serve_story_ad(current_user: dict = Depends(get_current_user)):
+    """Get an ad to display between stories"""
+    now = datetime.utcnow()
+    ad = await db.ads.find_one({
+        "status": "active",
+        "placement": "story",
+        "expires_at": {"$gt": now},
+        "$expr": {"$lt": ["$impressions_used", "$impressions_bought"]}
+    }, {"_id": 0})
+    
+    if ad:
+        await db.ads.update_one({"id": ad["id"]}, {"$inc": {"impressions_used": 1}})
+        if ad["impressions_used"] + 1 >= ad["impressions_bought"]:
+            await db.ads.update_one({"id": ad["id"]}, {"$set": {"status": "completed"}})
+        
+        user = await db.users.find_one({"id": ad["user_id"]}, {"_id": 0, "id": 1, "username": 1, "name": 1, "profile_image": 1})
+        ad["user"] = user
+    
+    return clean_doc(ad)
+
+@api_router.get("/ads/serve/preroll")
+async def serve_preroll_ad(current_user: dict = Depends(get_current_user)):
+    """Get a pre-roll ad to display before video lessons"""
+    now = datetime.utcnow()
+    ad = await db.ads.find_one({
+        "status": "active",
+        "placement": "preroll",
+        "expires_at": {"$gt": now},
+        "$expr": {"$lt": ["$impressions_used", "$impressions_bought"]}
+    }, {"_id": 0})
+    
+    if ad:
+        await db.ads.update_one({"id": ad["id"]}, {"$inc": {"impressions_used": 1}})
+        if ad["impressions_used"] + 1 >= ad["impressions_bought"]:
+            await db.ads.update_one({"id": ad["id"]}, {"$set": {"status": "completed"}})
+        
+        user = await db.users.find_one({"id": ad["user_id"]}, {"_id": 0, "id": 1, "username": 1, "name": 1, "profile_image": 1})
+        ad["user"] = user
+    
+    return clean_doc(ad)
+
+@api_router.post("/ads/{ad_id}/click")
+async def track_ad_click(ad_id: str, current_user: dict = Depends(get_current_user)):
+    """Track when a user clicks on an ad"""
+    ad = await db.ads.find_one({"id": ad_id}, {"_id": 0})
+    if not ad:
+        raise HTTPException(status_code=404, detail="Ad not found")
+    
+    await db.ads.update_one({"id": ad_id}, {"$inc": {"clicks": 1}})
+    
+    # Log click for analytics
+    await db.ad_clicks.insert_one({
+        "id": str(uuid.uuid4()),
+        "ad_id": ad_id,
+        "user_id": current_user["id"],
+        "created_at": datetime.utcnow()
+    })
+    
+    return {"message": "Click tracked", "link_url": ad["link_url"], "link_type": ad["link_type"]}
+
+@api_router.get("/ads/stats/{ad_id}")
+async def get_ad_stats(ad_id: str, current_user: dict = Depends(get_current_user)):
+    """Get detailed stats for an ad"""
+    ad = await db.ads.find_one({"id": ad_id}, {"_id": 0})
+    if not ad:
+        raise HTTPException(status_code=404, detail="Ad not found")
+    if ad["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Calculate CTR
+    ctr = (ad["clicks"] / ad["impressions_used"] * 100) if ad["impressions_used"] > 0 else 0
+    
+    # Days remaining
+    days_remaining = max(0, (ad["expires_at"] - datetime.utcnow()).days)
+    
+    return {
+        "ad": clean_doc(ad),
+        "impressions_remaining": ad["impressions_bought"] - ad["impressions_used"],
+        "ctr": round(ctr, 2),
+        "days_remaining": days_remaining,
+        "package": AD_PACKAGES.get(ad.get("package_id", "starter"))
+    }
+
+# Seed demo ads on startup
+async def seed_demo_ads():
+    """Create demo ads if none exist"""
+    count = await db.ads.count_documents({})
+    if count == 0:
+        logger.info("Seeding demo ads...")
+        demo_user = await db.users.find_one({}, {"_id": 0, "id": 1})
+        if demo_user:
+            now = datetime.utcnow()
+            demo_ads = [
+                {
+                    "id": str(uuid.uuid4()),
+                    "user_id": demo_user["id"],
+                    "title": "Scarpe da Ballo Premium",
+                    "media_url": "https://images.unsplash.com/photo-1518611012118-696072aa579a?w=800",
+                    "media_type": "image",
+                    "link_type": "external",
+                    "link_url": "https://example.com/dance-shoes",
+                    "link_text": "Acquista Ora",
+                    "placement": ["feed"],
+                    "package_id": "pro",
+                    "impressions_bought": 5000,
+                    "impressions_used": 234,
+                    "clicks": 18,
+                    "status": "active",
+                    "created_at": now,
+                    "expires_at": now + timedelta(days=14)
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "user_id": demo_user["id"],
+                    "title": "Corso Intensivo Salsa",
+                    "media_url": "https://images.unsplash.com/photo-1504609813442-a8924e83f76e?w=800",
+                    "media_type": "image",
+                    "link_type": "external",
+                    "link_url": "https://example.com/salsa-course",
+                    "link_text": "Iscriviti Gratis",
+                    "placement": ["story", "feed"],
+                    "package_id": "business",
+                    "impressions_bought": 20000,
+                    "impressions_used": 4521,
+                    "clicks": 312,
+                    "status": "active",
+                    "created_at": now,
+                    "expires_at": now + timedelta(days=30)
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "user_id": demo_user["id"],
+                    "title": "Lezione 1-to-1 con Champion",
+                    "media_url": "https://images.unsplash.com/photo-1547153760-18fc86324498?w=800",
+                    "media_type": "image",
+                    "link_type": "lesson",
+                    "link_url": "lesson-123",
+                    "link_text": "Prenota Ora",
+                    "placement": ["preroll"],
+                    "package_id": "starter",
+                    "impressions_bought": 1000,
+                    "impressions_used": 456,
+                    "clicks": 89,
+                    "status": "active",
+                    "created_at": now,
+                    "expires_at": now + timedelta(days=7)
+                }
+            ]
+            await db.ads.insert_many(demo_ads)
+            logger.info(f"Seeded {len(demo_ads)} demo ads")
+
+
 # ==================== NOTIFICATIONS ====================
 @api_router.get("/notifications")
 async def get_notifications(current_user: dict = Depends(get_current_user)):
@@ -3267,7 +3626,11 @@ async def create_indexes():
         await db.posts.create_index([("user_id", 1)])
         await db.group_lessons.create_index([("status", 1), ("scheduled_at", 1)])
         await db.messages.create_index([("conversation_id", 1), ("created_at", -1)])
+        await db.ads.create_index([("status", 1), ("placement", 1), ("expires_at", 1)])
         logger.info("MongoDB indexes created successfully")
+        
+        # Seed demo ads
+        await seed_demo_ads()
     except Exception as e:
         logger.error(f"Failed to create indexes: {e}")
 

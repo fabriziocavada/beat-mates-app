@@ -15,6 +15,7 @@ Social media mobile app for dancers built with Expo (React Native) + FastAPI + M
 - Autoplay videos with carousel support
 - Like, comment, save functionality
 - Share to stories feature (in progress)
+- **NEW: Sponsored Ads integrated between posts (every 5 posts)**
 
 ### 3. Stories (Instagram-like)
 **Completed:**
@@ -38,6 +39,7 @@ Social media mobile app for dancers built with Expo (React Native) + FastAPI + M
 - Centered Text/Countdown/Question panels to avoid iPhone keyboard
 - Improved overlay images upload with PNG/GIF support
 - Added extensive logging for debugging uploads
+- Fixed music list auto-loading when panel opens
 
 ### 4. Reels
 - Vertical scrolling video feed
@@ -52,6 +54,7 @@ Social media mobile app for dancers built with Expo (React Native) + FastAPI + M
 - Grid of posts
 - Shop tab for video lessons
 - Follow/unfollow
+- **NEW: "Sponsorizzate" menu item to manage ads**
 
 ### 7. Lessons System
 **Live 1-to-1:**
@@ -63,7 +66,7 @@ Social media mobile app for dancers built with Expo (React Native) + FastAPI + M
 - Multiple students join via Daily.co
 - Payment integration
 
-**Recorded Lessons (NEW):**
+**Recorded Lessons:**
 - Netflix-style tab with horizontal carousels
 - Categories: Latino Americani, Ballroom, Caraibiche
 - Each subcategory has lessons carousel
@@ -80,22 +83,57 @@ Social media mobile app for dancers built with Expo (React Native) + FastAPI + M
 ### 10. Notifications
 - Push notifications (pending native integration)
 
+### 11. Sponsorizzate/Ads System (NEW - Dec 2025)
+**Backend:**
+- `POST /api/ads` - Create new ad
+- `GET /api/ads/my` - Get user's ads
+- `GET /api/ads/packages` - Get pricing packages
+- `GET /api/ads/serve/feed` - Serve ad for feed placement
+- `GET /api/ads/serve/story` - Serve ad for story placement
+- `GET /api/ads/serve/preroll` - Serve pre-roll ad for video lessons
+- `POST /api/ads/{id}/click` - Track ad clicks
+- `PATCH /api/ads/{id}` - Pause/resume ad
+- `DELETE /api/ads/{id}` - Delete ad
+- `GET /api/ads/stats/{id}` - Get ad statistics
+
+**Pricing Packages (MOCK):**
+| Package | Impressions | Price | Duration |
+|---------|-------------|-------|----------|
+| 🥉 Starter | 1,000 | €29 | 7 days |
+| 🥈 Pro | 5,000 | €99 | 14 days |
+| 🥇 Business | 20,000 | €299 | 30 days |
+| 💎 Premium | 100,000 | €999 | 60 days |
+
+**Ad Placements:**
+- Feed: Between posts (every 5 posts)
+- Stories: Between user stories
+- Pre-roll: Before video lessons (skip after 10 sec)
+
+**Frontend Components:**
+- `AdCard.tsx` - Instagram-style feed ad card
+- `StoryAd.tsx` - Full-screen story ad with progress bar
+- `PrerollAd.tsx` - YouTube-style pre-roll with skip button
+- `sponsor.tsx` - Ad creation and management screen
+
 ## Technical Architecture
 
 ### Frontend (Expo/React Native)
 ```
 /app/frontend/
-├── app/(main)/           # Main app screens
-│   ├── home.tsx          # Feed
+├── app/(main)/
+│   ├── home.tsx          # Feed with ads integration
 │   ├── reels.tsx         # Reels viewer
 │   ├── available.tsx     # Lessons (Live/Group/Recorded tabs)
 │   ├── story/[id].tsx    # Story viewer (3D cube transitions)
 │   ├── create-story.tsx  # Story creation + overlay upload
+│   ├── sponsor.tsx       # NEW: Ad management screen
 │   └── ...
 ├── src/components/
 │   ├── InstagramStoryEditor.tsx  # Full Instagram-style editor (~2800 lines)
+│   ├── AdCard.tsx        # NEW: Feed ad component
+│   ├── StoryAd.tsx       # NEW: Story ad component
+│   ├── PrerollAd.tsx     # NEW: Pre-roll video ad component
 │   ├── PostCard.tsx      # Feed post card
-│   ├── RecordedLessonCard.tsx  # Netflix lesson card
 │   └── ...
 └── src/services/api.ts   # API client with uploadFile for PNG/GIF support
 ```
@@ -103,50 +141,44 @@ Social media mobile app for dancers built with Expo (React Native) + FastAPI + M
 ### Backend (FastAPI)
 ```
 /app/backend/
-├── server.py             # Main server (3100+ lines - needs refactoring)
+├── server.py             # Main server (3300+ lines - needs refactoring)
 └── uploads/              # Media storage
 ```
 
 ### Database (MongoDB)
-Collections: users, posts, stories, story_reactions, conversations, messages, video_lessons, etc.
+Collections: users, posts, stories, story_reactions, conversations, messages, video_lessons, **ads**, **ad_clicks**, etc.
 
-## API Endpoints
-- POST /api/stories - Create story (with 60s chunking for long videos)
-- GET /api/stories/{id}/reactions - Get reactions/viewers
-- POST /api/stories/{id}/react - Send reaction
-- GET /api/video-lessons/by-category - Netflix-style grouped lessons
-- POST /api/conversations - Create/find conversation
-- And many more...
+## Ad Schema
+```json
+{
+  "id": "uuid",
+  "user_id": "uuid",
+  "title": "string",
+  "media_url": "string",
+  "media_type": "image|video",
+  "link_type": "external|lesson",
+  "link_url": "string",
+  "link_text": "string",
+  "placement": ["feed", "story", "preroll"],
+  "package_id": "starter|pro|business|premium",
+  "impressions_bought": 5000,
+  "impressions_used": 234,
+  "clicks": 18,
+  "status": "active|paused|completed|pending",
+  "created_at": "datetime",
+  "expires_at": "datetime"
+}
+```
 
-## Current Session Progress (Dec 2025)
-
-### Completed in This Session:
-- ✅ Integrated InstagramStoryEditor in create-story.tsx (replaced old StoryEditor)
-- ✅ Added Hold-to-Pause on Home Feed videos (PostCard.tsx)
-- ✅ Implemented ShareModal with Instagram-style grid and share options
-- ✅ Connected ShareModal to PostCard and Reels
-- ✅ Enhanced InstagramStoryEditor with more stickers (Cornice, Ritagli, Avatar, Prodotto, Donazione)
-- ✅ Improved Text Editor toolbar with Instagram-style tools (rainbow color, italic, sparkles, alignment, animation)
-- ✅ ShareModal now has Threads icon and horizontal scroll
-
-### Previously Completed:
-- Splash screen with custom loading video
-- Story swipe gestures (UP/DOWN)
-- Story 3D cube transition
-- Story viewer section with reactions
-- Recorded lessons Netflix tab
-- Hold to pause on stories
-- Basic story editor structure
-
-### Known Issues:
+## Known Issues
 - P2: ReviewsPopup carousel swipe broken (carried from previous sessions)
 - P2: "i" Icon Size on Teacher card is too small
 
 ## Next Tasks (Priority Order)
-1. P1: Test all new features thoroughly (Story Editor, Share Modal, Hold-to-Pause)
-2. P1: Fix Reels autoplay if still broken
-3. P2: ReviewsPopup carousel fix
-4. P2: Stripe real integration
+1. P1: Integrate StoryAd between stories in story/[id].tsx
+2. P1: Integrate PrerollAd before video lessons in available.tsx
+3. P1: Stripe real integration
+4. P2: ReviewsPopup carousel fix
 5. P2: Google Social Login
 
 ## 3rd Party Integrations

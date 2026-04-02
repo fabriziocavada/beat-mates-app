@@ -386,6 +386,11 @@ export default function ProfileScreen() {
               <Text style={styles.menuItemText}>{user?.is_available ? 'Disponibile per lezioni' : 'Non disponibile'}</Text>
             </TouchableOpacity>
             
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); router.push('/(main)/sponsor'); }}>
+              <Ionicons name="megaphone" size={24} color="#E91E63" />
+              <Text style={[styles.menuItemText, { color: '#E91E63' }]}>Sponsorizzate</Text>
+            </TouchableOpacity>
+            
             <View style={styles.menuDivider} />
             
             <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); router.push('/(main)/edit-profile'); }}>

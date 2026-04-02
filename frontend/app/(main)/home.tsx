@@ -14,6 +14,7 @@ import Header from '../../src/components/Header';
 import TabBar from '../../src/components/TabBar';
 import StoriesBar from '../../src/components/StoriesBar';
 import PostCard from '../../src/components/PostCard';
+import AdCard from '../../src/components/AdCard';
 import api from '../../src/services/api';
 import { useAuthStore } from '../../src/store/authStore';
 
@@ -43,11 +44,26 @@ interface StoryUser {
   stories: any[];
 }
 
+interface Ad {
+  id: string;
+  user_id: string;
+  user?: any;
+  title: string;
+  media_url: string;
+  media_type: 'image' | 'video';
+  link_type: 'external' | 'lesson';
+  link_url: string;
+  link_text: string;
+}
+
+type FeedItem = (Post & { itemType: 'post' }) | (Ad & { itemType: 'ad' });
+
 export default function HomeScreen() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   
   const [posts, setPosts] = useState<Post[]>([]);
+  const [feedAd, setFeedAd] = useState<Ad | null>(null);
   const [stories, setStories] = useState<StoryUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -62,17 +78,32 @@ export default function HomeScreen() {
   
   const loadData = async () => {
     try {
-      const [postsRes, storiesRes] = await Promise.all([
+      const [postsRes, storiesRes, adRes] = await Promise.all([
         api.get('/posts'),
         api.get('/stories'),
+        api.get('/ads/serve/feed').catch(() => ({ data: null })),
       ]);
       setPosts(postsRes.data);
       setStories(storiesRes.data);
+      setFeedAd(adRes.data);
     } catch (error) {
       console.error('Failed to load data', error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Build feed with ads inserted after every 5 posts
+  const buildFeedWithAds = (): FeedItem[] => {
+    const feed: FeedItem[] = [];
+    posts.forEach((post, index) => {
+      feed.push({ ...post, itemType: 'post' as const });
+      // Insert ad after every 5 posts (positions 5, 10, 15, etc.)
+      if ((index + 1) % 5 === 0 && feedAd) {
+        feed.push({ ...feedAd, itemType: 'ad' as const });
+      }
+    });
+    return feed;
   };
   
   const handleRefresh = useCallback(async () => {
@@ -115,15 +146,20 @@ export default function HomeScreen() {
     ]);
   };
 
-  const renderItem = ({ item }: { item: Post }) => (
-    <PostCard
-      post={item}
-      currentUserId={user?.id}
-      onUserPress={(userId) => router.push(`/(main)/user/${userId}`)}
-      onCommentPress={(postId) => router.push(`/(main)/post/${postId}`)}
-      onDeletePress={handleDeletePost}
-    />
-  );
+  const renderItem = ({ item }: { item: FeedItem }) => {
+    if (item.itemType === 'ad') {
+      return <AdCard ad={item} />;
+    }
+    return (
+      <PostCard
+        post={item}
+        currentUserId={user?.id}
+        onUserPress={(userId) => router.push(`/(main)/user/${userId}`)}
+        onCommentPress={(postId) => router.push(`/(main)/post/${postId}`)}
+        onDeletePress={handleDeletePost}
+      />
+    );
+  };
   
   const renderHeader = () => (
     <StoriesBar
@@ -158,9 +194,9 @@ export default function HomeScreen() {
         </View>
       ) : (
         <FlatList
-          data={posts}
+          data={buildFeedWithAds()}
           renderItem={renderItem}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => `${item.itemType}-${item.id}`}
           ListHeaderComponent={renderHeader}
           ListEmptyComponent={renderEmpty}
           refreshControl={
