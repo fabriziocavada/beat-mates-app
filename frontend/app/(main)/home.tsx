@@ -56,7 +56,7 @@ interface Ad {
   link_text: string;
 }
 
-type FeedItem = (Post & { itemType: 'post' }) | (Ad & { itemType: 'ad' });
+type FeedItem = (Post & { itemType: 'post' }) | (Ad & { itemType: 'ad'; adPosition?: number });
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -96,11 +96,13 @@ export default function HomeScreen() {
   // Build feed with ads inserted after every 5 posts
   const buildFeedWithAds = (): FeedItem[] => {
     const feed: FeedItem[] = [];
+    let adIndex = 0;
     posts.forEach((post, index) => {
       feed.push({ ...post, itemType: 'post' as const });
       // Insert ad after every 5 posts (positions 5, 10, 15, etc.)
       if ((index + 1) % 5 === 0 && feedAd) {
-        feed.push({ ...feedAd, itemType: 'ad' as const });
+        adIndex++;
+        feed.push({ ...feedAd, itemType: 'ad' as const, adPosition: adIndex });
       }
     });
     return feed;
@@ -196,7 +198,7 @@ export default function HomeScreen() {
         <FlatList
           data={buildFeedWithAds()}
           renderItem={renderItem}
-          keyExtractor={(item) => `${item.itemType}-${item.id}`}
+          keyExtractor={(item, index) => item.itemType === 'ad' ? `ad-${item.id}-${(item as any).adPosition || index}` : `post-${item.id}`}
           ListHeaderComponent={renderHeader}
           ListEmptyComponent={renderEmpty}
           refreshControl={
