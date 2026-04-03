@@ -82,3 +82,7 @@ backend/uploads/coaching_34b3b376-3ee4-4c4e-8f97-e2467fdb061b_57916f9d.mp4
 backend/uploads/5db8dc46-799d-4fb2-b52b-67183f847011.mp4
 backend/uploads/f4ba2dfe-048f-49a6-a10a-c4df794cdd02.mp4
 backend/uploads/e611e9dd-9eb6-4d8f-9c20-79319b208aa3.mp4
+-e 
+# Environment files
+*.env
+*.env.*
