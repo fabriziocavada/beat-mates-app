@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
 
-const baseURL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
+// Production backend URL - hardcoded for reliability in iOS builds
+const baseURL = 'https://lesson-marketplace-5.preview.emergentagent.com';
 
 const api = axios.create({
   baseURL: `${baseURL}/api`,
