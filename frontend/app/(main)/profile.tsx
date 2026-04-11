@@ -25,6 +25,7 @@ import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
 import { useAuthStore } from '../../src/store/authStore';
 import api, { uploadFile, getMediaUrl, getThumbnailUrl } from '../../src/services/api';
+import { compressVideoForUpload } from '../../src/services/videoCompressor';
 
 const { width } = Dimensions.get('window');
 const POST_SIZE = (width - 4) / 3;
@@ -136,12 +137,18 @@ export default function ProfileScreen() {
   const uploadLessonWithTitle = async (videoUri: string, title: string) => {
     setIsUploadingLesson(true);
     try {
+      // Compress video before upload for faster upload (only works in native builds)
+      console.log('Compressing video before upload...');
+      const compressedUri = await compressVideoForUpload(videoUri, (progress) => {
+        console.log(`Compressione: ${progress.progress}%`);
+      });
+      
       const formData = new FormData();
       formData.append('title', title);
       formData.append('description', '');
       formData.append('price', '5');
       formData.append('currency', 'EUR');
-      formData.append('video', { uri: videoUri, name: 'lesson.mp4', type: 'video/mp4' } as any);
+      formData.append('video', { uri: compressedUri, name: 'lesson.mp4', type: 'video/mp4' } as any);
       await api.post('/video-lessons', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 300000 });
       Alert.alert('Fatto!', 'Videolezione caricata. Puoi modificare titolo e prezzo.');
       loadVideoLessons();
