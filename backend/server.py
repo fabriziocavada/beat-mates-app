@@ -2543,18 +2543,20 @@ async def create_video_lesson(
     with open(orig_path, "wb") as f:
         f.write(content)
     
-    # Compress video with ffmpeg (lighter format, compatible with iOS)
+    # Compress video with ffmpeg (iOS-compatible H.264 8-bit format)
     final_filename = f"{uuid.uuid4()}.mp4"
     final_path = UPLOADS_DIR / final_filename
     try:
         subprocess.run([
             FFMPEG_PATH, "-y", "-i", str(orig_path),
-            "-c:v", "libx264", "-preset", "fast", "-crf", "28",
+            "-c:v", "libx264", "-profile:v", "main", "-level", "4.0",
+            "-pix_fmt", "yuv420p",
+            "-preset", "fast", "-crf", "28",
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             "-vf", "scale='min(720,iw)':-2",
             str(final_path)
-        ], capture_output=True, timeout=120)
+        ], capture_output=True, timeout=180)
         if final_path.exists() and final_path.stat().st_size > 0:
             orig_path.unlink(missing_ok=True)
         else:
