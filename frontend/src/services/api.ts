@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
 
-// Production backend URL - hardcoded for reliability in iOS builds
-const baseURL = 'https://lesson-marketplace-5.preview.emergentagent.com';
+// Production backend URL - OVH Server (FAST!)
+const baseURL = 'https://api.beatmates.app';
 
 const api = axios.create({
   baseURL: `${baseURL}/api`,
