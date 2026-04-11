@@ -86,3 +86,12 @@ backend/uploads/e611e9dd-9eb6-4d8f-9c20-79319b208aa3.mp4
 # Environment files
 *.env
 *.env.*
+-e 
+# Environment and credential files
+.env
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials
