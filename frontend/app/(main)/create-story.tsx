@@ -87,10 +87,10 @@ export default function CreateStoryScreen() {
     if (!mediaUri) { Alert.alert('Nessun media', 'Scegli una foto o registra un video'); return; }
     setIsLoading(true);
     try {
-      const serverUrl = await uploadFile(mediaUri);
+      const uploadResult = await uploadFile(mediaUri);
       // Include editor data (texts, stickers, drawings, backgroundColor) if present
       const storyData: any = { 
-        media: serverUrl, 
+        media: uploadResult.url, 
         type: mediaType,
       };
       
@@ -108,11 +108,11 @@ export default function CreateStoryScreen() {
           const uploadPromises = data.overlayImages.map(async (img: any, index: number) => {
             console.log(`[${index}] Processing overlay: ${img.uri.substring(0, 80)}...`);
             try {
-              const uploadedUrl = await uploadFile(img.uri);
-              console.log(`[${index}] Upload SUCCESS: ${uploadedUrl}`);
+              const overlayResult = await uploadFile(img.uri);
+              console.log(`[${index}] Upload SUCCESS: ${overlayResult.url}`);
               return {
                 ...img,
-                uri: uploadedUrl, // Replace local URI with server URL
+                uri: overlayResult.url, // Replace local URI with server URL
               };
             } catch (e: any) {
               console.error(`[${index}] UPLOAD FAILED:`, e.message || e);

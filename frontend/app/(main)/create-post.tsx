@@ -146,12 +146,13 @@ export default function CreatePostScreen() {
           uriToUpload = await compressVideoForUpload(item.uri);
         }
         
-        const serverUrl = await uploadFile(uriToUpload);
-        if (serverUrl) uploadedUrls.push(serverUrl);
+        const uploadResult = await uploadFile(uriToUpload);
+        if (uploadResult.url) uploadedUrls.push(uploadResult.url);
         
         // Upload custom thumbnail for video if specified
         if (item.type === 'video' && item.customThumbnail && !customThumbnailUrl) {
-          customThumbnailUrl = await uploadFile(item.customThumbnail);
+          const thumbResult = await uploadFile(item.customThumbnail);
+          customThumbnailUrl = thumbResult.url;
         }
       }
       

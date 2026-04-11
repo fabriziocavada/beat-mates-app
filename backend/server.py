@@ -53,10 +53,122 @@ class CustomJSONEncoder(json.JSONEncoder):
             return obj.isoformat()
         return super().default(obj)
 
-# Uploads directory
+# Uploads directory (fallback for local storage)
 UPLOADS_DIR = ROOT_DIR / 'uploads'
 UPLOADS_DIR.mkdir(exist_ok=True)
 
+# ==================== BUNNY CDN CONFIGURATION ====================
+# Bunny Stream (for videos) - auto-transcodes to HLS for global delivery
+BUNNY_STREAM_LIBRARY_ID = os.environ.get('BUNNY_STREAM_LIBRARY_ID', '635479')
+BUNNY_STREAM_API_KEY = os.environ.get('BUNNY_STREAM_API_KEY', 'a4259ebe-259a-412e-8b30e50de798-7aee-468d')
+BUNNY_STREAM_API_URL = "https://video.bunnycdn.com"
+
+# Bunny Storage (for images) - global CDN replication
+BUNNY_STORAGE_ZONE = os.environ.get('BUNNY_STORAGE_ZONE', 'beatmates-media')
+BUNNY_STORAGE_API_KEY = os.environ.get('BUNNY_STORAGE_API_KEY', 'a5975055-b9f4-4ee7-a7aa208d480a-5ae9-4ae0')
+BUNNY_STORAGE_URL = "https://storage.bunnycdn.com"
+BUNNY_CDN_URL = os.environ.get('BUNNY_CDN_URL', 'https://beatmates-cd.b-cdn.net')
+
+# ==================== BUNNY CDN HELPER FUNCTIONS ====================
+
+async def upload_video_to_bunny_stream(file_content: bytes, title: str) -> dict:
+    """
+    Upload a video to Bunny Stream for global HLS delivery.
+    Returns: {guid, embed_url, status}
+    """
+    try:
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            # 1. Create video entry
+            create_response = await client.post(
+                f"{BUNNY_STREAM_API_URL}/library/{BUNNY_STREAM_LIBRARY_ID}/videos",
+                headers={
+                    "AccessKey": BUNNY_STREAM_API_KEY,
+                    "Content-Type": "application/json"
+                },
+                json={"title": title}
+            )
+            if create_response.status_code != 200:
+                logger.error(f"Bunny Stream create failed: {create_response.text}")
+                return None
+            
+            video_data = create_response.json()
+            guid = video_data["guid"]
+            
+            # 2. Upload video binary
+            upload_response = await client.put(
+                f"{BUNNY_STREAM_API_URL}/library/{BUNNY_STREAM_LIBRARY_ID}/videos/{guid}",
+                headers={
+                    "AccessKey": BUNNY_STREAM_API_KEY,
+                    "Content-Type": "application/octet-stream"
+                },
+                content=file_content
+            )
+            
+            if upload_response.status_code != 200:
+                logger.error(f"Bunny Stream upload failed: {upload_response.text}")
+                return None
+            
+            logger.info(f"Video uploaded to Bunny Stream: {guid}")
+            return {
+                "guid": guid,
+                "embed_url": f"https://iframe.mediadelivery.net/embed/{BUNNY_STREAM_LIBRARY_ID}/{guid}",
+                "library_id": BUNNY_STREAM_LIBRARY_ID,
+                "status": "processing"
+            }
+    except Exception as e:
+        logger.error(f"Bunny Stream upload error: {e}")
+        return None
+
+async def upload_image_to_bunny_storage(file_content: bytes, filename: str) -> str:
+    """
+    Upload an image to Bunny Storage for global CDN delivery.
+    Returns: CDN URL
+    """
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.put(
+                f"{BUNNY_STORAGE_URL}/{BUNNY_STORAGE_ZONE}/{filename}",
+                headers={
+                    "AccessKey": BUNNY_STORAGE_API_KEY,
+                    "Content-Type": "application/octet-stream"
+                },
+                content=file_content
+            )
+            
+            if response.status_code == 201:
+                cdn_url = f"{BUNNY_CDN_URL}/{filename}"
+                logger.info(f"Image uploaded to Bunny CDN: {cdn_url}")
+                return cdn_url
+            else:
+                logger.error(f"Bunny Storage upload failed: {response.status_code} - {response.text}")
+                return None
+    except Exception as e:
+        logger.error(f"Bunny Storage upload error: {e}")
+        return None
+
+async def get_bunny_video_status(guid: str) -> dict:
+    """Check the processing status of a Bunny Stream video."""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{BUNNY_STREAM_API_URL}/library/{BUNNY_STREAM_LIBRARY_ID}/videos/{guid}",
+                headers={"AccessKey": BUNNY_STREAM_API_KEY}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                # status: 0=created, 1=uploading, 2=processing, 3=transcoding, 4=finished, 5=error
+                status_map = {0: "created", 1: "uploading", 2: "processing", 3: "transcoding", 4: "ready", 5: "error"}
+                return {
+                    "guid": guid,
+                    "status": status_map.get(data.get("status", 0), "unknown"),
+                    "progress": data.get("encodeProgress", 0),
+                    "duration": data.get("length", 0),
+                    "thumbnail": f"https://vz-{BUNNY_STREAM_LIBRARY_ID}.b-cdn.net/{guid}/thumbnail.jpg" if data.get("status") == 4 else None
+                }
+            return None
+    except Exception as e:
+        logger.error(f"Bunny video status check error: {e}")
+        return None
 
 # Create the main app
 app = FastAPI(title="Beat Mates API")
@@ -2032,6 +2144,11 @@ async def upload_file(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
+    """
+    Upload media files to Bunny CDN for global delivery.
+    - Videos → Bunny Stream (auto-transcoded to HLS)
+    - Images → Bunny Storage (global CDN replication)
+    """
     # Determine extension from filename or content type
     ext = 'jpg'
     if file.filename:
@@ -2054,40 +2171,76 @@ async def upload_file(
 
     file_id = str(uuid.uuid4())
     filename = f"{file_id}.{ext}"
-    filepath = UPLOADS_DIR / filename
-
     content = await file.read()
-    with open(filepath, 'wb') as f:
-        f.write(content)
-
-    # Convert video to H.264 MP4 for browser compatibility
-    if is_video and ext != 'mp4':
-        mp4_filename = f"{file_id}.mp4"
-        mp4_path = UPLOADS_DIR / mp4_filename
-        if convert_video_to_mp4(str(filepath), str(mp4_path)):
-            os.remove(filepath)
-            filename = mp4_filename
-            filepath = mp4_path
-    elif is_video:
-        # ALWAYS compress MP4 videos for fast loading (run in thread to not block event loop)
-        import asyncio
-        compressed_filename = await asyncio.to_thread(compress_video, str(filepath))
-        filename = compressed_filename
-        filepath = UPLOADS_DIR / filename
-
-    url = f"/api/uploads/{filename}"
-    media_type = "video" if is_video else "image"
     
-    # Generate thumbnail for videos
-    thumbnail_url = None
+    # ========== BUNNY CDN UPLOAD ==========
     if is_video:
-        thumb_filename = f"{file_id}_thumb.jpg"
-        thumb_path = UPLOADS_DIR / thumb_filename
-        final_video_path = UPLOADS_DIR / filename
-        if generate_video_thumbnail(str(final_video_path), str(thumb_path)):
-            thumbnail_url = f"/api/uploads/{thumb_filename}"
-    
-    return {"url": url, "filename": filename, "media_type": media_type, "thumbnail": thumbnail_url}
+        # Upload video to Bunny Stream for global HLS delivery
+        logger.info(f"Uploading video to Bunny Stream: {filename} ({len(content)} bytes)")
+        bunny_result = await upload_video_to_bunny_stream(content, filename)
+        
+        if bunny_result:
+            # Video uploaded to Bunny Stream successfully
+            return {
+                "url": bunny_result["embed_url"],
+                "filename": filename,
+                "media_type": "video",
+                "thumbnail": None,  # Bunny generates thumbnails automatically
+                "bunny_guid": bunny_result["guid"],
+                "bunny_status": bunny_result["status"],
+                "cdn_type": "bunny_stream"
+            }
+        else:
+            # Fallback to local storage if Bunny fails
+            logger.warning("Bunny Stream upload failed, falling back to local storage")
+            filepath = UPLOADS_DIR / filename
+            with open(filepath, 'wb') as f:
+                f.write(content)
+            # Compress locally
+            compressed_filename = await asyncio.to_thread(compress_video, str(filepath))
+            return {
+                "url": f"/api/uploads/{compressed_filename}",
+                "filename": compressed_filename,
+                "media_type": "video",
+                "thumbnail": None,
+                "cdn_type": "local"
+            }
+    else:
+        # Upload image to Bunny Storage for global CDN delivery
+        logger.info(f"Uploading image to Bunny Storage: {filename} ({len(content)} bytes)")
+        cdn_url = await upload_image_to_bunny_storage(content, filename)
+        
+        if cdn_url:
+            # Image uploaded to Bunny CDN successfully
+            return {
+                "url": cdn_url,
+                "filename": filename,
+                "media_type": "image",
+                "thumbnail": None,
+                "cdn_type": "bunny_storage"
+            }
+        else:
+            # Fallback to local storage if Bunny fails
+            logger.warning("Bunny Storage upload failed, falling back to local storage")
+            filepath = UPLOADS_DIR / filename
+            with open(filepath, 'wb') as f:
+                f.write(content)
+            return {
+                "url": f"/api/uploads/{filename}",
+                "filename": filename,
+                "media_type": "image",
+                "thumbnail": None,
+                "cdn_type": "local"
+            }
+
+# Endpoint to check Bunny Stream video processing status
+@api_router.get("/bunny/video/{guid}/status")
+async def check_bunny_video_status(guid: str, current_user: dict = Depends(get_current_user)):
+    """Check the transcoding status of a Bunny Stream video."""
+    status = await get_bunny_video_status(guid)
+    if not status:
+        raise HTTPException(status_code=404, detail="Video not found")
+    return status
 
 # Video streaming endpoint - returns base64 data URL for short videos
 @api_router.api_route("/media/{filename}", methods=["GET", "HEAD"])

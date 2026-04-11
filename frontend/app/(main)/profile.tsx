@@ -234,8 +234,8 @@ export default function ProfileScreen() {
   const uploadProfilePic = async (uri: string) => {
     setIsUploadingPic(true);
     try {
-      const serverUrl = await uploadFile(uri);
-      await api.put('/users/me', { profile_image: serverUrl });
+      const result = await uploadFile(uri);
+      await api.put('/users/me', { profile_image: result.url });
       await refreshUser();
       Alert.alert('Fatto!', 'Immagine di profilo aggiornata');
     } catch (error) {

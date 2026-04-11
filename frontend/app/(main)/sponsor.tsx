@@ -124,12 +124,12 @@ export default function SponsorScreen() {
     setIsCreating(true);
     try {
       // Upload media first
-      const uploadedUrl = await uploadFile(mediaUri);
+      const uploadResult = await uploadFile(mediaUri);
       
       // Create ad
       await api.post('/ads', {
         title,
-        media_url: uploadedUrl,
+        media_url: uploadResult.url,
         media_type: mediaType,
         link_type: linkType,
         link_url: linkUrl,

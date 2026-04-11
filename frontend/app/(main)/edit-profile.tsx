@@ -36,9 +36,9 @@ export default function EditProfileScreen() {
     if (result.canceled || !result.assets?.[0]) return;
     setUploading(true);
     try {
-      const url = await uploadFile(result.assets[0].uri);
-      if (url) {
-        await api.put('/users/me', { profile_image: url });
+      const uploadResult = await uploadFile(result.assets[0].uri);
+      if (uploadResult.url) {
+        await api.put('/users/me', { profile_image: uploadResult.url });
         await refreshUser();
       }
     } catch { Alert.alert('Errore', 'Upload foto fallito'); }
