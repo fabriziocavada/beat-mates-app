@@ -54,8 +54,9 @@ Social media mobile app for dancers built with Expo (React Native) + FastAPI + M
 - Pre-loading of first 10 images in feed
 - Memory + disk cache
 
-### Video Optimization
-- Pre-buffering of adjacent reels (2 before/after)
+### Video Optimization - NATIVE PLAYER (NEW)
+- **Replaced WebView with expo-av native Video player** - MUCH faster!
+- Pre-loading of 2 adjacent reels
 - Client-side video compression before upload
 - Client-side image compression (max 1200px, 70% quality)
 

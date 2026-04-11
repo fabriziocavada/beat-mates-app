@@ -13,42 +13,58 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { WebView } from 'react-native-webview';
+import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
-import api, { getMediaUrl, getVideoPlayerUrl } from '../../src/services/api';
+import api, { getMediaUrl, isBunnyCdnUrl } from '../../src/services/api';
 import ShareModal from '../../src/components/ShareModal';
 
-// WebView video player with loading indicator and play/pause
-// Pre-load adjacent videos by keeping WebView mounted but hidden
+// Native Video Player - MUCH faster than WebView!
 function ReelVideoPlayer({ mediaUrl, isActive, shouldPreload }: { mediaUrl: string; isActive: boolean; shouldPreload?: boolean }) {
+  const videoRef = useRef<Video>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const webRef = useRef<WebView>(null);
-  const wasActive = useRef(false);
 
-  // Pause/resume when isActive changes
+  // Play/pause when isActive changes
   useEffect(() => {
-    if (!mediaUrl) return;
-    if (isActive && !wasActive.current) {
-      // Becoming active - play
-      wasActive.current = true;
+    if (!videoRef.current || !mediaUrl) return;
+    
+    if (isActive) {
+      videoRef.current.playAsync().catch(() => {});
       setIsPaused(false);
-      webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v){v.play();v.muted=false}true;`);
-    } else if (!isActive && wasActive.current) {
-      // Becoming inactive - pause and mute
-      wasActive.current = false;
-      webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v){v.pause();v.muted=true}true;`);
+    } else {
+      videoRef.current.pauseAsync().catch(() => {});
     }
   }, [isActive, mediaUrl]);
 
-  // Cleanup on unmount - stop audio
+  // Reset when mediaUrl changes
   useEffect(() => {
-    return () => {
-      webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v){v.pause();v.muted=true;v.src=''}true;`);
-    };
-  }, []);
+    setIsLoading(true);
+    setHasError(false);
+    setIsPaused(false);
+  }, [mediaUrl]);
+
+  const handlePlaybackStatusUpdate = (status: AVPlaybackStatus) => {
+    if (status.isLoaded) {
+      setIsLoading(false);
+      if (status.didJustFinish) {
+        // Loop the video
+        videoRef.current?.replayAsync().catch(() => {});
+      }
+    }
+  };
+
+  const togglePlayPause = async () => {
+    if (!videoRef.current) return;
+    if (isPaused) {
+      await videoRef.current.playAsync();
+      setIsPaused(false);
+    } else {
+      await videoRef.current.pauseAsync();
+      setIsPaused(true);
+    }
+  };
 
   if (!mediaUrl) {
     return (
@@ -58,41 +74,33 @@ function ReelVideoPlayer({ mediaUrl, isActive, shouldPreload }: { mediaUrl: stri
     );
   }
 
-  // Pre-load: keep WebView mounted but invisible and paused
-  const shouldLoadWebView = isActive || shouldPreload;
-  const playerUrl = getVideoPlayerUrl(mediaUrl, { muted: !isActive, fit: 'contain', autoplay: isActive });
-
-  const togglePlayPause = () => {
-    const newPaused = !isPaused;
-    setIsPaused(newPaused);
-    webRef.current?.injectJavaScript(`var v=document.getElementById('v');if(v){${newPaused ? 'v.pause()' : 'v.play()'}}true;`);
-  };
+  // Should we load this video? (active or pre-loading)
+  const shouldLoad = isActive || shouldPreload;
 
   return (
-    <View style={{ flex: 1 }}>
-      {shouldLoadWebView ? (
-        <WebView
-          ref={webRef}
-          source={{ uri: playerUrl }}
-          style={{ flex: 1, opacity: isLoading && isActive ? 0 : (isActive ? 1 : 0) }}
-          scrollEnabled={false}
-          bounces={false}
-          allowsInlineMediaPlayback={true}
-          mediaPlaybackRequiresUserAction={false}
-          javaScriptEnabled={true}
-          originWhitelist={['*']}
-          pointerEvents="none"
-          onMessage={(e) => {
-            const msg = e.nativeEvent.data;
-            if (msg === 'ready' || msg === 'playing') setIsLoading(false);
-            if (msg.startsWith('error')) setHasError(true);
+    <View style={{ flex: 1, backgroundColor: '#000' }}>
+      {shouldLoad && (
+        <Video
+          ref={videoRef}
+          source={{ uri: mediaUrl }}
+          style={StyleSheet.absoluteFill}
+          resizeMode={ResizeMode.CONTAIN}
+          shouldPlay={isActive}
+          isLooping={true}
+          isMuted={!isActive}
+          onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+          onError={(error) => {
+            console.log('[ReelVideoPlayer] Error:', error);
+            setHasError(true);
+            setIsLoading(false);
           }}
-          onError={() => setHasError(true)}
+          onLoad={() => setIsLoading(false)}
+          progressUpdateIntervalMillis={500}
+          usePoster={false}
         />
-      ) : (
-        <View style={{ flex: 1, backgroundColor: '#000' }} />
       )}
-      {/* Tap overlay for play/pause - only when active */}
+      
+      {/* Tap overlay for play/pause */}
       {isActive && (
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
@@ -106,15 +114,20 @@ function ReelVideoPlayer({ mediaUrl, isActive, shouldPreload }: { mediaUrl: stri
           )}
         </TouchableOpacity>
       )}
+      
+      {/* Loading indicator */}
       {isLoading && isActive && !hasError && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]} pointerEvents="none">
           <ActivityIndicator size="large" color="#FF6978" />
-          <Text style={{ color: '#666', marginTop: 10, fontSize: 12 }}>Caricamento...</Text>
         </View>
       )}
-      {!isActive && (
+      
+      {/* Black overlay when not active */}
+      {!isActive && !shouldPreload && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]} />
       )}
+      
+      {/* Error state */}
       {hasError && isActive && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]} pointerEvents="none">
           <Ionicons name="videocam-off-outline" size={48} color="#666" />
