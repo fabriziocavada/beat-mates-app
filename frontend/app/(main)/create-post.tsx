@@ -20,7 +20,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Video, ResizeMode } from 'expo-av';
 import api, { uploadFile } from '../../src/services/api';
 import { useAuthStore } from '../../src/store/authStore';
-import { compressVideoForUpload } from '../../src/services/videoCompressor';
+import { compressVideoForUpload, compressImageForUpload } from '../../src/services/videoCompressor';
 
 const { width } = Dimensions.get('window');
 
@@ -140,10 +140,13 @@ export default function CreatePostScreen() {
       for (const item of mediaItems) {
         let uriToUpload = item.uri;
         
-        // Compress video before upload
+        // Compress media before upload (Instagram-style)
         if (item.type === 'video') {
           console.log('Compressing video before upload...');
           uriToUpload = await compressVideoForUpload(item.uri);
+        } else {
+          console.log('Compressing image before upload...');
+          uriToUpload = await compressImageForUpload(item.uri);
         }
         
         const uploadResult = await uploadFile(uriToUpload);
@@ -151,7 +154,8 @@ export default function CreatePostScreen() {
         
         // Upload custom thumbnail for video if specified
         if (item.type === 'video' && item.customThumbnail && !customThumbnailUrl) {
-          const thumbResult = await uploadFile(item.customThumbnail);
+          const compressedThumb = await compressImageForUpload(item.customThumbnail);
+          const thumbResult = await uploadFile(compressedThumb);
           customThumbnailUrl = thumbResult.url;
         }
       }

@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 export interface CompressionProgress {
   progress: number;
@@ -12,6 +13,42 @@ try {
   VideoCompressor = require('react-native-compressor').Video;
 } catch (e) {
   console.log('Video compression not available (Expo Go mode)');
+}
+
+/**
+ * Compress image before upload (Instagram-style)
+ * Target: Max 1200px, 70% quality, ~150KB output
+ */
+export async function compressImageForUpload(uri: string): Promise<string> {
+  try {
+    if (Platform.OS === 'web') {
+      return uri; // Web handles compression differently
+    }
+
+    console.log('[compressImage] Starting compression for:', uri.substring(0, 50));
+    
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 1200 } }], // Max 1200px width
+      { 
+        compress: 0.7, // 70% quality (Instagram uses ~70-80%)
+        format: ImageManipulator.SaveFormat.JPEG 
+      }
+    );
+
+    console.log('[compressImage] Compressed successfully:', result.uri.substring(0, 50));
+    return result.uri;
+  } catch (error) {
+    console.warn('[compressImage] Compression failed, using original:', error);
+    return uri;
+  }
+}
+
+/**
+ * Compress multiple images in parallel
+ */
+export async function compressImagesForUpload(uris: string[]): Promise<string[]> {
+  return Promise.all(uris.map(uri => compressImageForUpload(uri)));
 }
 
 /**

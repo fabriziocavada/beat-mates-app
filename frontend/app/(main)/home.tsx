@@ -15,8 +15,9 @@ import TabBar from '../../src/components/TabBar';
 import StoriesBar from '../../src/components/StoriesBar';
 import PostCard from '../../src/components/PostCard';
 import AdCard from '../../src/components/AdCard';
-import api from '../../src/services/api';
+import api, { getMediaUrl } from '../../src/services/api';
 import { useAuthStore } from '../../src/store/authStore';
+import { preloadImages } from '../../src/components/OptimizedMedia';
 
 interface Post {
   id: string;
@@ -86,6 +87,14 @@ export default function HomeScreen() {
       setPosts(postsRes.data);
       setStories(storiesRes.data);
       setFeedAd(adRes.data);
+      
+      // Pre-load first 10 images for instant display (Instagram-style)
+      const imageUrls = postsRes.data
+        .slice(0, 10)
+        .filter((p: Post) => p.media && !p.media.includes('.mp4') && !p.media.includes('.mov'))
+        .map((p: Post) => getMediaUrl(p.media));
+      preloadImages(imageUrls);
+      
     } catch (error) {
       console.error('Failed to load data', error);
     } finally {

@@ -1,10 +1,11 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, FlatList, ScrollView, Animated, Alert, ActivityIndicator, GestureResponderEvent } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, FlatList, ScrollView, Animated, Alert, ActivityIndicator, GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import { useRouter } from 'expo-router';
 import api, { getMediaUrl, getThumbnailUrl } from '../services/api';
 import ShareModal from './ShareModal';
+import { OptimizedImage, preloadImages } from './OptimizedMedia';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -220,7 +221,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
         <TouchableOpacity style={styles.headerLeft} onPress={() => onUserPress?.(post.user_id)}>
           <View style={styles.avatarWrap}>
             {post.user?.profile_image ? (
-              <Image source={{ uri: getMediaUrl(post.user.profile_image) || '' }} style={styles.avatar} />
+              <OptimizedImage uri={getMediaUrl(post.user.profile_image)} width={36} height={36} style={styles.avatar} priority="high" />
             ) : (
               <View style={[styles.avatar, styles.avatarPH]}><Ionicons name="person" size={16} color="#666" /></View>
             )}
@@ -268,7 +269,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
                     {isVid ? (
                       <FeedVideoPlayer url={fullUrl} height={mediaHeight} isVisible={index === carouselIndex} muted={videoMuted} paused={isPaused} />
                     ) : (
-                      <Image source={{ uri: fullUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                      <OptimizedImage uri={fullUrl} width={SCREEN_WIDTH} height={mediaHeight} resizeMode="cover" priority="high" />
                     )}
                   </TouchableOpacity>
                 );

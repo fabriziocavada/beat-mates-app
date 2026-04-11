@@ -20,7 +20,8 @@ import api, { getMediaUrl, getVideoPlayerUrl } from '../../src/services/api';
 import ShareModal from '../../src/components/ShareModal';
 
 // WebView video player with loading indicator and play/pause
-function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: boolean }) {
+// Pre-load adjacent videos by keeping WebView mounted but hidden
+function ReelVideoPlayer({ mediaUrl, isActive, shouldPreload }: { mediaUrl: string; isActive: boolean; shouldPreload?: boolean }) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -57,7 +58,9 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
     );
   }
 
-  const playerUrl = getVideoPlayerUrl(mediaUrl, { muted: false, fit: 'contain' });
+  // Pre-load: keep WebView mounted but invisible and paused
+  const shouldLoadWebView = isActive || shouldPreload;
+  const playerUrl = getVideoPlayerUrl(mediaUrl, { muted: !isActive, fit: 'contain', autoplay: isActive });
 
   const togglePlayPause = () => {
     const newPaused = !isPaused;
@@ -67,24 +70,28 @@ function ReelVideoPlayer({ mediaUrl, isActive }: { mediaUrl: string; isActive: b
 
   return (
     <View style={{ flex: 1 }}>
-      <WebView
-        ref={webRef}
-        source={isActive ? { uri: playerUrl } : { html: '<html><body style="background:#000"></body></html>' }}
-        style={{ flex: 1, opacity: isLoading && isActive ? 0 : 1 }}
-        scrollEnabled={false}
-        bounces={false}
-        allowsInlineMediaPlayback={true}
-        mediaPlaybackRequiresUserAction={false}
-        javaScriptEnabled={true}
-        originWhitelist={['*']}
-        pointerEvents="none"
-        onMessage={(e) => {
-          const msg = e.nativeEvent.data;
-          if (msg === 'ready' || msg === 'playing') setIsLoading(false);
-          if (msg.startsWith('error')) setHasError(true);
-        }}
-        onError={() => setHasError(true)}
-      />
+      {shouldLoadWebView ? (
+        <WebView
+          ref={webRef}
+          source={{ uri: playerUrl }}
+          style={{ flex: 1, opacity: isLoading && isActive ? 0 : (isActive ? 1 : 0) }}
+          scrollEnabled={false}
+          bounces={false}
+          allowsInlineMediaPlayback={true}
+          mediaPlaybackRequiresUserAction={false}
+          javaScriptEnabled={true}
+          originWhitelist={['*']}
+          pointerEvents="none"
+          onMessage={(e) => {
+            const msg = e.nativeEvent.data;
+            if (msg === 'ready' || msg === 'playing') setIsLoading(false);
+            if (msg.startsWith('error')) setHasError(true);
+          }}
+          onError={() => setHasError(true)}
+        />
+      ) : (
+        <View style={{ flex: 1, backgroundColor: '#000' }} />
+      )}
       {/* Tap overlay for play/pause - only when active */}
       {isActive && (
         <TouchableOpacity
@@ -254,6 +261,8 @@ export default function ReelsScreen() {
 
   const renderReel = ({ item, index }: { item: ReelPost; index: number }) => {
     const isActive = index === currentIndex;
+    // Pre-load adjacent reels (1 before and 2 after) for smoother scrolling
+    const shouldPreload = Math.abs(index - currentIndex) <= 2;
     const isLiked = likedPosts.has(item.id) || item.is_liked;
     const mediaUrl = getMediaUrl(item.media);
     const profileUrl = getMediaUrl(item.user?.profile_image);
@@ -261,7 +270,11 @@ export default function ReelsScreen() {
     return (
       <View style={[styles.reelContainer, { height: ITEM_HEIGHT }]}>
         {mediaUrl ? (
-          <ReelVideoPlayer mediaUrl={mediaUrl} isActive={isActive && isScreenFocused} />
+          <ReelVideoPlayer 
+            mediaUrl={mediaUrl} 
+            isActive={isActive && isScreenFocused} 
+            shouldPreload={shouldPreload}
+          />
         ) : (
           <View style={[styles.media, styles.placeholder]}>
             <Ionicons name="videocam-outline" size={48} color={Colors.textSecondary} />
