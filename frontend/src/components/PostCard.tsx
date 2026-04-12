@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, FlatList, ScrollView, Animated, Alert, ActivityIndicator, GestureResponderEvent } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, FlatList, ScrollView, Animated, Alert, ActivityIndicator, GestureResponderEvent, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import { useRouter } from 'expo-router';
