@@ -3763,6 +3763,123 @@ async def mark_notification_read(notif_id: str, current_user: dict = Depends(get
 # Include the router in the main app
 app.include_router(api_router)
 
+# ==================== CDN MIGRATION ENDPOINT ====================
+@app.post("/api/admin/migrate-to-cdn")
+async def migrate_all_media_to_cdn():
+    """Migrate ALL local media to Bunny CDN. Run once on production."""
+    results = {"videos_migrated": 0, "images_migrated": 0, "errors": [], "skipped": 0}
+    
+    # 1. Migrate Posts
+    posts = await db.posts.find({}).to_list(500)
+    for post in posts:
+        post_id = post["id"]
+        media = post.get("media", "") or ""
+        media_urls = post.get("media_urls", []) or []
+        
+        # Migrate main media
+        if media and "/api/uploads/" in media:
+            filename = media.replace("/api/uploads/", "")
+            filepath = UPLOADS_DIR / filename
+            if filepath.exists():
+                try:
+                    content = filepath.read_bytes()
+                    is_video = filename.lower().endswith(('.mp4', '.mov', '.webm'))
+                    if is_video:
+                        bunny_result = await upload_video_to_bunny_stream(content, filename)
+                        if bunny_result:
+                            new_url = bunny_result["embed_url"]
+                            await db.posts.update_one({"id": post_id}, {"$set": {"media": new_url}})
+                            results["videos_migrated"] += 1
+                            logger.info(f"Migrated video {filename} -> {new_url}")
+                        else:
+                            results["errors"].append(f"Video upload failed: {filename}")
+                    else:
+                        cdn_url = await upload_image_to_bunny_storage(content, filename)
+                        if cdn_url:
+                            await db.posts.update_one({"id": post_id}, {"$set": {"media": cdn_url}})
+                            results["images_migrated"] += 1
+                            logger.info(f"Migrated image {filename} -> {cdn_url}")
+                        else:
+                            results["errors"].append(f"Image upload failed: {filename}")
+                except Exception as e:
+                    results["errors"].append(f"Error {filename}: {str(e)}")
+            else:
+                results["skipped"] += 1
+        
+        # Migrate media_urls array
+        new_urls = []
+        urls_changed = False
+        for url in media_urls:
+            if url and "/api/uploads/" in url:
+                fn = url.replace("/api/uploads/", "")
+                fp = UPLOADS_DIR / fn
+                if fp.exists():
+                    try:
+                        content = fp.read_bytes()
+                        is_vid = fn.lower().endswith(('.mp4', '.mov', '.webm'))
+                        if is_vid:
+                            r = await upload_video_to_bunny_stream(content, fn)
+                            if r:
+                                new_urls.append(r["embed_url"])
+                                urls_changed = True
+                                results["videos_migrated"] += 1
+                                continue
+                        else:
+                            cdn = await upload_image_to_bunny_storage(content, fn)
+                            if cdn:
+                                new_urls.append(cdn)
+                                urls_changed = True
+                                results["images_migrated"] += 1
+                                continue
+                    except Exception as e:
+                        results["errors"].append(f"Error {fn}: {str(e)}")
+            new_urls.append(url)
+        
+        if urls_changed:
+            await db.posts.update_one({"id": post_id}, {"$set": {"media_urls": new_urls}})
+    
+    # 2. Migrate Stories
+    stories = await db.stories.find({}).to_list(1000)
+    for story in stories:
+        media = story.get("media", "") or ""
+        if media and "/api/uploads/" in media:
+            filename = media.replace("/api/uploads/", "")
+            filepath = UPLOADS_DIR / filename
+            if filepath.exists():
+                try:
+                    content = filepath.read_bytes()
+                    is_video = filename.lower().endswith(('.mp4', '.mov', '.webm'))
+                    if is_video:
+                        r = await upload_video_to_bunny_stream(content, filename)
+                        if r:
+                            await db.stories.update_one({"id": story["id"]}, {"$set": {"media": r["embed_url"]}})
+                            results["videos_migrated"] += 1
+                    else:
+                        cdn = await upload_image_to_bunny_storage(content, filename)
+                        if cdn:
+                            await db.stories.update_one({"id": story["id"]}, {"$set": {"media": cdn}})
+                            results["images_migrated"] += 1
+                except Exception as e:
+                    results["errors"].append(f"Story error {filename}: {str(e)}")
+    
+    # 3. Migrate User profile images
+    users = await db.users.find({"profile_image": {"$regex": "^/api/uploads/"}}).to_list(500)
+    for user in users:
+        img = user.get("profile_image", "")
+        filename = img.replace("/api/uploads/", "")
+        filepath = UPLOADS_DIR / filename
+        if filepath.exists():
+            try:
+                content = filepath.read_bytes()
+                cdn = await upload_image_to_bunny_storage(content, filename)
+                if cdn:
+                    await db.users.update_one({"id": user["id"]}, {"$set": {"profile_image": cdn}})
+                    results["images_migrated"] += 1
+            except Exception as e:
+                results["errors"].append(f"User img error {filename}: {str(e)}")
+    
+    return results
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

@@ -8,10 +8,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
-import api, { getMediaUrl } from '../../../src/services/api';
+import api, { getMediaUrl, getDirectVideoUrl } from '../../../src/services/api';
 import Colors from '../../../src/constants/colors';
 import ShareModal from '../../../src/components/ShareModal';
 import StoryAd from '../../../src/components/StoryAd';
+import { Image as ExpoImage } from 'expo-image';
 
 const { width, height } = Dimensions.get('window');
 const PHOTO_DURATION = 6000;
@@ -370,18 +371,20 @@ function StoryVideoPlayer({ url, isActive, isPaused, musicUrl }: { url: string; 
   );
 }
 
-// Optimized Image loader with fast loading
+// Optimized Image loader with expo-image caching (FAST!)
 function StoryImageLoader({ url }: { url: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   
   return (
     <View style={StyleSheet.absoluteFill}>
-      <Image 
-        source={{ uri: url, cache: 'force-cache' }} 
+      <ExpoImage 
+        source={{ uri: url }} 
         style={styles.fullMedia} 
-        resizeMode="cover"
-        onLoadStart={() => setLoading(true)}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        priority="high"
+        transition={150}
         onLoad={() => setLoading(false)}
         onError={() => { setLoading(false); setError(true); }}
       />
