@@ -114,5 +114,12 @@ BUNNY_CDN_URL=https://beatmates-cd.b-cdn.net
 3. Push Notifications
 
 ## Known Issues (Pending)
-- ReviewsPopup carousel swipe broken
 - Hold-to-pause missing on Home Feed videos
+
+## Recent Updates (Apr 2026)
+- Reel player: WebView → expo-av native (MUCH faster)
+- Reel pre-loading: 5 videos in advance (TikTok-style)
+- Search page: Instagram Explore grid with mixed sizes
+- All media on Bunny CDN
+- Images compressed to ~200KB
+- Videos compressed to ~3-10MB

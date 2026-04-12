@@ -19,7 +19,8 @@ import TabBar from '../../src/components/TabBar';
 import api, { getMediaUrl, isBunnyCdnUrl } from '../../src/services/api';
 import ShareModal from '../../src/components/ShareModal';
 
-// Native Video Player - MUCH faster than WebView!
+// Native Video Player - TikTok style with instant loading!
+// Pre-loads videos so they're ready when you scroll
 function ReelVideoPlayer({ mediaUrl, isActive, shouldPreload }: { mediaUrl: string; isActive: boolean; shouldPreload?: boolean }) {
   const videoRef = useRef<Video>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -74,11 +75,12 @@ function ReelVideoPlayer({ mediaUrl, isActive, shouldPreload }: { mediaUrl: stri
     );
   }
 
-  // Should we load this video? (active or pre-loading)
+  // ALWAYS load if we should preload - this ensures video is ready when user scrolls
   const shouldLoad = isActive || shouldPreload;
 
   return (
     <View style={{ flex: 1, backgroundColor: '#000' }}>
+      {/* ALWAYS render the Video component if shouldLoad - NO black overlay! */}
       {shouldLoad && (
         <Video
           ref={videoRef}
@@ -115,16 +117,11 @@ function ReelVideoPlayer({ mediaUrl, isActive, shouldPreload }: { mediaUrl: stri
         </TouchableOpacity>
       )}
       
-      {/* Loading indicator */}
+      {/* Small loading indicator - only show briefly when FIRST loading active video */}
       {isLoading && isActive && !hasError && (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]} pointerEvents="none">
-          <ActivityIndicator size="large" color="#FF6978" />
+        <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]} pointerEvents="none">
+          <ActivityIndicator size="small" color="#FF6978" />
         </View>
-      )}
-      
-      {/* Black overlay when not active */}
-      {!isActive && !shouldPreload && (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]} />
       )}
       
       {/* Error state */}
@@ -274,8 +271,8 @@ export default function ReelsScreen() {
 
   const renderReel = ({ item, index }: { item: ReelPost; index: number }) => {
     const isActive = index === currentIndex;
-    // Pre-load adjacent reels (1 before and 2 after) for smoother scrolling
-    const shouldPreload = Math.abs(index - currentIndex) <= 2;
+    // Pre-load MORE videos (5 before and 5 after) for TikTok-style instant loading
+    const shouldPreload = Math.abs(index - currentIndex) <= 5;
     const isLiked = likedPosts.has(item.id) || item.is_liked;
     const mediaUrl = getMediaUrl(item.media);
     const profileUrl = getMediaUrl(item.user?.profile_image);
