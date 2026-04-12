@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Dimensions, FlatList, ScrollV
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import { useRouter } from 'expo-router';
-import api, { getMediaUrl, getThumbnailUrl } from '../services/api';
+import api, { getMediaUrl, getThumbnailUrl, getDirectVideoUrl } from '../services/api';
 import ShareModal from './ShareModal';
 import { OptimizedImage, preloadImages } from './OptimizedMedia';
 
@@ -35,7 +35,7 @@ interface PostCardProps {
 function isVideoPath(path: string | null | undefined): boolean {
   if (!path) return false;
   const l = path.toLowerCase();
-  return l.includes('.mp4') || l.includes('.mov') || l.includes('.webm') || l.includes('video');
+  return l.includes('.mp4') || l.includes('.mov') || l.includes('.webm') || l.includes('video') || l.includes('mediadelivery.net');
 }
 
 // WebView video player - pure rendering, no touch handling
@@ -254,8 +254,8 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
               scrollEventThrottle={16}
             >
               {mediaUrls.map((url, index) => {
-                const fullUrl = getMediaUrl(url) || '';
                 const isVid = isVideoPath(url);
+                const fullUrl = isVid ? (getDirectVideoUrl(url) || '') : (getMediaUrl(url) || '');
                 return (
                   <TouchableOpacity 
                     key={index} 
@@ -278,7 +278,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
           ) : isSingleVideo ? (
             /* Single video: tap overlay with hold-to-pause (Instagram-style) */
             <View style={{ width: '100%', height: mediaHeight }}>
-              <FeedVideoPlayer url={getMediaUrl(mediaUrls[0]) || ''} height={mediaHeight} isVisible={true} muted={videoMuted} paused={isPaused} />
+              <FeedVideoPlayer url={getDirectVideoUrl(mediaUrls[0]) || ''} height={mediaHeight} isVisible={true} muted={videoMuted} paused={isPaused} />
               <TouchableOpacity
                 style={StyleSheet.absoluteFill}
                 activeOpacity={1}

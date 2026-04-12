@@ -19,11 +19,14 @@ Social media mobile app for dancers built with Expo (React Native) + FastAPI + M
 - Horizontal swiping with 3D cube transition
 - Progress bar timer (6s photos, 60s videos)
 - Hold to pause, swipe UP for reactions, swipe DOWN to close
-- Full Story Editor with drawing, text, stickers
+- Full Story Editor with drawing, text, stickers (BROKEN - needs fix)
 
 ### 4. Reels
-- Vertical scrolling video feed
-- Pre-buffering for smoother scrolling (NEW)
+- Vertical scrolling video feed (TikTok-style)
+- Native expo-av Video player (no WebView)
+- Bunny Stream HLS direct playback (converted from embed URLs)
+- Thumbnail poster from CDN for instant preview
+- Pre-buffering of 2 adjacent reels
 - Like, comment, share functionality
 
 ### 5. Direct Messaging (Chat)
@@ -40,28 +43,37 @@ Social media mobile app for dancers built with Expo (React Native) + FastAPI + M
 - Group Lessons
 - Recorded Lessons (Netflix-style UI)
 
-## Performance Optimizations (NEW - Apr 2026)
+### 8. Search / Explore
+- Instagram-style explore grid (large + small tiles)
+- Category chips filter (dance disciplines)
+- User search with debounce
+- Suggested users when search bar is focused
+- Tapping videos opens Reels view
+
+## Performance Architecture
 
 ### Bunny CDN Integration
 - **Bunny Stream** for videos: Auto-transcoding to HLS
 - **Bunny Storage** for images: Global CDN (EU, US, Asia)
 - Stream Library ID: 635479
 - CDN URL: https://beatmates-cd.b-cdn.net
+- Direct HLS: https://vz-635479.b-cdn.net/{guid}/playlist.m3u8
+- Thumbnails: https://vz-635479.b-cdn.net/{guid}/thumbnail.jpg
+
+### Video URL Resolution (CRITICAL FIX - Feb 2026)
+- Backend stores Bunny Stream embed URLs: `iframe.mediadelivery.net/embed/635479/{guid}`
+- **expo-av CANNOT play embed URLs** - they are HTML pages, not video streams
+- `getDirectVideoUrl()` in api.ts converts embed → HLS: `vz-635479.b-cdn.net/{guid}/playlist.m3u8`
+- `getBunnyThumbnailUrl()` gets poster: `vz-635479.b-cdn.net/{guid}/thumbnail.jpg`
+- Local paths fallback to `getMediaUrl()` as before
 
 ### Image Optimization
 - `OptimizedImage` component with expo-image caching
 - Shimmer loading placeholders
-- Pre-loading of first 10 images in feed
 - Memory + disk cache
 
-### Video Optimization - NATIVE PLAYER (NEW)
-- **Replaced WebView with expo-av native Video player** - MUCH faster!
-- Pre-loading of 2 adjacent reels
-- Client-side video compression before upload
-- Client-side image compression (max 1200px, 70% quality)
-
 ### Upload Compression
-- Videos: react-native-compressor (native builds)
+- Videos: react-native-compressor (native builds only)
 - Images: expo-image-manipulator (1200px, 70% quality)
 
 ## Technical Architecture
@@ -70,56 +82,42 @@ Social media mobile app for dancers built with Expo (React Native) + FastAPI + M
 ```
 /app/frontend/
 ├── src/components/
-│   ├── OptimizedMedia.tsx    # NEW: Cached images with shimmer
-│   ├── PostCard.tsx          # Uses OptimizedImage
+│   ├── OptimizedMedia.tsx     # Cached images with shimmer
+│   ├── PostCard.tsx           # Uses getDirectVideoUrl for videos
 │   └── ...
 ├── src/services/
-│   ├── api.ts                # Bunny CDN URL helpers
-│   └── videoCompressor.ts    # Image + video compression
+│   ├── api.ts                 # getDirectVideoUrl, getBunnyThumbnailUrl helpers
+│   └── videoCompressor.ts     # Image + video compression
 └── app/(main)/
-    ├── home.tsx              # Pre-loads first 10 images
-    ├── reels.tsx             # Pre-buffers adjacent videos
+    ├── home.tsx
+    ├── reels.tsx              # TikTok-style with poster + HLS + pre-load
+    ├── search.tsx             # Instagram Explore grid + categories + suggestions
     └── ...
 ```
 
 ### Backend
 ```
 /app/backend/
-├── server.py                 # Bunny CDN upload functions
-└── .env                      # Bunny credentials
+├── server.py                  # Monolithic FastAPI (3700+ lines)
+└── .env                       # Bunny credentials
 ```
-
-## Bunny CDN Credentials
-```
-BUNNY_STREAM_LIBRARY_ID=635479
-BUNNY_STREAM_API_KEY=a4259ebe-259a-412e-8b30e50de798-7aee-468d
-BUNNY_STORAGE_ZONE=beatmates-media
-BUNNY_STORAGE_API_KEY=a5975055-b9f4-4ee7-a7aa208d480a-5ae9-4ae0
-BUNNY_CDN_URL=https://beatmates-cd.b-cdn.net
-```
-
-## Test Credentials
-- Teacher: tutor@test.com / password123
-- Student: mario@test.com / password123
-- Production: fabriziocavada@gmail.com / abc123!
 
 ## Deployment
 - **Backend**: OVH VPS (api.beatmates.app) via Docker
 - **App**: TestFlight (iOS), requires EAS build for updates
 - **Database**: MongoDB Atlas
 
-## Next Tasks
-1. Deploy updated frontend to TestFlight (user must run `eas build`)
-2. Stripe Connect for real payments
-3. Push Notifications
+## Pending Issues
+1. Story Editor broken (text/sticker/drawing)
+2. Share Modal (airplane icon) not working
+3. Hold-to-pause missing on Home Feed videos
+4. Mentions list empty in Story Editor
+5. ReviewsPopup.tsx Carousel Swipe broken
 
-## Known Issues (Pending)
-- Hold-to-pause missing on Home Feed videos
-
-## Recent Updates (Apr 2026)
-- Reel player: WebView → expo-av native (MUCH faster)
-- Reel pre-loading: 5 videos in advance (TikTok-style)
-- Search page: Instagram Explore grid with mixed sizes
-- All media on Bunny CDN
-- Images compressed to ~200KB
-- Videos compressed to ~3-10MB
+## Next Tasks (Priority)
+1. User deploys Build 11 to TestFlight (git pull + eas build)
+2. Stripe Connect for real payments (80/20 split)
+3. Admin Dashboard Web App
+4. Push Notifications
+5. Google Social Login
+6. Refactor server.py into modular routers

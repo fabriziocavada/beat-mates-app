@@ -6,7 +6,9 @@ const baseURL = 'https://api.beatmates.app';
 
 // Bunny CDN URLs for global delivery
 const BUNNY_CDN_URL = 'https://beatmates-cd.b-cdn.net';
-const BUNNY_STREAM_EMBED = 'https://iframe.mediadelivery.net/embed/635479';
+const BUNNY_STREAM_LIBRARY_ID = '635479';
+const BUNNY_STREAM_EMBED = `https://iframe.mediadelivery.net/embed/${BUNNY_STREAM_LIBRARY_ID}`;
+const BUNNY_STREAM_DIRECT = `https://vz-${BUNNY_STREAM_LIBRARY_ID}.b-cdn.net`;
 
 const api = axios.create({
   baseURL: `${baseURL}/api`,
@@ -116,6 +118,44 @@ export function isBunnyCdnUrl(url: string | null | undefined): boolean {
 export function isBunnyStreamEmbed(url: string | null | undefined): boolean {
   if (!url) return false;
   return url.includes('iframe.mediadelivery.net/embed');
+}
+
+// Extract GUID from Bunny Stream embed URL
+function extractBunnyGuid(url: string): string | null {
+  // Format: https://iframe.mediadelivery.net/embed/635479/{guid}
+  const match = url.match(/embed\/\d+\/([a-f0-9-]+)/i);
+  return match ? match[1] : null;
+}
+
+// Convert Bunny Stream embed URL to direct HLS playback URL (for expo-av)
+export function getDirectVideoUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  
+  // If it's a Bunny Stream embed URL, convert to direct HLS
+  if (isBunnyStreamEmbed(url)) {
+    const guid = extractBunnyGuid(url);
+    if (guid) {
+      return `${BUNNY_STREAM_DIRECT}/${guid}/playlist.m3u8`;
+    }
+  }
+  
+  // If it's already a direct URL (mp4, m3u8, etc.), resolve it normally
+  return getMediaUrl(url);
+}
+
+// Get Bunny Stream thumbnail URL for a video
+export function getBunnyThumbnailUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  
+  if (isBunnyStreamEmbed(url)) {
+    const guid = extractBunnyGuid(url);
+    if (guid) {
+      return `${BUNNY_STREAM_DIRECT}/${guid}/thumbnail.jpg`;
+    }
+  }
+  
+  // Fallback to server-side thumbnail
+  return getThumbnailUrl(url);
 }
 
 // Resolve a media path to a full URL

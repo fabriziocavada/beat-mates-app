@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -16,47 +15,61 @@ import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
-import api, { getMediaUrl, isBunnyCdnUrl } from '../../src/services/api';
+import api, { getMediaUrl, getDirectVideoUrl, getBunnyThumbnailUrl } from '../../src/services/api';
 import ShareModal from '../../src/components/ShareModal';
 
-// Native Video Player - TikTok style with instant loading!
-// Pre-loads videos so they're ready when you scroll
-function ReelVideoPlayer({ mediaUrl, isActive, shouldPreload }: { mediaUrl: string; isActive: boolean; shouldPreload?: boolean }) {
+const { width, height } = Dimensions.get('window');
+const ITEM_HEIGHT = height - 130;
+
+// ============================================================
+// ReelVideoPlayer - TikTok-style with poster + instant playback
+// ============================================================
+const ReelVideoPlayer = memo(({ 
+  videoUrl, 
+  thumbnailUrl,
+  isActive, 
+  shouldPreload 
+}: { 
+  videoUrl: string | null;
+  thumbnailUrl: string | null;
+  isActive: boolean; 
+  shouldPreload: boolean;
+}) => {
   const videoRef = useRef<Video>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isBuffering, setIsBuffering] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
 
-  // Play/pause when isActive changes
+  // Control play/pause based on active state
   useEffect(() => {
-    if (!videoRef.current || !mediaUrl) return;
-    
+    if (!videoRef.current || !videoUrl) return;
     if (isActive) {
       videoRef.current.playAsync().catch(() => {});
       setIsPaused(false);
     } else {
       videoRef.current.pauseAsync().catch(() => {});
     }
-  }, [isActive, mediaUrl]);
+  }, [isActive, videoUrl]);
 
-  // Reset when mediaUrl changes
-  useEffect(() => {
-    setIsLoading(true);
-    setHasError(false);
-    setIsPaused(false);
-  }, [mediaUrl]);
-
-  const handlePlaybackStatusUpdate = (status: AVPlaybackStatus) => {
+  const handleStatus = useCallback((status: AVPlaybackStatus) => {
     if (status.isLoaded) {
-      setIsLoading(false);
+      setIsBuffering(status.isBuffering || false);
       if (status.didJustFinish) {
-        // Loop the video
         videoRef.current?.replayAsync().catch(() => {});
       }
     }
-  };
+  }, []);
 
-  const togglePlayPause = async () => {
+  const handleLoad = useCallback(() => {
+    setIsBuffering(false);
+  }, []);
+
+  const handleError = useCallback(() => {
+    setHasError(true);
+    setIsBuffering(false);
+  }, []);
+
+  const togglePause = useCallback(async () => {
     if (!videoRef.current) return;
     if (isPaused) {
       await videoRef.current.playAsync();
@@ -65,79 +78,84 @@ function ReelVideoPlayer({ mediaUrl, isActive, shouldPreload }: { mediaUrl: stri
       await videoRef.current.pauseAsync();
       setIsPaused(true);
     }
-  };
+  }, [isPaused]);
 
-  if (!mediaUrl) {
+  if (!videoUrl) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
+      <View style={styles.videoBg}>
         <Ionicons name="videocam-off-outline" size={48} color="#666" />
       </View>
     );
   }
 
-  // ALWAYS load if we should preload - this ensures video is ready when user scrolls
-  const shouldLoad = isActive || shouldPreload;
+  // Render video if active OR should preload (adjacent items)
+  const shouldMount = isActive || shouldPreload;
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#000' }}>
-      {/* ALWAYS render the Video component if shouldLoad - NO black overlay! */}
-      {shouldLoad && (
-        <Video
-          ref={videoRef}
-          source={{ uri: mediaUrl }}
+    <View style={styles.videoBg}>
+      {/* Poster thumbnail - shows instantly while video buffers */}
+      {thumbnailUrl && (isBuffering || !shouldMount) && (
+        <Image
+          source={{ uri: thumbnailUrl }}
           style={StyleSheet.absoluteFill}
-          resizeMode={ResizeMode.CONTAIN}
-          shouldPlay={isActive}
-          isLooping={true}
-          isMuted={!isActive}
-          onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-          onError={(error) => {
-            console.log('[ReelVideoPlayer] Error:', error);
-            setHasError(true);
-            setIsLoading(false);
-          }}
-          onLoad={() => setIsLoading(false)}
-          progressUpdateIntervalMillis={500}
-          usePoster={false}
+          resizeMode="cover"
         />
       )}
-      
-      {/* Tap overlay for play/pause */}
+
+      {/* Video component - mounted for active + adjacent items */}
+      {shouldMount && (
+        <Video
+          ref={videoRef}
+          source={{ uri: videoUrl }}
+          style={StyleSheet.absoluteFill}
+          resizeMode={ResizeMode.CONTAIN}
+          shouldPlay={isActive && !isPaused}
+          isLooping
+          isMuted={!isActive}
+          onPlaybackStatusUpdate={handleStatus}
+          onLoad={handleLoad}
+          onError={handleError}
+          progressUpdateIntervalMillis={1000}
+        />
+      )}
+
+      {/* Tap to pause/play overlay */}
       {isActive && (
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
           activeOpacity={1}
-          onPress={togglePlayPause}
+          onPress={togglePause}
+          data-testid="reel-tap-overlay"
         >
           {isPaused && (
-            <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)' }]}>
+            <View style={styles.pauseOverlay}>
               <Ionicons name="play" size={60} color="rgba(255,255,255,0.85)" />
             </View>
           )}
         </TouchableOpacity>
       )}
-      
-      {/* Small loading indicator - only show briefly when FIRST loading active video */}
-      {isLoading && isActive && !hasError && (
-        <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]} pointerEvents="none">
+
+      {/* Small spinner only for active video that's buffering */}
+      {isActive && isBuffering && !hasError && (
+        <View style={styles.spinnerOverlay} pointerEvents="none">
           <ActivityIndicator size="small" color="#FF6978" />
         </View>
       )}
-      
+
       {/* Error state */}
       {hasError && isActive && (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]} pointerEvents="none">
+        <View style={styles.errorOverlay} pointerEvents="none">
           <Ionicons name="videocam-off-outline" size={48} color="#666" />
-          <Text style={{ color: '#888', fontSize: 12, marginTop: 8 }}>Video non disponibile</Text>
+          <Text style={styles.errorText}>Video non disponibile</Text>
         </View>
       )}
     </View>
   );
-}
+});
 
-const { width, height } = Dimensions.get('window');
-const ITEM_HEIGHT = height - 130;
-
+// ============================================================
+// Interfaces
+// ============================================================
 interface ReelPost {
   id: string;
   user_id: string;
@@ -154,8 +172,14 @@ interface ReelPost {
   comments_count: number;
   is_liked: boolean;
   created_at: string;
+  // Pre-computed URLs for performance
+  _videoUrl?: string | null;
+  _thumbnailUrl?: string | null;
 }
 
+// ============================================================
+// Main Screen
+// ============================================================
 export default function ReelsScreen() {
   const router = useRouter();
   const { postId } = useLocalSearchParams<{ postId?: string }>();
@@ -166,48 +190,54 @@ export default function ReelsScreen() {
   const [isScreenFocused, setIsScreenFocused] = useState(true);
   const flatListRef = useRef<FlatList>(null);
   
-  // Share modal state
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareReelData, setShareReelData] = useState<ReelPost | null>(null);
 
-  useEffect(() => {
-    loadReels();
-  }, []);
+  useEffect(() => { loadReels(); }, []);
 
-  // Pause videos when navigating away, resume when coming back
   useFocusEffect(
     useCallback(() => {
       setIsScreenFocused(true);
-      return () => {
-        setIsScreenFocused(false);
-      };
+      return () => setIsScreenFocused(false);
     }, [])
   );
 
   const loadReels = async () => {
     try {
       const response = await api.get('/posts');
-      const videoPosts = response.data.filter((p: any) => {
-        if (p.type === 'video' && p.media) return true;
-        if (p.media_urls && p.media_urls.length > 0) {
-          return p.media_urls.some((url: string) => {
-            const l = url.toLowerCase();
-            return l.includes('.mp4') || l.includes('.mov') || l.includes('.webm') || l.includes('video');
-          });
-        }
-        return false;
-      }).map((p: any) => {
-        if (p.media_urls && p.media_urls.length > 0) {
-          const videoUrl = p.media_urls.find((url: string) => {
-            const l = url.toLowerCase();
-            return l.includes('.mp4') || l.includes('.mov') || l.includes('.webm') || l.includes('video');
-          });
-          if (videoUrl) return { ...p, media: videoUrl };
-        }
-        return p;
-      });
+      const videoPosts = response.data
+        .filter((p: any) => {
+          if (p.type === 'video' && p.media) return true;
+          if (p.media_urls && p.media_urls.length > 0) {
+            return p.media_urls.some((url: string) => {
+              const l = url.toLowerCase();
+              return l.includes('.mp4') || l.includes('.mov') || l.includes('.webm') || l.includes('video') || l.includes('mediadelivery.net');
+            });
+          }
+          return false;
+        })
+        .map((p: any) => {
+          let media = p.media;
+          // If post has media_urls, find the video one
+          if (p.media_urls && p.media_urls.length > 0) {
+            const videoUrl = p.media_urls.find((url: string) => {
+              const l = url.toLowerCase();
+              return l.includes('.mp4') || l.includes('.mov') || l.includes('.webm') || l.includes('video') || l.includes('mediadelivery.net');
+            });
+            if (videoUrl) media = videoUrl;
+          }
+          // Pre-compute direct video URL and thumbnail URL at load time
+          return {
+            ...p,
+            media,
+            _videoUrl: getDirectVideoUrl(media),
+            _thumbnailUrl: getBunnyThumbnailUrl(media),
+          };
+        });
+
       setReels(videoPosts);
-      // Scroll to the specific post if coming from feed
+
+      // Scroll to specific post if coming from feed
       if (postId && videoPosts.length > 0) {
         const targetIndex = videoPosts.findIndex((p: ReelPost) => p.id === postId);
         if (targetIndex >= 0) {
@@ -224,21 +254,17 @@ export default function ReelsScreen() {
     }
   };
 
-  const handleLike = async (postId: string) => {
+  const handleLike = async (id: string) => {
     try {
-      await api.post(`/posts/${postId}/like`);
+      await api.post(`/posts/${id}/like`);
       setLikedPosts(prev => {
-        const newSet = new Set(prev);
-        if (newSet.has(postId)) {
-          newSet.delete(postId);
-        } else {
-          newSet.add(postId);
-        }
-        return newSet;
+        const s = new Set(prev);
+        s.has(id) ? s.delete(id) : s.add(id);
+        return s;
       });
-      setReels(prev => prev.map(r => 
-        r.id === postId 
-          ? { ...r, likes_count: likedPosts.has(postId) ? r.likes_count - 1 : r.likes_count + 1 }
+      setReels(prev => prev.map(r =>
+        r.id === id
+          ? { ...r, likes_count: likedPosts.has(id) ? r.likes_count - 1 : r.likes_count + 1 }
           : r
       ));
     } catch (error) {
@@ -246,15 +272,14 @@ export default function ReelsScreen() {
     }
   };
 
-  // Share reel - open modal
-  const handleShareToStory = (reel: ReelPost) => {
+  const handleShare = (reel: ReelPost) => {
     setShareReelData(reel);
     setShowShareModal(true);
   };
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
-      setCurrentIndex(viewableItems[0].index || 0);
+      setCurrentIndex(viewableItems[0].index ?? 0);
     }
   }, []);
 
@@ -269,35 +294,30 @@ export default function ReelsScreen() {
     }
   };
 
-  const renderReel = ({ item, index }: { item: ReelPost; index: number }) => {
-    const isActive = index === currentIndex;
-    // Pre-load MORE videos (5 before and 5 after) for TikTok-style instant loading
-    const shouldPreload = Math.abs(index - currentIndex) <= 5;
+  const renderReel = useCallback(({ item, index }: { item: ReelPost; index: number }) => {
+    const isActive = index === currentIndex && isScreenFocused;
+    // Pre-load 2 videos ahead and 1 behind for instant scroll
+    const shouldPreload = Math.abs(index - currentIndex) <= 2;
     const isLiked = likedPosts.has(item.id) || item.is_liked;
-    const mediaUrl = getMediaUrl(item.media);
     const profileUrl = getMediaUrl(item.user?.profile_image);
 
     return (
-      <View style={[styles.reelContainer, { height: ITEM_HEIGHT }]}>
-        {mediaUrl ? (
-          <ReelVideoPlayer 
-            mediaUrl={mediaUrl} 
-            isActive={isActive && isScreenFocused} 
-            shouldPreload={shouldPreload}
-          />
-        ) : (
-          <View style={[styles.media, styles.placeholder]}>
-            <Ionicons name="videocam-outline" size={48} color={Colors.textSecondary} />
-          </View>
-        )}
-        
+      <View style={[styles.reelContainer, { height: ITEM_HEIGHT }]} data-testid={`reel-item-${index}`}>
+        <ReelVideoPlayer
+          videoUrl={item._videoUrl ?? null}
+          thumbnailUrl={item._thumbnailUrl ?? null}
+          isActive={isActive}
+          shouldPreload={shouldPreload}
+        />
+
         {/* Overlay content */}
-        <View style={styles.overlay}>
+        <View style={styles.overlay} pointerEvents="box-none">
           {/* Bottom left - user info & caption */}
           <View style={styles.bottomInfo}>
             <TouchableOpacity
               style={styles.userRow}
               onPress={() => router.push(`/(main)/user/${item.user_id}`)}
+              data-testid={`reel-user-${item.id}`}
             >
               <View style={styles.reelAvatar}>
                 {profileUrl ? (
@@ -315,42 +335,29 @@ export default function ReelsScreen() {
 
           {/* Right side - action buttons */}
           <View style={styles.actions}>
-            <TouchableOpacity 
-              style={styles.actionBtn}
-              onPress={() => handleLike(item.id)}
-            >
-              <Ionicons 
-                name={isLiked ? "heart" : "heart-outline"} 
-                size={30} 
-                color={isLiked ? Colors.primary : "#FFF"} 
-              />
+            <TouchableOpacity style={styles.actionBtn} onPress={() => handleLike(item.id)} data-testid={`reel-like-${item.id}`}>
+              <Ionicons name={isLiked ? "heart" : "heart-outline"} size={30} color={isLiked ? Colors.primary : "#FFF"} />
               <Text style={styles.actionText}>{item.likes_count || 0}</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.actionBtn}
-              onPress={() => router.push(`/(main)/comments/${item.id}`)}
-            >
+
+            <TouchableOpacity style={styles.actionBtn} onPress={() => router.push(`/(main)/comments/${item.id}`)} data-testid={`reel-comment-${item.id}`}>
               <Ionicons name="chatbubble-outline" size={28} color="#FFF" />
               <Text style={styles.actionText}>{item.comments_count || 0}</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.actionBtn}
-              onPress={() => handleShareToStory(item)}
-            >
+
+            <TouchableOpacity style={styles.actionBtn} onPress={() => handleShare(item)} data-testid={`reel-share-${item.id}`}>
               <Ionicons name="paper-plane-outline" size={28} color="#FFF" />
               <Text style={styles.actionText}>Invia</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.actionBtn}>
+
+            <TouchableOpacity style={styles.actionBtn} data-testid={`reel-save-${item.id}`}>
               <Ionicons name="bookmark-outline" size={28} color="#FFF" />
             </TouchableOpacity>
           </View>
         </View>
       </View>
     );
-  };
+  }, [currentIndex, isScreenFocused, likedPosts]);
 
   if (isLoading) {
     return (
@@ -375,7 +382,7 @@ export default function ReelsScreen() {
           <Text style={styles.headerTitle}>Reels</Text>
         )}
         {!postId && (
-          <TouchableOpacity onPress={() => router.push('/(main)/create-post')}>
+          <TouchableOpacity onPress={() => router.push('/(main)/create-post')} data-testid="reels-create-btn">
             <Ionicons name="videocam" size={24} color="#FFF" />
           </TouchableOpacity>
         )}
@@ -391,6 +398,7 @@ export default function ReelsScreen() {
           <TouchableOpacity
             style={styles.createButton}
             onPress={() => router.push('/(main)/create-post')}
+            data-testid="reels-create-first-btn"
           >
             <Ionicons name="add" size={20} color="#FFF" />
             <Text style={styles.createButtonText}>Crea Contenuto</Text>
@@ -408,16 +416,17 @@ export default function ReelsScreen() {
           decelerationRate="fast"
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
-          windowSize={3}
-          maxToRenderPerBatch={2}
-          removeClippedSubviews={true}
+          // TikTok-level performance tuning:
+          windowSize={7}              // Render 3.5 screens above + below (keeps adjacent videos mounted)
+          initialNumToRender={3}      // Render first 3 items immediately
+          maxToRenderPerBatch={3}     // Render 3 at a time during scroll
+          removeClippedSubviews={false} // CRITICAL: keep preloaded videos mounted!
           getItemLayout={(_, index) => ({ length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index })}
         />
       )}
       <TabBar activeTab="reels" onTabPress={handleTabPress} />
-      
-      {/* Share Modal (Instagram-style) */}
-      <ShareModal 
+
+      <ShareModal
         visible={showShareModal}
         onClose={() => { setShowShareModal(false); setShareReelData(null); }}
         mediaUrl={shareReelData?.media}
@@ -460,14 +469,33 @@ const styles = StyleSheet.create({
     position: 'relative',
     backgroundColor: '#000',
   },
-  media: {
-    width: '100%',
-    height: '100%',
-  },
-  placeholder: {
+  videoBg: {
+    flex: 1,
+    backgroundColor: '#000',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1C1C1E',
+  },
+  pauseOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  spinnerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorText: {
+    color: '#888',
+    fontSize: 12,
+    marginTop: 8,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,

@@ -24,36 +24,83 @@ interface UserResult {
 interface ExplorePost {
   id: string;
   media: string;
+  media_urls?: string[];
   user_id: string;
+  type?: string;
   likes_count?: number;
   comments_count?: number;
   is_video?: boolean;
+}
+
+interface DanceCategory {
+  id: string;
+  name: string;
+  image_url: string;
+}
+
+// Suggested accounts to show before searching
+interface SuggestedUser {
+  id: string;
+  username: string;
+  name: string;
+  profile_image: string | null;
+  dance_categories?: string[];
 }
 
 export default function SearchScreen() {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<UserResult[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [explorePosts, setExplorePosts] = useState<ExplorePost[]>([]);
   const [isLoadingExplore, setIsLoadingExplore] = useState(true);
+  const [categories, setCategories] = useState<DanceCategory[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
+  const [isFocused, setIsFocused] = useState(false);
 
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load explore posts on mount
   useEffect(() => {
     loadExplorePosts();
+    loadCategories();
+    loadSuggestedUsers();
   }, []);
+
+  const loadCategories = async () => {
+    try {
+      const res = await api.get('/dance-categories');
+      setCategories(res.data);
+    } catch (e) {
+      console.log('Failed to load categories', e);
+    }
+  };
+
+  const loadSuggestedUsers = async () => {
+    try {
+      const res = await api.get('/available-teachers');
+      // Take top 8 users as suggestions
+      setSuggestedUsers(res.data.slice(0, 8));
+    } catch (e) {
+      console.log('Failed to load suggested users', e);
+    }
+  };
 
   const loadExplorePosts = async () => {
     try {
       const res = await api.get('/posts?limit=30');
-      // Mark videos
-      const posts = res.data.map((p: any) => ({
-        ...p,
-        is_video: p.media?.includes('.mp4') || p.media?.includes('.mov') || p.media?.includes('video'),
-      }));
+      const posts = res.data.map((p: any) => {
+        const mediaUrl = p.media || (p.media_urls && p.media_urls[0]);
+        return {
+          ...p,
+          media: mediaUrl,
+          is_video: p.type === 'video' || (mediaUrl && (
+            mediaUrl.includes('.mp4') || mediaUrl.includes('.mov') ||
+            mediaUrl.includes('video') || mediaUrl.includes('mediadelivery.net')
+          )),
+        };
+      });
       setExplorePosts(posts);
     } catch (e) {
       console.log('Failed to load explore posts', e);
@@ -67,156 +114,153 @@ export default function SearchScreen() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (text.length < 1) { setResults([]); setHasSearched(false); return; }
     debounceRef.current = setTimeout(async () => {
-      setIsLoading(true);
+      setIsSearching(true);
       setHasSearched(true);
       try {
         const res = await api.get(`/users/search?q=${encodeURIComponent(text)}`);
         setResults(res.data);
       } catch { setResults([]); }
-      finally { setIsLoading(false); }
+      finally { setIsSearching(false); }
     }, 300);
   }, []);
 
-  // Render Instagram-style grid pattern (1 large + 2 small, then 3 small, repeat)
+  const handleCategoryPress = (catId: string) => {
+    setSelectedCategory(prev => prev === catId ? null : catId);
+  };
+
+  // Filter explore posts by category (using user's dance_categories)
+  const filteredPosts = selectedCategory
+    ? explorePosts // For now show all - backend doesn't filter posts by category yet
+    : explorePosts;
+
+  // Render Instagram-style grid
   const renderExploreGrid = () => {
     const rows: React.ReactElement[] = [];
     let i = 0;
     let rowIndex = 0;
+    const data = filteredPosts;
 
-    while (i < explorePosts.length) {
+    while (i < data.length) {
       const patternIndex = rowIndex % 3;
-      
-      if (patternIndex === 0 && i + 3 <= explorePosts.length) {
-        // Row type 1: Large left + 2 small stacked right
-        const large = explorePosts[i];
-        const small1 = explorePosts[i + 1];
-        const small2 = explorePosts[i + 2];
-        
+
+      if (patternIndex === 0 && i + 3 <= data.length) {
+        const large = data[i];
+        const small1 = data[i + 1];
+        const small2 = data[i + 2];
         rows.push(
           <View key={`row-${rowIndex}`} style={styles.gridRow}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.gridItemLarge, { width: LARGE_SIZE, height: LARGE_SIZE }]}
-              onPress={() => router.push(`/(main)/post/${large.id}`)}
+              onPress={() => large.is_video
+                ? router.push({ pathname: '/(main)/reels', params: { postId: large.id } })
+                : router.push(`/(main)/post/${large.id}`)
+              }
+              data-testid={`explore-item-${large.id}`}
             >
               <OptimizedImage uri={getMediaUrl(large.media)} width={LARGE_SIZE} height={LARGE_SIZE} />
-              {large.is_video && (
-                <View style={styles.videoIcon}>
-                  <Ionicons name="play" size={16} color="#FFF" />
-                </View>
-              )}
+              {large.is_video && <View style={styles.videoIcon}><Ionicons name="play" size={16} color="#FFF" /></View>}
             </TouchableOpacity>
             <View style={styles.smallColumn}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.gridItemSmall, { width: SMALL_SIZE, height: SMALL_SIZE }]}
-                onPress={() => router.push(`/(main)/post/${small1.id}`)}
+                onPress={() => small1.is_video
+                  ? router.push({ pathname: '/(main)/reels', params: { postId: small1.id } })
+                  : router.push(`/(main)/post/${small1.id}`)
+                }
               >
                 <OptimizedImage uri={getMediaUrl(small1.media)} width={SMALL_SIZE} height={SMALL_SIZE} />
-                {small1.is_video && (
-                  <View style={styles.videoIcon}>
-                    <Ionicons name="play" size={12} color="#FFF" />
-                  </View>
-                )}
+                {small1.is_video && <View style={styles.videoIcon}><Ionicons name="play" size={12} color="#FFF" /></View>}
               </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.gridItemSmall, { width: SMALL_SIZE, height: SMALL_SIZE, marginTop: GRID_GAP }]}
-                onPress={() => router.push(`/(main)/post/${small2.id}`)}
+                onPress={() => small2.is_video
+                  ? router.push({ pathname: '/(main)/reels', params: { postId: small2.id } })
+                  : router.push(`/(main)/post/${small2.id}`)
+                }
               >
                 <OptimizedImage uri={getMediaUrl(small2.media)} width={SMALL_SIZE} height={SMALL_SIZE} />
-                {small2.is_video && (
-                  <View style={styles.videoIcon}>
-                    <Ionicons name="play" size={12} color="#FFF" />
-                  </View>
-                )}
+                {small2.is_video && <View style={styles.videoIcon}><Ionicons name="play" size={12} color="#FFF" /></View>}
               </TouchableOpacity>
             </View>
           </View>
         );
         i += 3;
-      } else if (patternIndex === 1 && i + 3 <= explorePosts.length) {
-        // Row type 2: 3 small in a row
-        const items = explorePosts.slice(i, i + 3);
+      } else if (patternIndex === 1 && i + 3 <= data.length) {
+        const items = data.slice(i, i + 3);
         rows.push(
           <View key={`row-${rowIndex}`} style={styles.gridRowSmall}>
             {items.map((item, idx) => (
-              <TouchableOpacity 
+              <TouchableOpacity
                 key={item.id}
                 style={[styles.gridItemSmall, { width: SMALL_SIZE, height: SMALL_SIZE, marginLeft: idx > 0 ? GRID_GAP : 0 }]}
-                onPress={() => router.push(`/(main)/post/${item.id}`)}
+                onPress={() => item.is_video
+                  ? router.push({ pathname: '/(main)/reels', params: { postId: item.id } })
+                  : router.push(`/(main)/post/${item.id}`)
+                }
               >
                 <OptimizedImage uri={getMediaUrl(item.media)} width={SMALL_SIZE} height={SMALL_SIZE} />
-                {item.is_video && (
-                  <View style={styles.videoIcon}>
-                    <Ionicons name="play" size={12} color="#FFF" />
-                  </View>
-                )}
+                {item.is_video && <View style={styles.videoIcon}><Ionicons name="play" size={12} color="#FFF" /></View>}
               </TouchableOpacity>
             ))}
           </View>
         );
         i += 3;
-      } else if (patternIndex === 2 && i + 3 <= explorePosts.length) {
-        // Row type 3: 2 small stacked left + Large right
-        const small1 = explorePosts[i];
-        const small2 = explorePosts[i + 1];
-        const large = explorePosts[i + 2];
-        
+      } else if (patternIndex === 2 && i + 3 <= data.length) {
+        const small1 = data[i];
+        const small2 = data[i + 1];
+        const large = data[i + 2];
         rows.push(
           <View key={`row-${rowIndex}`} style={styles.gridRow}>
             <View style={styles.smallColumn}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.gridItemSmall, { width: SMALL_SIZE, height: SMALL_SIZE }]}
-                onPress={() => router.push(`/(main)/post/${small1.id}`)}
+                onPress={() => small1.is_video
+                  ? router.push({ pathname: '/(main)/reels', params: { postId: small1.id } })
+                  : router.push(`/(main)/post/${small1.id}`)
+                }
               >
                 <OptimizedImage uri={getMediaUrl(small1.media)} width={SMALL_SIZE} height={SMALL_SIZE} />
-                {small1.is_video && (
-                  <View style={styles.videoIcon}>
-                    <Ionicons name="play" size={12} color="#FFF" />
-                  </View>
-                )}
+                {small1.is_video && <View style={styles.videoIcon}><Ionicons name="play" size={12} color="#FFF" /></View>}
               </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.gridItemSmall, { width: SMALL_SIZE, height: SMALL_SIZE, marginTop: GRID_GAP }]}
-                onPress={() => router.push(`/(main)/post/${small2.id}`)}
+                onPress={() => small2.is_video
+                  ? router.push({ pathname: '/(main)/reels', params: { postId: small2.id } })
+                  : router.push(`/(main)/post/${small2.id}`)
+                }
               >
                 <OptimizedImage uri={getMediaUrl(small2.media)} width={SMALL_SIZE} height={SMALL_SIZE} />
-                {small2.is_video && (
-                  <View style={styles.videoIcon}>
-                    <Ionicons name="play" size={12} color="#FFF" />
-                  </View>
-                )}
+                {small2.is_video && <View style={styles.videoIcon}><Ionicons name="play" size={12} color="#FFF" /></View>}
               </TouchableOpacity>
             </View>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.gridItemLarge, { width: LARGE_SIZE, height: LARGE_SIZE, marginLeft: GRID_GAP }]}
-              onPress={() => router.push(`/(main)/post/${large.id}`)}
+              onPress={() => large.is_video
+                ? router.push({ pathname: '/(main)/reels', params: { postId: large.id } })
+                : router.push(`/(main)/post/${large.id}`)
+              }
             >
               <OptimizedImage uri={getMediaUrl(large.media)} width={LARGE_SIZE} height={LARGE_SIZE} />
-              {large.is_video && (
-                <View style={styles.videoIcon}>
-                  <Ionicons name="play" size={16} color="#FFF" />
-                </View>
-              )}
+              {large.is_video && <View style={styles.videoIcon}><Ionicons name="play" size={16} color="#FFF" /></View>}
             </TouchableOpacity>
           </View>
         );
         i += 3;
       } else {
-        // Remaining items: just show as small grid
-        const remaining = explorePosts.slice(i);
+        const remaining = data.slice(i);
         rows.push(
           <View key={`row-${rowIndex}`} style={styles.gridRowSmall}>
             {remaining.map((item, idx) => (
-              <TouchableOpacity 
+              <TouchableOpacity
                 key={item.id}
                 style={[styles.gridItemSmall, { width: SMALL_SIZE, height: SMALL_SIZE, marginLeft: idx > 0 ? GRID_GAP : 0 }]}
-                onPress={() => router.push(`/(main)/post/${item.id}`)}
+                onPress={() => item.is_video
+                  ? router.push({ pathname: '/(main)/reels', params: { postId: item.id } })
+                  : router.push(`/(main)/post/${item.id}`)
+                }
               >
                 <OptimizedImage uri={getMediaUrl(item.media)} width={SMALL_SIZE} height={SMALL_SIZE} />
-                {item.is_video && (
-                  <View style={styles.videoIcon}>
-                    <Ionicons name="play" size={12} color="#FFF" />
-                  </View>
-                )}
+                {item.is_video && <View style={styles.videoIcon}><Ionicons name="play" size={12} color="#FFF" /></View>}
               </TouchableOpacity>
             ))}
           </View>
@@ -227,6 +271,9 @@ export default function SearchScreen() {
     }
     return rows;
   };
+
+  // Show suggestions overlay when search bar is focused but empty
+  const showSuggestions = isFocused && query.length === 0 && !hasSearched;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -239,23 +286,79 @@ export default function SearchScreen() {
           <Ionicons name="search" size={18} color="#888" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Cerca..."
+            placeholder="Cerca utenti, danza..."
             placeholderTextColor="#666"
             value={query}
             onChangeText={handleSearch}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setTimeout(() => setIsFocused(false), 200)}
             returnKeyType="search"
             data-testid="search-input"
           />
           {query.length > 0 && (
-            <TouchableOpacity onPress={() => { setQuery(''); setResults([]); setHasSearched(false); }}>
+            <TouchableOpacity onPress={() => { setQuery(''); setResults([]); setHasSearched(false); }} data-testid="search-clear-btn">
               <Ionicons name="close-circle" size={18} color="#666" />
             </TouchableOpacity>
           )}
         </View>
       </View>
 
+      {/* Category Chips - Instagram style */}
+      {!hasSearched && !showSuggestions && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoryBar}
+          contentContainerStyle={styles.categoryContent}
+        >
+          {categories.map(cat => (
+            <TouchableOpacity
+              key={cat.id}
+              style={[styles.categoryChip, selectedCategory === cat.id && styles.categoryChipActive]}
+              onPress={() => handleCategoryPress(cat.id)}
+              data-testid={`category-chip-${cat.id}`}
+            >
+              <Text style={[styles.categoryChipText, selectedCategory === cat.id && styles.categoryChipTextActive]}>
+                {cat.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
+
+      {/* Suggestions overlay - shows when search is focused but empty */}
+      {showSuggestions && suggestedUsers.length > 0 && (
+        <View style={styles.suggestionsContainer}>
+          <Text style={styles.suggestionsTitle}>Suggeriti per te</Text>
+          {suggestedUsers.map(user => (
+            <TouchableOpacity
+              key={user.id}
+              style={styles.suggestionRow}
+              onPress={() => {
+                setIsFocused(false);
+                router.push(`/(main)/user/${user.id}`);
+              }}
+              data-testid={`suggestion-${user.id}`}
+            >
+              <View style={styles.userAvatar}>
+                {user.profile_image ? (
+                  <Image source={{ uri: getMediaUrl(user.profile_image) || '' }} style={styles.avatarImg} />
+                ) : (
+                  <Ionicons name="person" size={22} color="#666" />
+                )}
+              </View>
+              <View style={styles.userInfo}>
+                <Text style={styles.userName}>{user.username}</Text>
+                <Text style={styles.userFullName}>{user.name}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#444" />
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       {/* Search Results */}
-      {isLoading ? (
+      {isSearching ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
@@ -291,9 +394,9 @@ export default function SearchScreen() {
             )}
           />
         )
-      ) : (
+      ) : !showSuggestions ? (
         /* Explore Grid - Instagram Style */
-        <ScrollView 
+        <ScrollView
           style={styles.exploreContainer}
           showsVerticalScrollIndicator={false}
         >
@@ -301,7 +404,7 @@ export default function SearchScreen() {
             <View style={styles.centered}>
               <ActivityIndicator size="large" color={Colors.primary} />
             </View>
-          ) : explorePosts.length === 0 ? (
+          ) : filteredPosts.length === 0 ? (
             <View style={styles.centered}>
               <Ionicons name="images-outline" size={48} color="#444" />
               <Text style={styles.emptyText}>Nessun contenuto da esplorare</Text>
@@ -310,7 +413,7 @@ export default function SearchScreen() {
             renderExploreGrid()
           )}
         </ScrollView>
-      )}
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -322,26 +425,69 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, color: '#FFF', fontSize: 15 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12, minHeight: 200 },
   emptyText: { color: '#666', fontSize: 15 },
+
+  // Category chips
+  categoryBar: { maxHeight: 44, paddingBottom: 4 },
+  categoryContent: { paddingHorizontal: 12, gap: 8, alignItems: 'center' },
+  categoryChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#1C1C1E',
+    marginRight: 8,
+  },
+  categoryChipActive: {
+    backgroundColor: Colors.primary,
+  },
+  categoryChipText: {
+    color: '#CCC',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  categoryChipTextActive: {
+    color: '#FFF',
+  },
+
+  // Suggestions
+  suggestionsContainer: {
+    flex: 1,
+    paddingTop: 8,
+  },
+  suggestionsTitle: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  suggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+
+  // User rows (search results + suggestions)
   userRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: '#1C1C1E' },
   userAvatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#1C1C1E', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   avatarImg: { width: '100%', height: '100%' },
   userInfo: { flex: 1, marginLeft: 14 },
   userName: { color: '#FFF', fontWeight: '700', fontSize: 15 },
   userFullName: { color: '#888', fontSize: 13, marginTop: 2 },
-  
-  // Explore Grid Styles
+
+  // Explore Grid
   exploreContainer: { flex: 1 },
   gridRow: { flexDirection: 'row', marginTop: GRID_GAP },
   gridRowSmall: { flexDirection: 'row', marginTop: GRID_GAP },
   gridItemLarge: { overflow: 'hidden', backgroundColor: '#1a1a1a' },
   gridItemSmall: { overflow: 'hidden', backgroundColor: '#1a1a1a' },
   smallColumn: { marginLeft: GRID_GAP },
-  videoIcon: { 
-    position: 'absolute', 
-    top: 8, 
-    right: 8, 
-    backgroundColor: 'rgba(0,0,0,0.5)', 
-    borderRadius: 4, 
+  videoIcon: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 4,
     padding: 4,
   },
 });
