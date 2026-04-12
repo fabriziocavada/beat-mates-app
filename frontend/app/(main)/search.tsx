@@ -39,7 +39,7 @@ export default function SearchScreen() {
   const [explorePosts, setExplorePosts] = useState<ExplorePost[]>([]);
   const [isLoadingExplore, setIsLoadingExplore] = useState(true);
 
-  const debounceRef = React.useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load explore posts on mount
   useEffect(() => {
@@ -79,7 +79,7 @@ export default function SearchScreen() {
 
   // Render Instagram-style grid pattern (1 large + 2 small, then 3 small, repeat)
   const renderExploreGrid = () => {
-    const rows: JSX.Element[] = [];
+    const rows: React.ReactElement[] = [];
     let i = 0;
     let rowIndex = 0;
 
