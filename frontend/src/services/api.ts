@@ -127,19 +127,23 @@ function extractBunnyGuid(url: string): string | null {
   return match ? match[1] : null;
 }
 
-// Convert Bunny Stream embed URL to direct HLS playback URL (for expo-av)
+// Convert any media URL to a direct playable URL for expo-av
 export function getDirectVideoUrl(url: string | null | undefined): string | null {
   if (!url) return null;
   
-  // If it's a Bunny Stream embed URL, convert to direct HLS
+  // Bunny Stream embed URLs can't be played directly (403 on HLS)
+  // Extract GUID and try Bunny Storage fallback, or use getMediaUrl
   if (isBunnyStreamEmbed(url)) {
-    const guid = extractBunnyGuid(url);
-    if (guid) {
-      return `${BUNNY_STREAM_DIRECT}/${guid}/playlist.m3u8`;
-    }
+    // Fall back to server-side proxy or original media URL
+    return getMediaUrl(url);
   }
   
-  // If it's already a direct URL (mp4, m3u8, etc.), resolve it normally
+  // Bunny Storage .mp4 - directly playable!
+  if (url.includes('b-cdn.net') && (url.includes('.mp4') || url.includes('.mov'))) {
+    return url;
+  }
+  
+  // Any other URL (local paths, etc)
   return getMediaUrl(url);
 }
 

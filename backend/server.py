@@ -2175,28 +2175,25 @@ async def upload_file(
     
     # ========== BUNNY CDN UPLOAD ==========
     if is_video:
-        # Upload video to Bunny Stream for global HLS delivery
-        logger.info(f"Uploading video to Bunny Stream: {filename} ({len(content)} bytes)")
-        bunny_result = await upload_video_to_bunny_stream(content, filename)
+        # Upload video to Bunny Storage as direct .mp4 for global CDN delivery
+        # (Bunny Stream HLS requires token auth which breaks expo-av playback)
+        logger.info(f"Uploading video to Bunny Storage: {filename} ({len(content)} bytes)")
+        cdn_url = await upload_image_to_bunny_storage(content, filename)
         
-        if bunny_result:
-            # Video uploaded to Bunny Stream successfully
+        if cdn_url:
             return {
-                "url": bunny_result["embed_url"],
+                "url": cdn_url,
                 "filename": filename,
                 "media_type": "video",
-                "thumbnail": None,  # Bunny generates thumbnails automatically
-                "bunny_guid": bunny_result["guid"],
-                "bunny_status": bunny_result["status"],
-                "cdn_type": "bunny_stream"
+                "thumbnail": None,
+                "cdn_type": "bunny_storage"
             }
         else:
             # Fallback to local storage if Bunny fails
-            logger.warning("Bunny Stream upload failed, falling back to local storage")
+            logger.warning("Bunny Storage upload failed, falling back to local storage")
             filepath = UPLOADS_DIR / filename
             with open(filepath, 'wb') as f:
                 f.write(content)
-            # Compress locally
             compressed_filename = await asyncio.to_thread(compress_video, str(filepath))
             return {
                 "url": f"/api/uploads/{compressed_filename}",
@@ -3877,6 +3874,71 @@ async def migrate_all_media_to_cdn():
                     results["images_migrated"] += 1
             except Exception as e:
                 results["errors"].append(f"User img error {filename}: {str(e)}")
+    
+    return results
+
+# Fix endpoint: re-migrate Bunny Stream embed URLs to Bunny Storage mp4
+@app.post("/api/admin/fix-stream-videos")
+async def fix_stream_videos():
+    """Convert Bunny Stream embed URLs to direct Bunny Storage mp4 URLs.
+    Downloads from VPS local files and re-uploads to Storage."""
+    results = {"fixed": 0, "errors": []}
+    
+    # Find all posts/stories with embed URLs
+    posts = await db.posts.find({"media": {"$regex": "iframe.mediadelivery.net"}}).to_list(100)
+    for post in posts:
+        media = post.get("media", "")
+        # Extract original filename from media_urls if available
+        media_urls = post.get("media_urls", []) or []
+        
+        # Try to find the local file
+        local_file = None
+        for url in media_urls:
+            if url and "/api/uploads/" in url and (".mp4" in url or ".mov" in url):
+                fn = url.replace("/api/uploads/", "")
+                fp = UPLOADS_DIR / fn
+                if fp.exists():
+                    local_file = fp
+                    break
+        
+        if not local_file:
+            # Try to find any mp4 in uploads that matches this post
+            results["errors"].append(f"No local file for post {post['id']}")
+            continue
+        
+        try:
+            content = local_file.read_bytes()
+            cdn_url = await upload_image_to_bunny_storage(content, local_file.name)
+            if cdn_url:
+                update = {"$set": {"media": cdn_url}}
+                # Also update media_urls
+                new_urls = [cdn_url if ("/api/uploads/" in u and (".mp4" in u or ".mov" in u)) else u for u in media_urls]
+                update["$set"]["media_urls"] = new_urls
+                await db.posts.update_one({"id": post["id"]}, update)
+                results["fixed"] += 1
+                logger.info(f"Fixed stream video for post {post['id']} -> {cdn_url}")
+        except Exception as e:
+            results["errors"].append(f"Error fixing {post['id']}: {str(e)}")
+    
+    # Same for stories
+    stories = await db.stories.find({"media": {"$regex": "iframe.mediadelivery.net"}}).to_list(100)
+    for story in stories:
+        media = story.get("media", "")
+        # Stories don't have media_urls, try to find by story id
+        story_id = story["id"]
+        possible_files = list(UPLOADS_DIR.glob(f"*{story_id}*")) + list(UPLOADS_DIR.glob("*.mp4"))
+        
+        for fp in possible_files:
+            if fp.exists() and fp.suffix in ['.mp4', '.mov']:
+                try:
+                    content = fp.read_bytes()
+                    cdn_url = await upload_image_to_bunny_storage(content, fp.name)
+                    if cdn_url:
+                        await db.stories.update_one({"id": story_id}, {"$set": {"media": cdn_url}})
+                        results["fixed"] += 1
+                        break
+                except:
+                    pass
     
     return results
 
