@@ -218,11 +218,12 @@ export default function ReelsScreen() {
         })
         .map((p: any) => {
           let media = p.media;
-          // If post has media_urls, find the video one
-          if (p.media_urls && p.media_urls.length > 0) {
+          // Use media field directly - it has the correct CDN URL
+          // Only check media_urls if media is missing
+          if (!media && p.media_urls && p.media_urls.length > 0) {
             const videoUrl = p.media_urls.find((url: string) => {
               const l = url.toLowerCase();
-              return l.includes('.mp4') || l.includes('.mov') || l.includes('.webm') || l.includes('video') || l.includes('mediadelivery.net');
+              return l.includes('.mp4') || l.includes('.mov') || l.includes('.webm');
             });
             if (videoUrl) media = videoUrl;
           }
