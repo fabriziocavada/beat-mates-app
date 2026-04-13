@@ -116,9 +116,25 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
   // Share modal state
   const [showShareModal, setShowShareModal] = useState(false);
 
-  const mediaUrls = (post.media_urls && post.media_urls.length > 0)
-    ? post.media_urls
-    : (post.media ? [post.media] : []);
+  // Build media URLs list - prefer 'media' field for videos (has correct CDN URL)
+  // media_urls may contain stale embed URLs from Bunny Stream
+  const mediaUrls = (() => {
+    const urls = (post.media_urls && post.media_urls.length > 0) ? post.media_urls : [];
+    // If post has a direct media field, use it as primary
+    if (post.media && urls.length <= 1) {
+      return [post.media];
+    }
+    // For carousels, replace any broken embed URLs with the media field
+    if (urls.length > 1) {
+      return urls.map(u => {
+        if (u && u.includes('iframe.mediadelivery.net') && post.media && !post.media.includes('iframe.mediadelivery.net')) {
+          return post.media;
+        }
+        return u;
+      });
+    }
+    return post.media ? [post.media] : [];
+  })();
   const isCarousel = mediaUrls.length > 1;
   const mediaHeight = Math.min(SCREEN_WIDTH * 1.25, 500);
   const isOwner = currentUserId === post.user_id;
