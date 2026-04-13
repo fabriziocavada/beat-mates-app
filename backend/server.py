@@ -3942,7 +3942,77 @@ async def fix_stream_videos():
     
     return results
 
-app.add_middleware(
+# Fix: Download video from Bunny Stream and re-upload to Bunny Storage
+@app.post("/api/admin/fix-stream-to-storage")
+async def fix_stream_to_storage():
+    """Download videos from Bunny Stream API and re-upload as .mp4 to Bunny Storage."""
+    import re as re_mod
+    results = {"fixed": 0, "errors": []}
+    
+    posts = await db.posts.find({"media": {"$regex": "iframe.mediadelivery.net"}}).to_list(100)
+    
+    for post in posts:
+        media = post.get("media", "")
+        post_id = post["id"]
+        
+        match = re_mod.search(r'embed/\d+/([a-f0-9-]+)', media)
+        if not match:
+            results["errors"].append(f"No GUID in {media}")
+            continue
+        
+        guid = match.group(1)
+        logger.info(f"Downloading video {guid} from Bunny Stream for post {post_id}")
+        
+        try:
+            async with httpx.AsyncClient(timeout=300.0) as hc:
+                info_resp = await hc.get(
+                    f"{BUNNY_STREAM_API_URL}/library/{BUNNY_STREAM_LIBRARY_ID}/videos/{guid}",
+                    headers={"AccessKey": BUNNY_STREAM_API_KEY}
+                )
+                if info_resp.status_code != 200:
+                    results["errors"].append(f"Can't get info for {guid}")
+                    continue
+                
+                video_info = info_resp.json()
+                original_name = video_info.get("title", f"{guid}.mp4")
+                if not original_name.endswith('.mp4'):
+                    original_name += '.mp4'
+                
+                # Try downloading from Bunny Stream
+                video_content = None
+                for dl_url in [
+                    f"{BUNNY_STREAM_API_URL}/library/{BUNNY_STREAM_LIBRARY_ID}/videos/{guid}/play",
+                    f"https://vz-{BUNNY_STREAM_LIBRARY_ID}.b-cdn.net/{guid}/original",
+                ]:
+                    try:
+                        dl_resp = await hc.get(dl_url, headers={"AccessKey": BUNNY_STREAM_API_KEY, "Referer": "https://iframe.mediadelivery.net/"}, follow_redirects=True)
+                        if dl_resp.status_code == 200 and len(dl_resp.content) > 10000:
+                            video_content = dl_resp.content
+                            break
+                    except:
+                        continue
+                
+                if not video_content:
+                    results["errors"].append(f"Download failed for {guid}")
+                    continue
+                
+                logger.info(f"Downloaded {len(video_content)/1024/1024:.1f}MB for {guid}")
+                
+                cdn_url = await upload_image_to_bunny_storage(video_content, original_name)
+                if cdn_url:
+                    new_media_urls = [cdn_url if "iframe.mediadelivery.net" in u else u for u in (post.get("media_urls") or [])]
+                    if not new_media_urls:
+                        new_media_urls = [cdn_url]
+                    
+                    await db.posts.update_one({"id": post_id}, {"$set": {"media": cdn_url, "media_urls": new_media_urls}})
+                    results["fixed"] += 1
+                    logger.info(f"Fixed post {post_id}: {cdn_url}")
+                else:
+                    results["errors"].append(f"Storage upload failed for {guid}")
+        except Exception as e:
+            results["errors"].append(f"Error for {post_id}: {str(e)}")
+    
+    return results
     CORSMiddleware,
     allow_credentials=True,
     allow_origins=["*"],
