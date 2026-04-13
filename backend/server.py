@@ -4013,6 +4013,8 @@ async def fix_stream_to_storage():
             results["errors"].append(f"Error for {post_id}: {str(e)}")
     
     return results
+
+app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
     allow_origins=["*"],
