@@ -1,0 +1,6 @@
+ios/
+android/
+.expo/
+.git/
+__tests__/
+*.test.*
