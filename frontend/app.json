@@ -14,7 +14,7 @@
         "NSCameraUsageDescription": "Serve per le videolezioni live",
         "NSMicrophoneUsageDescription": "Serve per le videolezioni live"
       },
-      "bundleIdentifier": "com.anonymous.frontend"
+      "bundleIdentifier": "com.beatmates.app"
     },
     "android": {
       "adaptiveIcon": {
