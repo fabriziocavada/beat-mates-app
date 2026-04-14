@@ -49,8 +49,7 @@
         }
       ],
       "expo-secure-store",
-      "expo-video",
-      "react-native-compressor"
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true
