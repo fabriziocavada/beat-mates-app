@@ -4115,6 +4115,8 @@ async def compress_cdn_videos():
             results["errors"].append(f"Error {post_id}: {str(e)}")
     
     return results
+
+app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
     allow_origins=["*"],
