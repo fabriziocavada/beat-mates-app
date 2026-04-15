@@ -1193,91 +1193,57 @@ async def create_story(data: StoryCreate, current_user: dict = Depends(get_curre
     
     created_stories = []
     
-    # For videos: compress, generate thumbnails, upload to CDN
+    # For videos: generate thumbnail (video already compressed by /api/upload)
     if data.type == "video" and media_value:
         try:
             import asyncio as _asyncio
             
-            video_content = None
-            video_filename = None
+            seg_id = str(uuid.uuid4())
+            thumb_cdn_url = None
             
-            # If media is a CDN URL, download it first
+            # Download just enough to generate thumbnail
             if media_value.startswith("http"):
-                logger.info(f"Story video on CDN, downloading for processing: {media_value[:60]}")
-                async with httpx.AsyncClient(timeout=120.0) as hc:
+                logger.info(f"Generating thumbnail for story video: {media_value[:60]}")
+                async with httpx.AsyncClient(timeout=60.0) as hc:
                     resp = await hc.get(media_value, follow_redirects=True)
                     if resp.status_code == 200:
                         video_content = resp.content
-                        video_filename = media_value.split("/")[-1]
-                        if not video_filename.endswith('.mp4'):
-                            video_filename += '.mp4'
-            elif media_value.startswith("/api/uploads/"):
-                video_filename = media_value.replace("/api/uploads/", "")
-                video_path = UPLOADS_DIR / video_filename
-                if video_path.exists():
-                    video_content = video_path.read_bytes()
+                        temp_vid = str(UPLOADS_DIR / f"thumb_input_{seg_id}.mp4")
+                        thumb_path = str(UPLOADS_DIR / f"thumb_{seg_id}.jpg")
+                        
+                        with open(temp_vid, 'wb') as f:
+                            f.write(video_content)
+                        
+                        if generate_video_thumbnail(temp_vid, thumb_path):
+                            if os.path.exists(thumb_path):
+                                thumb_content = open(thumb_path, 'rb').read()
+                                thumb_cdn_url = await upload_image_to_bunny_storage(thumb_content, f"thumb_{seg_id}.jpg")
+                                try: os.remove(thumb_path)
+                                except: pass
+                        
+                        try: os.remove(temp_vid)
+                        except: pass
             
-            if video_content and video_filename:
-                # Save to temp file for ffmpeg processing
-                temp_input = str(UPLOADS_DIR / f"story_input_{video_filename}")
-                with open(temp_input, 'wb') as f:
-                    f.write(video_content)
-                
-                original_size = len(video_content)
-                logger.info(f"Story video: {original_size//1024}KB, compressing...")
-                
-                # Compress
-                compressed_name = await _asyncio.to_thread(compress_video, temp_input)
-                compressed_path = UPLOADS_DIR / compressed_name
-                
-                # Generate thumbnail
-                seg_id = str(uuid.uuid4())
-                thumb_filename = f"thumb_{seg_id}.jpg"
-                thumb_path = str(UPLOADS_DIR / thumb_filename)
-                thumb_cdn_url = None
-                
-                if compressed_path.exists():
-                    if generate_video_thumbnail(str(compressed_path), thumb_path):
-                        if os.path.exists(thumb_path):
-                            thumb_content = open(thumb_path, 'rb').read()
-                            thumb_cdn_url = await upload_image_to_bunny_storage(thumb_content, thumb_filename)
-                            try: os.remove(thumb_path)
-                            except: pass
-                    
-                    # Upload compressed video to CDN
-                    comp_content = compressed_path.read_bytes()
-                    cdn_url = await upload_image_to_bunny_storage(comp_content, video_filename)
-                    new_size = len(comp_content)
-                    logger.info(f"Story compressed: {original_size//1024}KB -> {new_size//1024}KB")
-                    
-                    try:
-                        compressed_path.unlink(missing_ok=True)
-                    except: pass
-                    
-                    final_media = cdn_url or media_value
-                else:
-                    final_media = media_value
-                
-                story = {
-                    "id": seg_id,
-                    "user_id": current_user["id"],
-                    "media": final_media,
-                    "thumbnail": thumb_cdn_url,
-                    "type": "video",
-                    "views_count": 0,
-                    "editor_data": data.editor_data,
-                    "created_at": now,
-                    "expires_at": now + timedelta(hours=24),
-                }
-                await db.stories.insert_one(story)
-                story.pop("_id", None)
-                story["user"] = {
-                    "id": current_user["id"],
-                    "username": current_user["username"],
-                    "name": current_user["name"],
-                    "profile_image": current_user.get("profile_image"),
-                }
-                created_stories.append(story)
+            story = {
+                "id": seg_id,
+                "user_id": current_user["id"],
+                "media": media_value,
+                "thumbnail": thumb_cdn_url,
+                "type": "video",
+                "views_count": 0,
+                "editor_data": data.editor_data,
+                "created_at": now,
+                "expires_at": now + timedelta(hours=24),
+            }
+            await db.stories.insert_one(story)
+            story.pop("_id", None)
+            story["user"] = {
+                "id": current_user["id"],
+                "username": current_user["username"],
+                "name": current_user["name"],
+                "profile_image": current_user.get("profile_image"),
+            }
+            created_stories.append(story)
         except Exception as e:
             logger.error(f"Story video processing failed: {e}")
     
