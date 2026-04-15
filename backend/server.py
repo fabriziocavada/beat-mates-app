@@ -2105,14 +2105,17 @@ def convert_video_to_mp4(input_path: str, output_path: str) -> bool:
         return False
 
 def compress_video(input_path: str) -> str:
-    """ALWAYS re-encode video to web-compatible H.264 8-bit Main profile."""
+    """ALWAYS re-encode video to web-compatible H.264 8-bit Main profile.
+    Target: 720p max, ~1-2MB for 10-15s clips (TikTok/Instagram level)."""
     try:
         file_size = os.path.getsize(input_path)
         base = os.path.splitext(input_path)[0]
         output_path = f"{base}_web.mp4"
         
-        # Use CRF based on file size for quality/size balance
-        crf = '28' if file_size > 3 * 1024 * 1024 else '23'
+        # Aggressive compression for social media
+        # CRF 30 = good quality for mobile, much smaller files
+        # Scale to 720p max height, preserve aspect ratio
+        crf = '30'
         
         cmd = [
             FFMPEG_PATH, '-y', '-i', input_path,
@@ -2121,19 +2124,20 @@ def compress_video(input_path: str) -> str:
             '-preset', 'fast', '-crf', crf,
             '-c:a', 'aac', '-b:a', '64k',
             '-movflags', '+faststart',
-            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+            '-vf', 'scale=-2:min(720\\,ih)',
             output_path
         ]
         result = subprocess.run(cmd, capture_output=True, timeout=180)
         
         if result.returncode == 0 and os.path.exists(output_path):
+            new_size = os.path.getsize(output_path)
             os.remove(input_path)
             new_name = os.path.basename(input_path)
             new_path = os.path.join(os.path.dirname(output_path), new_name)
             os.rename(output_path, new_path)
-            logger.info(f"Re-encoded video from {file_size//1024}KB to {os.path.getsize(new_path)//1024}KB (web-compatible H.264 8-bit)")
+            logger.info(f"Compressed video: {file_size//1024}KB -> {new_size//1024}KB ({new_size*100//file_size}%)")
             return new_name
-        logger.warning(f"Video re-encode failed (returncode={result.returncode}), keeping original. stderr: {result.stderr[:500] if result.stderr else 'none'}")
+        logger.warning(f"Video compression failed (rc={result.returncode}). stderr: {result.stderr[:500] if result.stderr else 'none'}")
         return os.path.basename(input_path)
     except Exception as e:
         logger.error(f"Video compression failed: {e}")
