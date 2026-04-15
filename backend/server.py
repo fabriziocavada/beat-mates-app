@@ -2124,7 +2124,7 @@ def compress_video(input_path: str) -> str:
             '-preset', 'fast', '-crf', crf,
             '-c:a', 'aac', '-b:a', '64k',
             '-movflags', '+faststart',
-            '-vf', 'scale=-2:min(720\\,ih)',
+            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
             output_path
         ]
         result = subprocess.run(cmd, capture_output=True, timeout=180)
@@ -4096,7 +4096,7 @@ async def compress_cdn_videos():
                 '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', '30',
                 '-c:a', 'aac', '-b:a', '64k',
                 '-movflags', '+faststart',
-                '-vf', 'scale=trunc(iw/2)*2:min(720,trunc(ih/2)*2)',
+                '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
                 output_path
             ]
             proc = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, timeout=180)
