@@ -4153,6 +4153,72 @@ async def fix_media_urls():
             results["fixed"] += 1
     return results
 
+# Generate thumbnails for video stories that don't have one
+@app.post("/api/admin/generate-story-thumbnails")
+async def generate_story_thumbnails():
+    """Generate poster thumbnails for video stories using ffmpeg."""
+    results = {"generated": 0, "errors": []}
+    
+    stories = await db.stories.find({"type": "video", "thumbnail": None}).to_list(500)
+    stories += await db.stories.find({"type": "video", "thumbnail": {"$exists": False}}).to_list(500)
+    
+    # Deduplicate
+    seen = set()
+    unique_stories = []
+    for s in stories:
+        if s["id"] not in seen:
+            seen.add(s["id"])
+            unique_stories.append(s)
+    
+    for story in unique_stories:
+        media = story.get("media", "") or ""
+        story_id = story["id"]
+        if not media or "b-cdn.net" not in media:
+            continue
+        
+        try:
+            # Download first 2MB of video (enough for first frame)
+            async with httpx.AsyncClient(timeout=30.0) as hc:
+                resp = await hc.get(media, follow_redirects=True)
+                if resp.status_code != 200:
+                    continue
+                content = resp.content
+            
+            # Save temp video
+            temp_vid = str(UPLOADS_DIR / f"thumb_input_{story_id}.mp4")
+            thumb_path = str(UPLOADS_DIR / f"thumb_{story_id}.jpg")
+            with open(temp_vid, 'wb') as f:
+                f.write(content)
+            
+            # Extract first frame with ffmpeg
+            cmd = [
+                FFMPEG_PATH, '-y', '-i', temp_vid,
+                '-vframes', '1', '-an', '-ss', '0.1',
+                '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+                '-q:v', '5',
+                thumb_path
+            ]
+            proc = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, timeout=30)
+            
+            if proc.returncode == 0 and os.path.exists(thumb_path):
+                thumb_content = open(thumb_path, 'rb').read()
+                thumb_filename = f"thumb_{story_id}.jpg"
+                cdn_url = await upload_image_to_bunny_storage(thumb_content, thumb_filename)
+                if cdn_url:
+                    await db.stories.update_one({"id": story_id}, {"$set": {"thumbnail": cdn_url}})
+                    results["generated"] += 1
+            
+            # Cleanup
+            for p in [temp_vid, thumb_path]:
+                try:
+                    os.remove(p)
+                except:
+                    pass
+        except Exception as e:
+            results["errors"].append(f"{story_id}: {str(e)}")
+    
+    return results
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
