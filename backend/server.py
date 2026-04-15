@@ -4116,8 +4116,8 @@ async def compress_cdn_videos():
                 else:
                     results["errors"].append(f"Upload failed for {post_id}")
             else:
-                stderr = proc.stderr.decode(errors='replace')[:200] if proc.stderr else ''
-                results["errors"].append(f"FFmpeg failed {post_id}: {stderr}")
+                stderr = proc.stderr.decode(errors='replace')[-500:] if proc.stderr else ''
+                results["errors"].append(f"FFmpeg failed {post_id}: rc={proc.returncode} err={stderr}")
             
             # Cleanup
             for p in [input_path, output_path]:
