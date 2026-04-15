@@ -2175,11 +2175,47 @@ async def upload_file(
     
     # ========== BUNNY CDN UPLOAD ==========
     if is_video:
-        # Upload video to Bunny Storage as direct .mp4 for global CDN delivery
-        # (Bunny Stream HLS requires token auth which breaks expo-av playback)
-        logger.info(f"Uploading video to Bunny Storage: {filename} ({len(content)} bytes)")
-        cdn_url = await upload_image_to_bunny_storage(content, filename)
+        # COMPRESS video with ffmpeg BEFORE uploading to CDN
+        # Save to temp file, compress, then upload compressed version
+        logger.info(f"Compressing video before CDN upload: {filename} ({len(content)} bytes)")
+        temp_input = UPLOADS_DIR / f"temp_{filename}"
+        with open(temp_input, 'wb') as f:
+            f.write(content)
         
+        try:
+            compressed_name = await asyncio.to_thread(compress_video, str(temp_input))
+            compressed_path = UPLOADS_DIR / compressed_name
+            if compressed_path.exists():
+                compressed_content = compressed_path.read_bytes()
+                logger.info(f"Compressed: {len(content)} -> {len(compressed_content)} bytes ({len(compressed_content)*100//len(content)}%)")
+                # Upload compressed version to Bunny CDN
+                cdn_url = await upload_image_to_bunny_storage(compressed_content, filename)
+                # Clean up local files
+                try:
+                    compressed_path.unlink(missing_ok=True)
+                    temp_input.unlink(missing_ok=True)
+                except:
+                    pass
+                
+                if cdn_url:
+                    return {
+                        "url": cdn_url,
+                        "filename": filename,
+                        "media_type": "video",
+                        "thumbnail": None,
+                        "cdn_type": "bunny_storage"
+                    }
+        except Exception as e:
+            logger.error(f"Video compression failed: {e}")
+            # Clean up
+            try:
+                temp_input.unlink(missing_ok=True)
+            except:
+                pass
+        
+        # Fallback: upload raw if compression failed
+        logger.warning("Compression failed, uploading raw video to CDN")
+        cdn_url = await upload_image_to_bunny_storage(content, filename)
         if cdn_url:
             return {
                 "url": cdn_url,
@@ -2188,20 +2224,18 @@ async def upload_file(
                 "thumbnail": None,
                 "cdn_type": "bunny_storage"
             }
-        else:
-            # Fallback to local storage if Bunny fails
-            logger.warning("Bunny Storage upload failed, falling back to local storage")
-            filepath = UPLOADS_DIR / filename
-            with open(filepath, 'wb') as f:
-                f.write(content)
-            compressed_filename = await asyncio.to_thread(compress_video, str(filepath))
-            return {
-                "url": f"/api/uploads/{compressed_filename}",
-                "filename": compressed_filename,
-                "media_type": "video",
-                "thumbnail": None,
-                "cdn_type": "local"
-            }
+        
+        # Final fallback: local storage
+        filepath = UPLOADS_DIR / filename
+        with open(filepath, 'wb') as f:
+            f.write(content)
+        return {
+            "url": f"/api/uploads/{filename}",
+            "filename": filename,
+            "media_type": "video",
+            "thumbnail": None,
+            "cdn_type": "local"
+        }
     else:
         # Upload image to Bunny Storage for global CDN delivery
         logger.info(f"Uploading image to Bunny Storage: {filename} ({len(content)} bytes)")
@@ -4014,7 +4048,73 @@ async def fix_stream_to_storage():
     
     return results
 
-app.add_middleware(
+# Compress existing CDN videos that are too large and re-upload
+@app.post("/api/admin/compress-cdn-videos")
+async def compress_cdn_videos():
+    """Download large videos from CDN, compress with ffmpeg, re-upload."""
+    results = {"compressed": 0, "skipped": 0, "errors": []}
+    MAX_SIZE = 3 * 1024 * 1024  # 3MB threshold
+    
+    posts = await db.posts.find({"type": "video"}).to_list(100)
+    for post in posts:
+        media = post.get("media", "") or ""
+        if "b-cdn.net" not in media or ".mp4" not in media:
+            continue
+        
+        post_id = post["id"]
+        try:
+            # Check file size via HEAD request
+            async with httpx.AsyncClient(timeout=30.0) as hc:
+                head = await hc.head(media)
+                size = int(head.headers.get("content-length", 0))
+                
+                if size <= MAX_SIZE:
+                    results["skipped"] += 1
+                    logger.info(f"Skip {post_id}: {size//1024}KB <= {MAX_SIZE//1024}KB")
+                    continue
+                
+                logger.info(f"Compressing {post_id}: {size//1024}KB > {MAX_SIZE//1024}KB")
+                
+                # Download video
+                resp = await hc.get(media, follow_redirects=True)
+                if resp.status_code != 200:
+                    results["errors"].append(f"Download failed {post_id}: {resp.status_code}")
+                    continue
+                
+                content = resp.content
+            
+            # Save, compress, upload
+            filename = media.split("/")[-1]
+            temp_path = UPLOADS_DIR / f"recompress_{filename}"
+            temp_path.write_bytes(content)
+            
+            compressed_name = await asyncio.to_thread(compress_video, str(temp_path))
+            compressed_path = UPLOADS_DIR / compressed_name
+            
+            if compressed_path.exists():
+                new_content = compressed_path.read_bytes()
+                new_size = len(new_content)
+                logger.info(f"Compressed {post_id}: {size//1024}KB -> {new_size//1024}KB")
+                
+                # Re-upload to same filename on CDN
+                cdn_url = await upload_image_to_bunny_storage(new_content, filename)
+                if cdn_url:
+                    results["compressed"] += 1
+                
+                # Cleanup
+                try:
+                    compressed_path.unlink(missing_ok=True)
+                    temp_path.unlink(missing_ok=True)
+                except:
+                    pass
+            else:
+                results["errors"].append(f"Compression produced no output for {post_id}")
+                temp_path.unlink(missing_ok=True)
+                
+        except Exception as e:
+            results["errors"].append(f"Error {post_id}: {str(e)}")
+    
+    return results
     CORSMiddleware,
     allow_credentials=True,
     allow_origins=["*"],
