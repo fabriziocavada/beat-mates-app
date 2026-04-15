@@ -1193,39 +1193,79 @@ async def create_story(data: StoryCreate, current_user: dict = Depends(get_curre
     
     created_stories = []
     
-    # For videos: split into 60s segments if needed, compress, generate thumbnails
-    if data.type == "video" and media_value and media_value.startswith("/api/uploads/"):
-        video_filename = media_value.replace("/api/uploads/", "")
-        video_path = UPLOADS_DIR / video_filename
-        
+    # For videos: compress, generate thumbnails, upload to CDN
+    if data.type == "video" and media_value:
         try:
             import asyncio as _asyncio
-            # Split video into 60s segments
-            segments = await _asyncio.to_thread(split_video_into_segments, str(video_path))
             
-            for seg_path in segments:
-                seg_id = str(uuid.uuid4())
-                seg_filename = os.path.basename(seg_path)
+            video_content = None
+            video_filename = None
+            
+            # If media is a CDN URL, download it first
+            if media_value.startswith("http"):
+                logger.info(f"Story video on CDN, downloading for processing: {media_value[:60]}")
+                async with httpx.AsyncClient(timeout=120.0) as hc:
+                    resp = await hc.get(media_value, follow_redirects=True)
+                    if resp.status_code == 200:
+                        video_content = resp.content
+                        video_filename = media_value.split("/")[-1]
+                        if not video_filename.endswith('.mp4'):
+                            video_filename += '.mp4'
+            elif media_value.startswith("/api/uploads/"):
+                video_filename = media_value.replace("/api/uploads/", "")
+                video_path = UPLOADS_DIR / video_filename
+                if video_path.exists():
+                    video_content = video_path.read_bytes()
+            
+            if video_content and video_filename:
+                # Save to temp file for ffmpeg processing
+                temp_input = str(UPLOADS_DIR / f"story_input_{video_filename}")
+                with open(temp_input, 'wb') as f:
+                    f.write(video_content)
                 
-                # Compress to H.264
-                compressed_name = await _asyncio.to_thread(compress_video, seg_path)
-                final_path = UPLOADS_DIR / compressed_name
+                original_size = len(video_content)
+                logger.info(f"Story video: {original_size//1024}KB, compressing...")
+                
+                # Compress
+                compressed_name = await _asyncio.to_thread(compress_video, temp_input)
+                compressed_path = UPLOADS_DIR / compressed_name
                 
                 # Generate thumbnail
+                seg_id = str(uuid.uuid4())
                 thumb_filename = f"thumb_{seg_id}.jpg"
-                thumb_path = UPLOADS_DIR / thumb_filename
-                thumb_url = None
-                if generate_video_thumbnail(str(final_path), str(thumb_path)):
-                    thumb_url = f"/api/uploads/{thumb_filename}"
+                thumb_path = str(UPLOADS_DIR / thumb_filename)
+                thumb_cdn_url = None
+                
+                if compressed_path.exists():
+                    if generate_video_thumbnail(str(compressed_path), thumb_path):
+                        if os.path.exists(thumb_path):
+                            thumb_content = open(thumb_path, 'rb').read()
+                            thumb_cdn_url = await upload_image_to_bunny_storage(thumb_content, thumb_filename)
+                            try: os.remove(thumb_path)
+                            except: pass
+                    
+                    # Upload compressed video to CDN
+                    comp_content = compressed_path.read_bytes()
+                    cdn_url = await upload_image_to_bunny_storage(comp_content, video_filename)
+                    new_size = len(comp_content)
+                    logger.info(f"Story compressed: {original_size//1024}KB -> {new_size//1024}KB")
+                    
+                    try:
+                        compressed_path.unlink(missing_ok=True)
+                    except: pass
+                    
+                    final_media = cdn_url or media_value
+                else:
+                    final_media = media_value
                 
                 story = {
                     "id": seg_id,
                     "user_id": current_user["id"],
-                    "media": f"/api/uploads/{compressed_name}",
-                    "thumbnail": thumb_url,
+                    "media": final_media,
+                    "thumbnail": thumb_cdn_url,
                     "type": "video",
                     "views_count": 0,
-                    "editor_data": data.editor_data,  # Include overlay data for video segments
+                    "editor_data": data.editor_data,
                     "created_at": now,
                     "expires_at": now + timedelta(hours=24),
                 }
