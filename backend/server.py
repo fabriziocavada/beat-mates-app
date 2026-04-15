@@ -4120,6 +4120,28 @@ async def compress_cdn_videos():
     
     return results
 
+# Fix broken media_urls that still have iframe.mediadelivery.net
+@app.post("/api/admin/fix-media-urls")
+async def fix_media_urls():
+    """Replace broken embed URLs in media_urls with the correct media field URL."""
+    results = {"fixed": 0}
+    posts = await db.posts.find({}).to_list(500)
+    for post in posts:
+        media = post.get("media", "") or ""
+        urls = post.get("media_urls", []) or []
+        new_urls = []
+        changed = False
+        for u in urls:
+            if u and "iframe.mediadelivery.net" in u and media and "b-cdn.net" in media:
+                new_urls.append(media)
+                changed = True
+            else:
+                new_urls.append(u)
+        if changed:
+            await db.posts.update_one({"id": post["id"]}, {"$set": {"media_urls": new_urls}})
+            results["fixed"] += 1
+    return results
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
