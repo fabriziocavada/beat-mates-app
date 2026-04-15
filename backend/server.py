@@ -4056,7 +4056,7 @@ async def fix_stream_to_storage():
 @app.post("/api/admin/compress-cdn-videos")
 async def compress_cdn_videos():
     """Download large videos from CDN, compress with ffmpeg, re-upload."""
-    results = {"compressed": 0, "skipped": 0, "errors": []}
+    results = {"compressed": 0, "skipped": 0, "errors": [], "details": []}
     MAX_SIZE = 3 * 1024 * 1024  # 3MB threshold
     
     posts = await db.posts.find({"type": "video"}).to_list(100)
@@ -4066,55 +4066,66 @@ async def compress_cdn_videos():
             continue
         
         post_id = post["id"]
+        filename = media.split("/")[-1]
         try:
-            # Check file size via HEAD request
-            async with httpx.AsyncClient(timeout=30.0) as hc:
+            async with httpx.AsyncClient(timeout=60.0) as hc:
                 head = await hc.head(media)
                 size = int(head.headers.get("content-length", 0))
                 
                 if size <= MAX_SIZE:
                     results["skipped"] += 1
-                    logger.info(f"Skip {post_id}: {size//1024}KB <= {MAX_SIZE//1024}KB")
                     continue
                 
-                logger.info(f"Compressing {post_id}: {size//1024}KB > {MAX_SIZE//1024}KB")
-                
-                # Download video
+                logger.info(f"Compressing {post_id}: {size//1024}KB")
                 resp = await hc.get(media, follow_redirects=True)
                 if resp.status_code != 200:
-                    results["errors"].append(f"Download failed {post_id}: {resp.status_code}")
+                    results["errors"].append(f"Download failed {post_id}")
                     continue
-                
                 content = resp.content
             
-            # Save, compress, upload
-            filename = media.split("/")[-1]
-            temp_path = UPLOADS_DIR / f"recompress_{filename}"
-            temp_path.write_bytes(content)
+            # Save to temp file
+            input_path = str(UPLOADS_DIR / f"input_{filename}")
+            output_path = str(UPLOADS_DIR / f"output_{filename}")
+            with open(input_path, 'wb') as f:
+                f.write(content)
             
-            compressed_name = await asyncio.to_thread(compress_video, str(temp_path))
-            compressed_path = UPLOADS_DIR / compressed_name
+            # Compress with ffmpeg directly (don't use compress_video which renames files)
+            cmd = [
+                FFMPEG_PATH, '-y', '-i', input_path,
+                '-c:v', 'libx264', '-profile:v', 'main', '-level', '4.0',
+                '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', '30',
+                '-c:a', 'aac', '-b:a', '64k',
+                '-movflags', '+faststart',
+                '-vf', 'scale=trunc(iw/2)*2:min(720,trunc(ih/2)*2)',
+                output_path
+            ]
+            proc = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, timeout=180)
             
-            if compressed_path.exists():
-                new_content = compressed_path.read_bytes()
-                new_size = len(new_content)
-                logger.info(f"Compressed {post_id}: {size//1024}KB -> {new_size//1024}KB")
+            if proc.returncode == 0 and os.path.exists(output_path):
+                new_size = os.path.getsize(output_path)
+                with open(output_path, 'rb') as f:
+                    new_content = f.read()
                 
-                # Re-upload to same filename on CDN
+                logger.info(f"Compressed {post_id}: {size//1024}KB -> {new_size//1024}KB ({new_size*100//size}%)")
+                
+                # Upload compressed version to CDN with SAME filename
                 cdn_url = await upload_image_to_bunny_storage(new_content, filename)
                 if cdn_url:
                     results["compressed"] += 1
-                
-                # Cleanup
+                    results["details"].append(f"{post_id[:8]}: {size//1024}KB->{new_size//1024}KB")
+                else:
+                    results["errors"].append(f"Upload failed for {post_id}")
+            else:
+                stderr = proc.stderr.decode(errors='replace')[:200] if proc.stderr else ''
+                results["errors"].append(f"FFmpeg failed {post_id}: {stderr}")
+            
+            # Cleanup
+            for p in [input_path, output_path]:
                 try:
-                    compressed_path.unlink(missing_ok=True)
-                    temp_path.unlink(missing_ok=True)
+                    os.remove(p)
                 except:
                     pass
-            else:
-                results["errors"].append(f"Compression produced no output for {post_id}")
-                temp_path.unlink(missing_ok=True)
-                
+                    
         except Exception as e:
             results["errors"].append(f"Error {post_id}: {str(e)}")
     
