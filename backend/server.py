@@ -1193,36 +1193,25 @@ async def create_story(data: StoryCreate, current_user: dict = Depends(get_curre
     
     created_stories = []
     
-    # For videos: generate thumbnail (video already compressed by /api/upload)
+    # For videos: use thumbnail from upload response (already on CDN)
     if data.type == "video" and media_value:
         try:
-            import asyncio as _asyncio
-            
             seg_id = str(uuid.uuid4())
-            thumb_cdn_url = None
             
-            # Download just enough to generate thumbnail
-            if media_value.startswith("http"):
-                logger.info(f"Generating thumbnail for story video: {media_value[:60]}")
-                async with httpx.AsyncClient(timeout=60.0) as hc:
-                    resp = await hc.get(media_value, follow_redirects=True)
-                    if resp.status_code == 200:
-                        video_content = resp.content
-                        temp_vid = str(UPLOADS_DIR / f"thumb_input_{seg_id}.mp4")
-                        thumb_path = str(UPLOADS_DIR / f"thumb_{seg_id}.jpg")
-                        
-                        with open(temp_vid, 'wb') as f:
-                            f.write(video_content)
-                        
-                        if generate_video_thumbnail(temp_vid, thumb_path):
-                            if os.path.exists(thumb_path):
-                                thumb_content = open(thumb_path, 'rb').read()
-                                thumb_cdn_url = await upload_image_to_bunny_storage(thumb_content, f"thumb_{seg_id}.jpg")
-                                try: os.remove(thumb_path)
-                                except: pass
-                        
-                        try: os.remove(temp_vid)
-                        except: pass
+            # Thumbnail should already exist from /api/upload
+            # Convention: thumb_FILENAME.jpg
+            thumb_cdn_url = None
+            if media_value.startswith("http") and "b-cdn.net" in media_value:
+                thumb_name = "thumb_" + media_value.split("/")[-1].replace('.mp4', '.jpg').replace('.mov', '.jpg')
+                thumb_cdn_url = f"https://beatmates-cd.b-cdn.net/{thumb_name}"
+                # Verify it exists
+                async with httpx.AsyncClient(timeout=5.0) as hc:
+                    try:
+                        check = await hc.head(thumb_cdn_url)
+                        if check.status_code != 200:
+                            thumb_cdn_url = None
+                    except:
+                        thumb_cdn_url = None
             
             story = {
                 "id": seg_id,
@@ -2186,21 +2175,32 @@ async def upload_file(
     # ========== BUNNY CDN UPLOAD ==========
     if is_video:
         # COMPRESS video with ffmpeg BEFORE uploading to CDN
-        # Save to temp file, compress, then upload compressed version
         logger.info(f"Compressing video before CDN upload: {filename} ({len(content)} bytes)")
         temp_input = UPLOADS_DIR / f"temp_{filename}"
         with open(temp_input, 'wb') as f:
             f.write(content)
         
+        thumb_cdn_url = None
         try:
             compressed_name = await asyncio.to_thread(compress_video, str(temp_input))
             compressed_path = UPLOADS_DIR / compressed_name
             if compressed_path.exists():
                 compressed_content = compressed_path.read_bytes()
                 logger.info(f"Compressed: {len(content)} -> {len(compressed_content)} bytes ({len(compressed_content)*100//len(content)}%)")
-                # Upload compressed version to Bunny CDN
+                
+                # Generate thumbnail from compressed video
+                thumb_name = f"thumb_{filename.replace('.mp4', '.jpg').replace('.mov', '.jpg')}"
+                thumb_path = str(UPLOADS_DIR / thumb_name)
+                if generate_video_thumbnail(str(compressed_path), thumb_path):
+                    if os.path.exists(thumb_path):
+                        thumb_content = open(thumb_path, 'rb').read()
+                        thumb_cdn_url = await upload_image_to_bunny_storage(thumb_content, thumb_name)
+                        try: os.remove(thumb_path)
+                        except: pass
+                
+                # Upload compressed video to CDN
                 cdn_url = await upload_image_to_bunny_storage(compressed_content, filename)
-                # Clean up local files
+                # Clean up
                 try:
                     compressed_path.unlink(missing_ok=True)
                     temp_input.unlink(missing_ok=True)
@@ -2212,19 +2212,17 @@ async def upload_file(
                         "url": cdn_url,
                         "filename": filename,
                         "media_type": "video",
-                        "thumbnail": None,
+                        "thumbnail": thumb_cdn_url,
                         "cdn_type": "bunny_storage"
                     }
         except Exception as e:
             logger.error(f"Video compression failed: {e}")
-            # Clean up
             try:
                 temp_input.unlink(missing_ok=True)
             except:
                 pass
         
         # Fallback: upload raw if compression failed
-        logger.warning("Compression failed, uploading raw video to CDN")
         cdn_url = await upload_image_to_bunny_storage(content, filename)
         if cdn_url:
             return {
