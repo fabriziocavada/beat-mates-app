@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../../src/constants/colors';
-import api, { getMediaUrl } from '../../src/services/api';
+import api, { getMediaUrl, getThumbnailUrl } from '../../src/services/api';
 import { OptimizedImage } from '../../src/components/OptimizedMedia';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -133,6 +133,14 @@ export default function SearchScreen() {
     ? explorePosts // For now show all - backend doesn't filter posts by category yet
     : explorePosts;
 
+  // Get the best image URL for a grid item (thumbnail for videos, direct URL for photos)
+  const getGridImageUrl = (item: ExplorePost): string | null => {
+    if (item.is_video) {
+      return getThumbnailUrl(item.media) || getMediaUrl(item.media);
+    }
+    return getMediaUrl(item.media);
+  };
+
   // Render Instagram-style grid
   const renderExploreGrid = () => {
     const rows: React.ReactElement[] = [];
@@ -157,7 +165,7 @@ export default function SearchScreen() {
               }
               data-testid={`explore-item-${large.id}`}
             >
-              <OptimizedImage uri={getMediaUrl(large.media)} width={LARGE_SIZE} height={LARGE_SIZE} />
+              <OptimizedImage uri={getGridImageUrl(large)} width={LARGE_SIZE} height={LARGE_SIZE} />
               {large.is_video && <View style={styles.videoIcon}><Ionicons name="play" size={16} color="#FFF" /></View>}
             </TouchableOpacity>
             <View style={styles.smallColumn}>
@@ -168,7 +176,7 @@ export default function SearchScreen() {
                   : router.push(`/(main)/post/${small1.id}`)
                 }
               >
-                <OptimizedImage uri={getMediaUrl(small1.media)} width={SMALL_SIZE} height={SMALL_SIZE} />
+                <OptimizedImage uri={getGridImageUrl(small1)} width={SMALL_SIZE} height={SMALL_SIZE} />
                 {small1.is_video && <View style={styles.videoIcon}><Ionicons name="play" size={12} color="#FFF" /></View>}
               </TouchableOpacity>
               <TouchableOpacity
@@ -178,7 +186,7 @@ export default function SearchScreen() {
                   : router.push(`/(main)/post/${small2.id}`)
                 }
               >
-                <OptimizedImage uri={getMediaUrl(small2.media)} width={SMALL_SIZE} height={SMALL_SIZE} />
+                <OptimizedImage uri={getGridImageUrl(small2)} width={SMALL_SIZE} height={SMALL_SIZE} />
                 {small2.is_video && <View style={styles.videoIcon}><Ionicons name="play" size={12} color="#FFF" /></View>}
               </TouchableOpacity>
             </View>
@@ -198,7 +206,7 @@ export default function SearchScreen() {
                   : router.push(`/(main)/post/${item.id}`)
                 }
               >
-                <OptimizedImage uri={getMediaUrl(item.media)} width={SMALL_SIZE} height={SMALL_SIZE} />
+                <OptimizedImage uri={getGridImageUrl(item)} width={SMALL_SIZE} height={SMALL_SIZE} />
                 {item.is_video && <View style={styles.videoIcon}><Ionicons name="play" size={12} color="#FFF" /></View>}
               </TouchableOpacity>
             ))}
@@ -219,7 +227,7 @@ export default function SearchScreen() {
                   : router.push(`/(main)/post/${small1.id}`)
                 }
               >
-                <OptimizedImage uri={getMediaUrl(small1.media)} width={SMALL_SIZE} height={SMALL_SIZE} />
+                <OptimizedImage uri={getGridImageUrl(small1)} width={SMALL_SIZE} height={SMALL_SIZE} />
                 {small1.is_video && <View style={styles.videoIcon}><Ionicons name="play" size={12} color="#FFF" /></View>}
               </TouchableOpacity>
               <TouchableOpacity
@@ -229,7 +237,7 @@ export default function SearchScreen() {
                   : router.push(`/(main)/post/${small2.id}`)
                 }
               >
-                <OptimizedImage uri={getMediaUrl(small2.media)} width={SMALL_SIZE} height={SMALL_SIZE} />
+                <OptimizedImage uri={getGridImageUrl(small2)} width={SMALL_SIZE} height={SMALL_SIZE} />
                 {small2.is_video && <View style={styles.videoIcon}><Ionicons name="play" size={12} color="#FFF" /></View>}
               </TouchableOpacity>
             </View>
@@ -240,7 +248,7 @@ export default function SearchScreen() {
                 : router.push(`/(main)/post/${large.id}`)
               }
             >
-              <OptimizedImage uri={getMediaUrl(large.media)} width={LARGE_SIZE} height={LARGE_SIZE} />
+              <OptimizedImage uri={getGridImageUrl(large)} width={LARGE_SIZE} height={LARGE_SIZE} />
               {large.is_video && <View style={styles.videoIcon}><Ionicons name="play" size={16} color="#FFF" /></View>}
             </TouchableOpacity>
           </View>
@@ -259,7 +267,7 @@ export default function SearchScreen() {
                   : router.push(`/(main)/post/${item.id}`)
                 }
               >
-                <OptimizedImage uri={getMediaUrl(item.media)} width={SMALL_SIZE} height={SMALL_SIZE} />
+                <OptimizedImage uri={getGridImageUrl(item)} width={SMALL_SIZE} height={SMALL_SIZE} />
                 {item.is_video && <View style={styles.videoIcon}><Ionicons name="play" size={12} color="#FFF" /></View>}
               </TouchableOpacity>
             ))}

@@ -2100,26 +2100,26 @@ def convert_video_to_mp4(input_path: str, output_path: str) -> bool:
         return False
 
 def compress_video(input_path: str) -> str:
-    """Compress video for mobile: 480p, ultrafast, CRF 32.
-    Target: <2MB for 10-15s clips."""
+    """Compress video for mobile: 1080p, Instagram-quality.
+    Target: good quality, reasonable file size."""
     try:
         file_size = os.path.getsize(input_path)
         base = os.path.splitext(input_path)[0]
         output_path = f"{base}_web.mp4"
         
-        # Skip compression if already small (<2MB)
-        if file_size < 2 * 1024 * 1024:
+        # Skip compression if already small (<3MB)
+        if file_size < 3 * 1024 * 1024:
             logger.info(f"Video already small ({file_size//1024}KB), skipping compression")
             return os.path.basename(input_path)
         
         cmd = [
             FFMPEG_PATH, '-y', '-i', input_path,
-            '-c:v', 'libx264', '-profile:v', 'baseline',
+            '-c:v', 'libx264', '-profile:v', 'main', '-level', '4.0',
             '-pix_fmt', 'yuv420p',
-            '-preset', 'ultrafast', '-crf', '32',
-            '-c:a', 'aac', '-b:a', '48k', '-ac', '1',
+            '-preset', 'fast', '-crf', '26',
+            '-c:a', 'aac', '-b:a', '96k',
             '-movflags', '+faststart',
-            '-vf', 'scale=-2:720',
+            '-vf', 'scale=-2:1080',
             '-threads', '0',
             '-max_muxing_queue_size', '1024',
             output_path
@@ -4222,6 +4222,59 @@ async def generate_story_thumbnails():
                     pass
         except Exception as e:
             results["errors"].append(f"{story_id}: {str(e)}")
+    
+    return results
+
+
+# Generate thumbnails for video posts that don't have one on CDN
+@app.post("/api/admin/generate-post-thumbnails")
+async def generate_post_thumbnails():
+    """Generate CDN thumbnails for video posts."""
+    results = {"generated": 0, "errors": []}
+    
+    posts = await db.posts.find({"type": "video"}).to_list(500)
+    for post in posts:
+        media = post.get("media", "") or ""
+        if "b-cdn.net" not in media or ".mp4" not in media:
+            continue
+        
+        filename = media.split("/")[-1]
+        thumb_name = "thumb_" + filename.replace(".mp4", ".jpg").replace(".mov", ".jpg")
+        
+        # Check if thumb already exists on CDN
+        async with httpx.AsyncClient(timeout=5.0) as hc:
+            try:
+                check = await hc.head(f"https://beatmates-cd.b-cdn.net/{thumb_name}")
+                if check.status_code == 200:
+                    continue
+            except:
+                pass
+        
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as hc:
+                resp = await hc.get(media, follow_redirects=True)
+                if resp.status_code != 200:
+                    continue
+                
+                temp_vid = str(UPLOADS_DIR / f"postthumb_{filename}")
+                thumb_path = str(UPLOADS_DIR / thumb_name)
+                
+                with open(temp_vid, 'wb') as f:
+                    f.write(resp.content)
+                
+                if generate_video_thumbnail(temp_vid, thumb_path):
+                    if os.path.exists(thumb_path):
+                        thumb_content = open(thumb_path, 'rb').read()
+                        cdn_url = await upload_image_to_bunny_storage(thumb_content, thumb_name)
+                        if cdn_url:
+                            results["generated"] += 1
+                        try: os.remove(thumb_path)
+                        except: pass
+                
+                try: os.remove(temp_vid)
+                except: pass
+        except Exception as e:
+            results["errors"].append(f"{post['id'][:8]}: {str(e)}")
     
     return results
 
