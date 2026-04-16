@@ -10,6 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Video, ResizeMode } from 'expo-av';
 import api, { uploadFile, getMediaUrl } from '../../src/services/api';
 import InstagramStoryEditor from '../../src/components/InstagramStoryEditor';
+import { useUpload } from '../../src/contexts/UploadContext';
 
 const { width } = Dimensions.get('window');
 
@@ -21,6 +22,7 @@ export default function CreateStoryScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
   const [editorData, setEditorData] = useState<any>(null);
+  const { startUpload, finishUpload, failUpload } = useUpload();
 
   // Handle shared media from reels/posts
   useEffect(() => {
@@ -87,6 +89,7 @@ export default function CreateStoryScreen() {
     if (!mediaUri) { Alert.alert('Nessun media', 'Scegli una foto o registra un video'); return; }
     
     // Navigate back IMMEDIATELY - upload continues in background
+    startUpload('story');
     router.replace('/(main)/home');
     
     // Upload in background
@@ -127,9 +130,10 @@ export default function CreateStoryScreen() {
       }
       
       await api.post('/stories', storyData);
-      console.log('Story published in background');
+      finishUpload();
     } catch (error: any) {
       console.error('Background story upload failed:', error.response?.data || error.message);
+      failUpload();
     }
   };
 

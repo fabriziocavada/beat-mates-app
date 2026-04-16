@@ -21,6 +21,7 @@ import { Video, ResizeMode } from 'expo-av';
 import api, { uploadFile } from '../../src/services/api';
 import { useAuthStore } from '../../src/store/authStore';
 import { compressVideoForUpload, compressImageForUpload } from '../../src/services/videoCompressor';
+import { useUpload } from '../../src/contexts/UploadContext';
 
 const { width } = Dimensions.get('window');
 
@@ -33,6 +34,7 @@ interface MediaItem {
 export default function CreatePostScreen() {
   const router = useRouter();
   const refreshUser = useAuthStore((state) => state.refreshUser);
+  const { startUpload, finishUpload, failUpload } = useUpload();
   
   const [caption, setCaption] = useState('');
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
@@ -134,6 +136,7 @@ export default function CreatePostScreen() {
     // Navigate back IMMEDIATELY - upload continues in background (Instagram-style)
     const itemsToUpload = [...mediaItems];
     const captionToUpload = caption;
+    startUpload('post');
     router.replace('/(main)/home');
     
     try {
@@ -171,9 +174,10 @@ export default function CreatePostScreen() {
       });
       
       refreshUser();
-      console.log('Post published in background');
+      finishUpload();
     } catch (error: any) {
       console.error('Background post upload failed:', error?.message || error);
+      failUpload();
     }
   };
   
