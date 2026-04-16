@@ -2100,29 +2100,31 @@ def convert_video_to_mp4(input_path: str, output_path: str) -> bool:
         return False
 
 def compress_video(input_path: str) -> str:
-    """ALWAYS re-encode video to web-compatible H.264 8-bit Main profile.
-    Target: 720p max, ~1-2MB for 10-15s clips (TikTok/Instagram level)."""
+    """Compress video for mobile: 480p, ultrafast, CRF 32.
+    Target: <2MB for 10-15s clips."""
     try:
         file_size = os.path.getsize(input_path)
         base = os.path.splitext(input_path)[0]
         output_path = f"{base}_web.mp4"
         
-        # Aggressive compression for social media
-        # CRF 30 = good quality for mobile, much smaller files
-        # Scale to 720p max height, preserve aspect ratio
-        crf = '30'
+        # Skip compression if already small (<2MB)
+        if file_size < 2 * 1024 * 1024:
+            logger.info(f"Video already small ({file_size//1024}KB), skipping compression")
+            return os.path.basename(input_path)
         
         cmd = [
             FFMPEG_PATH, '-y', '-i', input_path,
-            '-c:v', 'libx264', '-profile:v', 'main', '-level', '4.0',
+            '-c:v', 'libx264', '-profile:v', 'baseline',
             '-pix_fmt', 'yuv420p',
-            '-preset', 'fast', '-crf', crf,
-            '-c:a', 'aac', '-b:a', '64k',
+            '-preset', 'ultrafast', '-crf', '32',
+            '-c:a', 'aac', '-b:a', '48k', '-ac', '1',
             '-movflags', '+faststart',
-            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+            '-vf', 'scale=-2:480',
+            '-threads', '0',
+            '-max_muxing_queue_size', '1024',
             output_path
         ]
-        result = subprocess.run(cmd, capture_output=True, timeout=180)
+        result = subprocess.run(cmd, capture_output=True, timeout=60)
         
         if result.returncode == 0 and os.path.exists(output_path):
             new_size = os.path.getsize(output_path)
@@ -2132,7 +2134,7 @@ def compress_video(input_path: str) -> str:
             os.rename(output_path, new_path)
             logger.info(f"Compressed video: {file_size//1024}KB -> {new_size//1024}KB ({new_size*100//file_size}%)")
             return new_name
-        logger.warning(f"Video compression failed (rc={result.returncode}). stderr: {result.stderr[:500] if result.stderr else 'none'}")
+        logger.warning(f"Compression failed (rc={result.returncode}). stderr: {(result.stderr or b'')[-300:].decode(errors='replace')}")
         return os.path.basename(input_path)
     except Exception as e:
         logger.error(f"Video compression failed: {e}")
