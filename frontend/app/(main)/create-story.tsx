@@ -85,10 +85,13 @@ export default function CreateStoryScreen() {
 
   const handlePublish = async (data?: any) => {
     if (!mediaUri) { Alert.alert('Nessun media', 'Scegli una foto o registra un video'); return; }
-    setIsLoading(true);
+    
+    // Navigate back IMMEDIATELY - upload continues in background
+    router.replace('/(main)/home');
+    
+    // Upload in background
     try {
       const uploadResult = await uploadFile(mediaUri);
-      // Include editor data (texts, stickers, drawings, backgroundColor) if present
       const storyData: any = { 
         media: uploadResult.url, 
         type: mediaType,
@@ -96,59 +99,37 @@ export default function CreateStoryScreen() {
       
       // Add editor overlays if present
       if (data) {
-        console.log('=== PUBLISH START ===');
-        console.log('Editor data received, overlayImages count:', data.overlayImages?.length || 0);
-        
-        // Upload overlay images to server (they have local file:// URIs)
         let uploadedOverlayImages: any[] = [];
         if (data.overlayImages && data.overlayImages.length > 0) {
-          console.log('=== UPLOADING', data.overlayImages.length, 'overlay images ===');
-          
-          // Use Promise.all to ensure ALL uploads complete before continuing
-          const uploadPromises = data.overlayImages.map(async (img: any, index: number) => {
-            console.log(`[${index}] Processing overlay: ${img.uri.substring(0, 80)}...`);
+          const uploadPromises = data.overlayImages.map(async (img: any) => {
             try {
               const overlayResult = await uploadFile(img.uri);
-              console.log(`[${index}] Upload SUCCESS: ${overlayResult.url}`);
-              return {
-                ...img,
-                uri: overlayResult.url, // Replace local URI with server URL
-              };
-            } catch (e: any) {
-              console.error(`[${index}] UPLOAD FAILED:`, e.message || e);
-              return null; // Mark as failed
+              return { ...img, uri: overlayResult.url };
+            } catch (e) {
+              return null;
             }
           });
-          
           const results = await Promise.all(uploadPromises);
-          uploadedOverlayImages = results.filter(r => r !== null); // Remove failed uploads
-          console.log('=== UPLOAD COMPLETE:', uploadedOverlayImages.length, '/', data.overlayImages.length, 'succeeded ===');
+          uploadedOverlayImages = results.filter(r => r !== null);
         }
         
         storyData.editor_data = {
           texts: data.texts || [],
           stickers: data.stickers || [],
           drawings: data.drawings || [],
-          overlayImages: uploadedOverlayImages, // Use uploaded URLs
+          overlayImages: uploadedOverlayImages,
           backgroundColor: data.backgroundColor || null,
           caption: data.caption || '',
-          music: data.music || null, // Include selected music track
-          effect: data.effect || null, // Include selected effect
-          effectParticles: data.effectParticles || [], // Include effect particles
+          music: data.music || null,
+          effect: data.effect || null,
+          effectParticles: data.effectParticles || [],
         };
-        
-        console.log('=== FINAL STORY DATA ===');
-        console.log('overlayImages in storyData:', JSON.stringify(storyData.editor_data.overlayImages));
       }
       
       await api.post('/stories', storyData);
-      console.log('=== STORY PUBLISHED SUCCESSFULLY ===');
-      router.replace('/(main)/home');
+      console.log('Story published in background');
     } catch (error: any) {
-      console.error('Story error:', error.response?.data || error.message);
-      Alert.alert('Errore', 'Impossibile pubblicare. Riprova.');
-    } finally {
-      setIsLoading(false);
+      console.error('Background story upload failed:', error.response?.data || error.message);
     }
   };
 

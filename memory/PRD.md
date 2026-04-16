@@ -3,121 +3,58 @@
 ## Overview
 Social media mobile app for dancers built with Expo (React Native) + FastAPI + MongoDB.
 
-## Core Features
-
-### 1. Authentication
-- Email/password login/register
-- JWT token authentication
-
-### 2. Social Feed
-- Filterable by dance disciplines
-- Autoplay videos with carousel support
-- Like, comment, save functionality
-- Sponsored Ads integrated between posts (every 5 posts)
-
-### 3. Stories (Instagram-like)
-- Horizontal swiping with 3D cube transition
-- Progress bar timer (6s photos, 60s videos)
-- Hold to pause, swipe UP for reactions, swipe DOWN to close
-- Full Story Editor with drawing, text, stickers (BROKEN - needs fix)
-
-### 4. Reels
-- Vertical scrolling video feed (TikTok-style)
-- Native expo-av Video player (no WebView)
-- Bunny Stream HLS direct playback (converted from embed URLs)
-- Thumbnail poster from CDN for instant preview
-- Pre-buffering of 2 adjacent reels
-- Like, comment, share functionality
-
-### 5. Direct Messaging (Chat)
-- 1-to-1 conversations
-- Real-time messaging
-
-### 6. User Profiles
-- Grid of posts
-- Shop tab for video lessons
-- Follow/unfollow
-
-### 7. Lessons System
-- Live 1-to-1 via Daily.co
-- Group Lessons
-- Recorded Lessons (Netflix-style UI)
-
-### 8. Search / Explore
-- Instagram-style explore grid (large + small tiles)
-- Category chips filter (dance disciplines)
-- User search with debounce
-- Suggested users when search bar is focused
-- Tapping videos opens Reels view
+## Core Features Implemented
+- Authentication (Email/JWT)
+- Social Feed with autoplay videos
+- Stories (Instagram-like) with editor
+- Reels (TikTok-style vertical scroll with expo-av)
+- Search/Explore (Instagram grid + category chips + suggestions)
+- Direct Messaging
+- User Profiles with grid
+- Lessons System (Live/Group/Recorded)
+- Bunny CDN for all media (images + videos)
 
 ## Performance Architecture
 
-### Bunny CDN Integration
-- **Bunny Stream** for videos: Auto-transcoding to HLS
-- **Bunny Storage** for images: Global CDN (EU, US, Asia)
-- Stream Library ID: 635479
-- CDN URL: https://beatmates-cd.b-cdn.net
-- Direct HLS: https://vz-635479.b-cdn.net/{guid}/playlist.m3u8
-- Thumbnails: https://vz-635479.b-cdn.net/{guid}/thumbnail.jpg
+### Upload Flow (Instagram-style)
+1. User presses "Publish" → App returns to feed IMMEDIATELY (background upload)
+2. Video sent to VPS `/api/upload`
+3. VPS compresses with ffmpeg (720p, ultrafast, CRF 32, baseline profile)
+4. VPS generates thumbnail from first frame
+5. VPS uploads compressed video + thumbnail to Bunny CDN
+6. `/api/stories` or `/api/posts` creates the DB entry using CDN URLs
 
-### Video URL Resolution (CRITICAL FIX - Feb 2026)
-- Backend stores Bunny Stream embed URLs: `iframe.mediadelivery.net/embed/635479/{guid}`
-- **expo-av CANNOT play embed URLs** - they are HTML pages, not video streams
-- `getDirectVideoUrl()` in api.ts converts embed → HLS: `vz-635479.b-cdn.net/{guid}/playlist.m3u8`
-- `getBunnyThumbnailUrl()` gets poster: `vz-635479.b-cdn.net/{guid}/thumbnail.jpg`
-- Local paths fallback to `getMediaUrl()` as before
+### Video Thumbnails
+- `/api/upload` generates `thumb_FILENAME.jpg` on CDN
+- `getThumbnailUrl()` in frontend resolves CDN thumb URL for video posts
+- Profile grid, story circles, and search all use these thumbnails
 
-### Image Optimization
-- `OptimizedImage` component with expo-image caching
-- Shimmer loading placeholders
-- Memory + disk cache
+### Media URLs
+- All new media goes to Bunny CDN (`beatmates-cd.b-cdn.net`)
+- `getDirectVideoUrl()` resolves any URL format to playable mp4
+- `media_urls` array synced with `media` field (no stale embed URLs)
 
-### Upload Compression
-- Videos: react-native-compressor (native builds only)
-- Images: expo-image-manipulator (1200px, 70% quality)
-
-## Technical Architecture
-
-### Frontend
-```
-/app/frontend/
-├── src/components/
-│   ├── OptimizedMedia.tsx     # Cached images with shimmer
-│   ├── PostCard.tsx           # Uses getDirectVideoUrl for videos
-│   └── ...
-├── src/services/
-│   ├── api.ts                 # getDirectVideoUrl, getBunnyThumbnailUrl helpers
-│   └── videoCompressor.ts     # Image + video compression
-└── app/(main)/
-    ├── home.tsx
-    ├── reels.tsx              # TikTok-style with poster + HLS + pre-load
-    ├── search.tsx             # Instagram Explore grid + categories + suggestions
-    └── ...
-```
-
-### Backend
-```
-/app/backend/
-├── server.py                  # Monolithic FastAPI (3700+ lines)
-└── .env                       # Bunny credentials
-```
+## Key Technical Decisions
+- expo-av for video playback (expo-video doesn't work in Expo Go)
+- No react-native-compressor (causes pod conflicts with React 19/SDK 54)
+- No react-native-fast-image (same pod conflict)
+- Background upload pattern for instant UX
+- Server-side compression (720p, ultrafast preset) since client compression removed
 
 ## Deployment
-- **Backend**: OVH VPS (api.beatmates.app) via Docker
-- **App**: TestFlight (iOS), requires EAS build for updates
-- **Database**: MongoDB Atlas
+- Backend: OVH VPS (api.beatmates.app) via Docker
+- App: TestFlight (iOS) via EAS Build
+- Database: MongoDB (production on VPS)
+- CDN: Bunny CDN (beatmates-cd.b-cdn.net)
 
 ## Pending Issues
-1. Story Editor broken (text/sticker/drawing)
-2. Share Modal (airplane icon) not working
-3. Hold-to-pause missing on Home Feed videos
-4. Mentions list empty in Story Editor
-5. ReviewsPopup.tsx Carousel Swipe broken
+- Story Editor (text/sticker/drawing) - basic implementation exists
+- Share Modal - not functional
+- Hold-to-pause on Home Feed videos
 
-## Next Tasks (Priority)
-1. User deploys Build 11 to TestFlight (git pull + eas build)
-2. Stripe Connect for real payments (80/20 split)
-3. Admin Dashboard Web App
-4. Push Notifications
-5. Google Social Login
-6. Refactor server.py into modular routers
+## Next Tasks
+- Stripe Connect for payments (80/20 split)
+- Admin Dashboard Web App
+- Push Notifications
+- Google Social Login
+- Refactor server.py into modular routers

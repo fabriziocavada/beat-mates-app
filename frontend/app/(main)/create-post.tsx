@@ -131,28 +131,27 @@ export default function CreatePostScreen() {
       return;
     }
     
-    setIsLoading(true);
+    // Navigate back IMMEDIATELY - upload continues in background (Instagram-style)
+    const itemsToUpload = [...mediaItems];
+    const captionToUpload = caption;
+    router.replace('/(main)/home');
+    
     try {
-      // Upload all media files
       const uploadedUrls: string[] = [];
       let customThumbnailUrl: string | null = null;
       
-      for (const item of mediaItems) {
+      for (const item of itemsToUpload) {
         let uriToUpload = item.uri;
         
-        // Compress media before upload (Instagram-style)
         if (item.type === 'video') {
-          console.log('Compressing video before upload...');
           uriToUpload = await compressVideoForUpload(item.uri);
         } else {
-          console.log('Compressing image before upload...');
           uriToUpload = await compressImageForUpload(item.uri);
         }
         
         const uploadResult = await uploadFile(uriToUpload);
         if (uploadResult.url) uploadedUrls.push(uploadResult.url);
         
-        // Upload custom thumbnail for video if specified
         if (item.type === 'video' && item.customThumbnail && !customThumbnailUrl) {
           const compressedThumb = await compressImageForUpload(item.customThumbnail);
           const thumbResult = await uploadFile(compressedThumb);
@@ -160,24 +159,21 @@ export default function CreatePostScreen() {
         }
       }
       
-      const hasVideo = mediaItems.some(m => m.type === 'video');
-      const postType = mediaItems.length === 0 ? 'text' : hasVideo ? 'video' : 'photo';
+      const hasVideo = itemsToUpload.some(m => m.type === 'video');
+      const postType = itemsToUpload.length === 0 ? 'text' : hasVideo ? 'video' : 'photo';
       
       await api.post('/posts', {
         type: postType,
         media: uploadedUrls[0] || null,
         media_urls: uploadedUrls,
-        caption,
+        caption: captionToUpload,
         thumbnail_url: customThumbnailUrl,
       });
       
       refreshUser();
-      router.replace('/(main)/home');
+      console.log('Post published in background');
     } catch (error: any) {
-      console.error('Post error:', error?.message || error);
-      Alert.alert('Errore', 'Impossibile creare il post. Controlla la connessione e riprova.');
-    } finally {
-      setIsLoading(false);
+      console.error('Background post upload failed:', error?.message || error);
     }
   };
   

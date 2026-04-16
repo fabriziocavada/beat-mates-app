@@ -201,8 +201,12 @@ export function isVideoUrl(path: string | null | undefined): boolean {
 export function getThumbnailUrl(mediaPath: string | null | undefined): string | null {
   if (!mediaPath) return null;
   
-  // Bunny Stream videos have auto-generated thumbnails
-  // But they require signed URLs, so we skip for now
+  // CDN videos: thumbnail is thumb_FILENAME.jpg on same CDN
+  if (mediaPath.includes('b-cdn.net') && (mediaPath.includes('.mp4') || mediaPath.includes('.mov'))) {
+    const filename = mediaPath.split('/').pop() || '';
+    const thumbName = 'thumb_' + filename.replace('.mp4', '.jpg').replace('.mov', '.jpg');
+    return `https://beatmates-cd.b-cdn.net/${thumbName}`;
+  }
   
   // Local server thumbnails
   let filename = mediaPath;
