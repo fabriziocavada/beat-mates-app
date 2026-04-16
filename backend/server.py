@@ -1400,18 +1400,23 @@ async def get_story_reactions(story_id: str, current_user: dict = Depends(get_cu
 async def get_available_teachers(current_user: dict = Depends(get_current_user)):
     user_categories = current_user.get("dance_categories", [])
     
-    # Auto-close stale "active" sessions older than 2 hours
-    two_hours_ago = datetime.utcnow() - timedelta(hours=2)
+    MAX_CALL_MINUTES = 15
+    
+    # Auto-close stale sessions: pending > 60s, active > 15 min
+    one_min_ago = datetime.utcnow() - timedelta(seconds=60)
     await db.live_sessions.update_many(
-        {"status": "active", "created_at": {"$lt": two_hours_ago}},
+        {"status": "pending", "created_at": {"$lt": one_min_ago}},
+        {"$set": {"status": "expired", "ended_at": datetime.utcnow()}}
+    )
+    max_call_ago = datetime.utcnow() - timedelta(minutes=MAX_CALL_MINUTES)
+    await db.live_sessions.update_many(
+        {"status": "active", "started_at": {"$lt": max_call_ago}},
         {"$set": {"status": "completed", "ended_at": datetime.utcnow()}}
     )
     
-    # Show ALL users (not just available), mark online status
-    fifteen_min_ago = datetime.utcnow() - timedelta(minutes=15)
+    # Show ALL users, mark online status
+    five_min_ago = datetime.utcnow() - timedelta(minutes=5)
     query = {"id": {"$ne": current_user["id"]}}
-    if user_categories:
-        query["dance_categories"] = {"$in": user_categories}
     if user_categories:
         query["dance_categories"] = {"$in": user_categories}
     
@@ -1423,21 +1428,27 @@ async def get_available_teachers(current_user: dict = Depends(get_current_user))
     for sess in active_sessions:
         start = sess.get("started_at") or sess.get("created_at", datetime.utcnow())
         elapsed_minutes = (datetime.utcnow() - start).total_seconds() / 60
-        remaining = max(0, int(60 - elapsed_minutes))
+        remaining = max(0, int(MAX_CALL_MINUTES - elapsed_minutes))
         if sess.get("teacher_id"):
             busy_user_ids[sess["teacher_id"]] = remaining
         if sess.get("student_id"):
             busy_user_ids[sess["student_id"]] = remaining
     
+    # Also mark users with pending calls as busy
+    pending_sessions = await db.live_sessions.find({"status": "pending"}).to_list(100)
+    for sess in pending_sessions:
+        if sess.get("teacher_id"):
+            busy_user_ids.setdefault(sess["teacher_id"], 1)
+    
     result = []
     for user in users:
         uid = user["id"]
         is_busy = uid in busy_user_ids
-        is_recently_active = user.get("last_active") and user["last_active"] >= fifteen_min_ago
+        is_recently_active = user.get("last_active") and user["last_active"] >= five_min_ago
         is_set_available = user.get("is_available", False)
         is_online = is_set_available and is_recently_active and not is_busy
         
-        # Get average rating from reviews collection
+        # Get average rating
         avg_rating_result = await db.reviews.aggregate([
             {"$match": {"reviewee_id": uid, "rating": {"$exists": True, "$gt": 0}}},
             {"$group": {"_id": None, "avg": {"$avg": "$rating"}, "count": {"$sum": 1}}}
@@ -1677,13 +1688,13 @@ async def accept_live_session(session_id: str, current_user: dict = Depends(get_
     if session["teacher_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
-    # Create Daily.co room for the video call
+    # Create Daily.co room for the video call (15 min limit)
     room_url = None
     room_name = None
     if DAILY_API_KEY:
         try:
             room_name = f"beatmates-{uuid.uuid4().hex[:12]}"
-            exp_timestamp = int((datetime.utcnow() + timedelta(hours=2)).timestamp())
+            exp_timestamp = int((datetime.utcnow() + timedelta(minutes=15)).timestamp())
             async with httpx.AsyncClient() as client_http:
                 response = await client_http.post(
                     f"{DAILY_API_URL}/rooms",
