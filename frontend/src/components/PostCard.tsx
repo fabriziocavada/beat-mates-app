@@ -60,6 +60,16 @@ function FeedVideoPlayer({ url, height, isVisible, muted, paused = false }: { ur
     }
   }, [muted]);
 
+  // Cleanup: stop video when component unmounts (fixes stuck audio)
+  useEffect(() => {
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.stopAsync?.().catch(() => {});
+        videoRef.current.unloadAsync?.().catch(() => {});
+      }
+    };
+  }, []);
+
   return (
     <View style={{ width: '100%', height }}>
       <Video
