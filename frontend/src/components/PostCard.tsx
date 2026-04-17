@@ -179,8 +179,10 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
       lastTap.current = now;
       setTimeout(() => {
         if (lastTap.current === now) {
-          // This handler is only used on single video posts → always open Reels
-          router.push({ pathname: '/(main)/reels', params: { postId: post.id } });
+          // Single tap on video → open Reels. Single tap on photo → do nothing
+          if (isSingleVideo) {
+            router.push({ pathname: '/(main)/reels', params: { postId: post.id } });
+          }
         }
       }, 350);
     }

@@ -318,8 +318,21 @@ export default function VideoCallScreen() {
         } else {
           setRoomUrl(finalUrl);
         }
-      } else if (s.status === 'completed') setError('Questa lezione e gia terminata.');
-      else setError('La sessione non e ancora attiva');
+      } else if (s.status === 'pending') {
+        // Waiting for teacher to accept - poll every 2 seconds
+        setError(null);
+        setLoading(true);
+        if (retryCount.current < 30) { // Max 60 seconds waiting
+          retryCount.current++;
+          setTimeout(loadSession, 2000);
+          return;
+        }
+        setError('L\'insegnante non ha risposto. Riprova più tardi.');
+      } else if (s.status === 'completed' || s.status === 'expired') {
+        setError('Questa lezione è già terminata.');
+      } else {
+        setError('La sessione non è ancora attiva');
+      }
     } catch {
       if (retryCount.current < 3) { retryCount.current++; setTimeout(loadSession, 2000); return; }
       setError('Impossibile caricare la sessione.');
