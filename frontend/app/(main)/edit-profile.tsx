@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -16,11 +16,23 @@ export default function EditProfileScreen() {
   const [bio, setBio] = useState(user?.bio || '');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [allCategories, setAllCategories] = useState<{id: string; name: string}[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(user?.dance_categories || []);
+
+  useEffect(() => {
+    api.get('/dance-categories').then(r => setAllCategories(r.data)).catch(() => {});
+  }, []);
+
+  const toggleCategory = (catId: string) => {
+    setSelectedCategories(prev => 
+      prev.includes(catId) ? prev.filter(c => c !== catId) : [...prev, catId]
+    );
+  };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.put('/users/me', { name, username, bio });
+      await api.put('/users/me', { name, username, bio, dance_categories: selectedCategories });
       await refreshUser();
       Alert.alert('Salvato', 'Profilo aggiornato!');
       router.back();

@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, usePathname } from 'expo-router';
+import { useRouter, usePathname, useFocusEffect } from 'expo-router';
 import Header from '../../src/components/Header';
 import TabBar from '../../src/components/TabBar';
 import StoriesBar from '../../src/components/StoriesBar';
@@ -158,7 +158,20 @@ export default function HomeScreen() {
   };
 
   const [visiblePostIds, setVisiblePostIds] = useState<Set<string>>(new Set());
+  const [isScreenFocused, setIsScreenFocused] = useState(true);
   
+  // CRITICAL: Pause ALL videos when user navigates away from Home (to Reels, Profile, etc.)
+  // Without this, the video audio keeps playing in background because expo-router keeps tabs mounted.
+  useFocusEffect(
+    useCallback(() => {
+      setIsScreenFocused(true);
+      return () => {
+        setIsScreenFocused(false);
+        setVisiblePostIds(new Set()); // clear all visible → all videos pause & mute
+      };
+    }, [])
+  );
+
   const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
     const ids = new Set<string>();
     viewableItems.forEach((item: any) => {
@@ -177,7 +190,7 @@ export default function HomeScreen() {
       <PostCard
         post={item}
         currentUserId={user?.id}
-        isVisible={visiblePostIds.has(item.id)}
+        isVisible={isScreenFocused && visiblePostIds.has(item.id)}
         onUserPress={(userId) => router.push(`/(main)/user/${userId}`)}
         onCommentPress={(postId) => router.push(`/(main)/post/${postId}`)}
         onDeletePress={handleDeletePost}
