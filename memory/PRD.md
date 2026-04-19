@@ -5,41 +5,38 @@ Social media mobile app for dancers built with Expo (React Native) + FastAPI + M
 
 ## Core Features Implemented
 - Authentication (Email/JWT)
-- Social Feed with autoplay videos
-- Stories (Instagram-like) with editor
+- Social Feed with autoplay videos (audio cleanup on unmount)
+- Stories (Instagram-like) with editor, background upload, thumbnail generation
 - Reels (TikTok-style vertical scroll with expo-av)
-- Search/Explore (Instagram grid + category chips + suggestions)
+- Search/Explore (Instagram grid + category chips + suggestions + video thumbnails)
 - Direct Messaging
-- User Profiles with grid
+- User Profiles with grid + video thumbnails
+- Video Calls via Daily.co (15 min limit, 60s pending timeout, busy status)
 - Lessons System (Live/Group/Recorded)
-- Bunny CDN for all media (images + videos)
+- Bunny CDN for all media (global delivery including Asia)
+- Background upload with progress banner (Instagram-style)
 
 ## Performance Architecture
 
 ### Upload Flow (Instagram-style)
-1. User presses "Publish" → App returns to feed IMMEDIATELY (background upload)
-2. Video sent to VPS `/api/upload`
-3. VPS compresses with ffmpeg (720p, ultrafast, CRF 32, baseline profile)
-4. VPS generates thumbnail from first frame
-5. VPS uploads compressed video + thumbnail to Bunny CDN
-6. `/api/stories` or `/api/posts` creates the DB entry using CDN URLs
+1. User presses "Publish" → App returns to feed IMMEDIATELY
+2. Banner shows "Pubblicazione storia/post..." 
+3. Video sent to VPS `/api/upload` → compressed with ffmpeg (1080p, CRF 26) → uploaded to CDN
+4. Thumbnail auto-generated from first frame
+5. Banner shows "Pubblicato!" when done
 
-### Video Thumbnails
-- `/api/upload` generates `thumb_FILENAME.jpg` on CDN
-- `getThumbnailUrl()` in frontend resolves CDN thumb URL for video posts
-- Profile grid, story circles, and search all use these thumbnails
+### Video Calls (Robust system)
+- Pending sessions auto-expire after 60 seconds
+- Active sessions max 15 minutes (Daily.co room + DB)
+- Teachers in call or with pending call = busy (red in list)
+- Remaining minutes shown in teacher list
+- Frontend polls every 2s while waiting for teacher to accept
 
-### Media URLs
-- All new media goes to Bunny CDN (`beatmates-cd.b-cdn.net`)
-- `getDirectVideoUrl()` resolves any URL format to playable mp4
-- `media_urls` array synced with `media` field (no stale embed URLs)
-
-## Key Technical Decisions
-- expo-av for video playback (expo-video doesn't work in Expo Go)
-- No react-native-compressor (causes pod conflicts with React 19/SDK 54)
-- No react-native-fast-image (same pod conflict)
-- Background upload pattern for instant UX
-- Server-side compression (720p, ultrafast preset) since client compression removed
+### Media Delivery
+- All media on Bunny CDN (beatmates-cd.b-cdn.net) with PoPs in EU, US, Asia
+- Videos compressed server-side to 1080p/CRF26/H.264 Main
+- Thumbnails: thumb_FILENAME.jpg convention on CDN
+- getThumbnailUrl() resolves CDN thumbnails for video posts
 
 ## Deployment
 - Backend: OVH VPS (api.beatmates.app) via Docker
@@ -47,14 +44,23 @@ Social media mobile app for dancers built with Expo (React Native) + FastAPI + M
 - Database: MongoDB (production on VPS)
 - CDN: Bunny CDN (beatmates-cd.b-cdn.net)
 
-## Pending Issues
-- Story Editor (text/sticker/drawing) - basic implementation exists
-- Share Modal - not functional
-- Hold-to-pause on Home Feed videos
+## Known Issues Fixed This Session
+- Expo Go crash (missing expo-image-manipulator)
+- Reels not playing (embed URLs → direct mp4)
+- Search thumbnails black (now uses getThumbnailUrl)
+- Profile thumbnails black (same fix)
+- Story thumbnails black (ffmpeg first-frame extraction)
+- Photos opening Reels (single tap now only for videos)
+- Music stuck when changing pages (video unload on unmount)
+- Video call "session not active" (polling + timeout)
+- Upload taking 88s (background upload + optimized compression)
+- Video quality too low (480p → 1080p)
+- media_urls with stale embed URLs (admin fix endpoint)
 
-## Next Tasks
-- Stripe Connect for payments (80/20 split)
-- Admin Dashboard Web App
-- Push Notifications
-- Google Social Login
-- Refactor server.py into modular routers
+## Next Tasks (Priority)
+1. Stripe Connect for payments (80/20 split teachers)
+2. Social Login (Google/Apple)
+3. Push Notifications (APNs via Expo)
+4. Admin Dashboard Web App
+5. Story Editor improvements (text/sticker/drawing)
+6. Refactor server.py into modular routers
