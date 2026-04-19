@@ -107,7 +107,7 @@ function FeedVideoPlayer({ url, height, isVisible, muted, paused = false }: { ur
   );
 }
 
-export default function PostCard({ post, onUserPress, onCommentPress, onDeletePress, onSharePress, currentUserId }: PostCardProps) {
+export default function PostCard({ post, onUserPress, onCommentPress, onDeletePress, onSharePress, currentUserId, isVisible = true }: PostCardProps & { isVisible?: boolean }) {
   const [isLiked, setIsLiked] = useState(post.is_liked);
   const [likesCount, setLikesCount] = useState(post.likes_count);
   const [isSaved, setIsSaved] = useState(false);
@@ -118,6 +118,13 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
   const heartOpacity = useRef(new Animated.Value(0)).current;
   const [videoMuted, setVideoMuted] = useState(true);
   const router = useRouter();
+  
+  // Mute audio when post goes off-screen
+  useEffect(() => {
+    if (!isVisible && !videoMuted) {
+      setVideoMuted(true);
+    }
+  }, [isVisible]);
   
   // Hold-to-pause state (Instagram-style)
   const [isPaused, setIsPaused] = useState(false);
@@ -306,7 +313,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
           ) : isSingleVideo ? (
             /* Single video: tap overlay with hold-to-pause (Instagram-style) */
             <View style={{ width: '100%', height: mediaHeight }}>
-              <FeedVideoPlayer url={getDirectVideoUrl(mediaUrls[0]) || ''} height={mediaHeight} isVisible={true} muted={videoMuted} paused={isPaused} />
+              <FeedVideoPlayer url={getDirectVideoUrl(mediaUrls[0]) || ''} height={mediaHeight} isVisible={isVisible} muted={videoMuted} paused={isPaused} />
               <TouchableOpacity
                 style={StyleSheet.absoluteFill}
                 activeOpacity={1}

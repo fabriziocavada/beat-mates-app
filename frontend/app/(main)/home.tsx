@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -157,6 +157,18 @@ export default function HomeScreen() {
     ]);
   };
 
+  const [visiblePostIds, setVisiblePostIds] = useState<Set<string>>(new Set());
+  
+  const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
+    const ids = new Set<string>();
+    viewableItems.forEach((item: any) => {
+      if (item.item?.id) ids.add(item.item.id);
+    });
+    setVisiblePostIds(ids);
+  }, []);
+
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
+
   const renderItem = ({ item }: { item: FeedItem }) => {
     if (item.itemType === 'ad') {
       return <AdCard ad={item} />;
@@ -165,6 +177,7 @@ export default function HomeScreen() {
       <PostCard
         post={item}
         currentUserId={user?.id}
+        isVisible={visiblePostIds.has(item.id)}
         onUserPress={(userId) => router.push(`/(main)/user/${userId}`)}
         onCommentPress={(postId) => router.push(`/(main)/post/${postId}`)}
         onDeletePress={handleDeletePost}
@@ -210,6 +223,8 @@ export default function HomeScreen() {
           keyExtractor={(item, index) => item.itemType === 'ad' ? `ad-${item.id}-${(item as any).adPosition || index}` : `post-${item.id}`}
           ListHeaderComponent={renderHeader}
           ListEmptyComponent={renderEmpty}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
