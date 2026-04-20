@@ -81,6 +81,27 @@ export default function EditProfileScreen() {
         <TextInput style={styles.input} value={username} onChangeText={setUsername} placeholderTextColor="#666" />
         <Text style={styles.label}>Bio</Text>
         <TextInput style={[styles.input, { height: 80 }]} value={bio} onChangeText={setBio} multiline placeholderTextColor="#666" placeholder="Racconta di te..." />
+
+        <Text style={styles.label}>Categorie di ballo</Text>
+        <Text style={styles.helperText}>Seleziona i tuoi stili di ballo preferiti</Text>
+        <View style={styles.categoriesContainer}>
+          {allCategories.map((cat) => {
+            const isSelected = selectedCategories.includes(cat.id);
+            return (
+              <TouchableOpacity
+                key={cat.id}
+                onPress={() => toggleCategory(cat.id)}
+                style={[styles.categoryChip, isSelected && styles.categoryChipSelected]}
+                data-testid={`category-chip-${cat.id}`}
+              >
+                <Text style={[styles.categoryChipText, isSelected && styles.categoryChipTextSelected]}>
+                  {cat.name}
+                </Text>
+                {isSelected && <Ionicons name="checkmark-circle" size={16} color="#FFF" style={{ marginLeft: 6 }} />}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -97,4 +118,10 @@ const styles = StyleSheet.create({
   changePhotoText: { color: Colors.primary, fontSize: 14, fontWeight: '600', marginTop: 10 },
   label: { color: '#888', fontSize: 13, marginBottom: 6, marginTop: 16 },
   input: { backgroundColor: '#1C1C1E', borderRadius: 10, padding: 14, color: '#FFF', fontSize: 16 },
+  helperText: { color: '#666', fontSize: 12, marginBottom: 10, marginTop: -4 },
+  categoriesContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 30 },
+  categoryChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 9, backgroundColor: '#1C1C1E', borderRadius: 20, borderWidth: 1, borderColor: '#2C2C2E' },
+  categoryChipSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  categoryChipText: { color: '#AAA', fontSize: 14, fontWeight: '500' },
+  categoryChipTextSelected: { color: '#FFF', fontWeight: '700' },
 });
