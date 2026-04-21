@@ -128,7 +128,12 @@ export default function HomeScreen() {
     switch (tab) {
       case 'home':
         // Already on Home: scroll to top (TikTok/Instagram behavior)
-        try { listRef.current?.scrollToOffset({ offset: 0, animated: true }); } catch {}
+        console.log('[HOME TAB] tapped - scrolling to top');
+        try {
+          listRef.current?.scrollToOffset({ offset: 0, animated: true });
+        } catch (e) {
+          console.log('[HOME TAB] scrollToOffset failed', e);
+        }
         break;
       case 'create':
         router.push('/(main)/create-post');

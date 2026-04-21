@@ -51,7 +51,10 @@ function FeedVideoPlayer({ url, height, isVisible, muted, paused = false }: { ur
       if (isVisible && !paused) {
         videoRef.current.playAsync?.().catch(() => {});
       } else {
+        // Aggressively stop + mute to kill any lingering audio tracks (expo-av iOS bug)
+        videoRef.current.setIsMutedAsync?.(true).catch(() => {});
         videoRef.current.pauseAsync?.().catch(() => {});
+        videoRef.current.stopAsync?.().catch(() => {});
       }
     }
   }, [isVisible, paused]);
