@@ -41,7 +41,7 @@ function isVideoPath(path: string | null | undefined): boolean {
 }
 
 // WebView video player - pure rendering, no touch handling
-function FeedVideoPlayer({ url, height, isVisible, muted, paused = false }: { url: string; height: number; isVisible: boolean; muted: boolean; paused?: boolean }) {
+function FeedVideoPlayer({ url, height, isVisible, muted, paused = false, posterUrl }: { url: string; height: number; isVisible: boolean; muted: boolean; paused?: boolean; posterUrl?: string | null }) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const videoRef = useRef<any>(null);
