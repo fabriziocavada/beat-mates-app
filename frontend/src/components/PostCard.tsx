@@ -99,10 +99,9 @@ function FeedVideoPlayer({ url, height, isVisible, muted, paused = false }: { ur
           if (status.isLoaded && isLoading) setIsLoading(false);
         }}
       />
+      {/* Silent placeholder: black background while video initializes. No pulsating spinner — less visual noise. */}
       {isLoading && !hasError && !posterUrl && (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
-          <ActivityIndicator size="large" color="#FF6978" />
-        </View>
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]} pointerEvents="none" />
       )}
       {hasError && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
