@@ -122,7 +122,9 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
   // Otherwise fall back to local muted state (e.g. when used in single post view).
   const usingSharedAudio = typeof feedAudioOn === 'boolean' && typeof onToggleFeedAudio === 'function';
   const [localMuted, setLocalMuted] = useState(true);
-  const videoMuted = usingSharedAudio ? !feedAudioOn : localMuted;
+  // CRITICAL: if the post is off-screen, force mute even if shared audio is on.
+  // Only the currently visible post should produce sound.
+  const videoMuted = !isVisible || (usingSharedAudio ? !feedAudioOn : localMuted);
   const toggleMute = () => {
     if (usingSharedAudio) onToggleFeedAudio!();
     else setLocalMuted(v => !v);

@@ -69,6 +69,7 @@ export default function HomeScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const pathname = usePathname();
+  const listRef = useRef<FlatList<FeedItem> | null>(null);
   
   // Refresh when screen comes into focus
   useEffect(() => {
@@ -126,6 +127,8 @@ export default function HomeScreen() {
   const handleTabPress = (tab: string) => {
     switch (tab) {
       case 'home':
+        // Already on Home: scroll to top (TikTok/Instagram behavior)
+        try { listRef.current?.scrollToOffset({ offset: 0, animated: true }); } catch {}
         break;
       case 'create':
         router.push('/(main)/create-post');
@@ -235,6 +238,7 @@ export default function HomeScreen() {
         </View>
       ) : (
         <FlatList
+          ref={listRef}
           data={buildFeedWithAds()}
           renderItem={renderItem}
           keyExtractor={(item, index) => item.itemType === 'ad' ? `ad-${item.id}-${(item as any).adPosition || index}` : `post-${item.id}`}
