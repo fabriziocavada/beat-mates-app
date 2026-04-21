@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import Colors from '../../src/constants/colors';
 import TabBar from '../../src/components/TabBar';
-import api, { getMediaUrl, getDirectVideoUrl } from '../../src/services/api';
+import api, { getMediaUrl, getDirectVideoUrl, getBunnyThumbnailUrl, getThumbnailUrl } from '../../src/services/api';
 import ShareModal from '../../src/components/ShareModal';
 
 const { width, height } = Dimensions.get('window');
@@ -24,9 +24,11 @@ const ITEM_HEIGHT = height - 130;
 const ReelVideoPlayer = memo(({
   videoUrl,
   isActive,
+  posterUrl,
 }: {
   videoUrl: string;
   isActive: boolean;
+  posterUrl?: string | null;
 }) => {
   const videoRef = useRef<Video>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -45,6 +47,14 @@ const ReelVideoPlayer = memo(({
 
   return (
     <View style={styles.videoBg}>
+      {/* Poster thumbnail: show immediately while video loads (kills the "spinner wait") */}
+      {posterUrl && isLoading && !hasError && (
+        <Image
+          source={{ uri: posterUrl }}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+        />
+      )}
       <Video
         ref={videoRef}
         source={{ uri: videoUrl }}
@@ -125,6 +135,19 @@ export default function ReelsScreen() {
 
   useEffect(() => { loadReels(); }, []);
 
+  // Prefetch thumbnails of next 2 reels for instant preview (TikTok-like)
+  useEffect(() => {
+    if (reels.length === 0) return;
+    for (let i = 1; i <= 2; i++) {
+      const next = reels[currentIndex + i];
+      if (!next) continue;
+      const thumb = getBunnyThumbnailUrl(next.media) || getThumbnailUrl(next.media);
+      if (thumb) {
+        Image.prefetch(thumb).catch(() => {});
+      }
+    }
+  }, [currentIndex, reels]);
+
   useFocusEffect(useCallback(() => {
     setIsScreenFocused(true);
     return () => setIsScreenFocused(false);
@@ -188,7 +211,11 @@ export default function ReelsScreen() {
 
     return (
       <View style={[styles.reelContainer, { height: ITEM_HEIGHT }]}>
-        <ReelVideoPlayer videoUrl={item._videoUrl} isActive={isActive} />
+        <ReelVideoPlayer 
+          videoUrl={item._videoUrl} 
+          isActive={isActive} 
+          posterUrl={getBunnyThumbnailUrl(item.media) || getThumbnailUrl(item.media)}
+        />
 
         <View style={styles.overlay} pointerEvents="box-none">
           <View style={styles.bottomInfo}>

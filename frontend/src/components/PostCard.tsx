@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Dimensions, FlatList, ScrollV
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import { useRouter } from 'expo-router';
-import api, { getMediaUrl, getThumbnailUrl, getDirectVideoUrl } from '../services/api';
+import api, { getMediaUrl, getThumbnailUrl, getDirectVideoUrl, getBunnyThumbnailUrl } from '../services/api';
 import ShareModal from './ShareModal';
 import { OptimizedImage, preloadImages } from './OptimizedMedia';
 
@@ -77,6 +77,14 @@ function FeedVideoPlayer({ url, height, isVisible, muted, paused = false }: { ur
 
   return (
     <View style={{ width: '100%', height }}>
+      {/* Poster: show thumbnail immediately while video loads (Instagram-style) */}
+      {posterUrl && isLoading && !hasError && (
+        <Image
+          source={{ uri: posterUrl }}
+          style={[StyleSheet.absoluteFill, { width: '100%', height }]}
+          resizeMode="cover"
+        />
+      )}
       <Video
         ref={videoRef}
         source={{ uri: url }}
@@ -91,7 +99,7 @@ function FeedVideoPlayer({ url, height, isVisible, muted, paused = false }: { ur
           if (status.isLoaded && isLoading) setIsLoading(false);
         }}
       />
-      {isLoading && !hasError && (
+      {isLoading && !hasError && !posterUrl && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
           <ActivityIndicator size="large" color="#FF6978" />
         </View>
@@ -313,7 +321,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
                     data-testid={`carousel-tap-${post.id}-${index}`}
                   >
                     {isVid ? (
-                      <FeedVideoPlayer url={fullUrl} height={mediaHeight} isVisible={index === carouselIndex} muted={videoMuted} paused={isPaused} />
+                      <FeedVideoPlayer url={fullUrl} height={mediaHeight} isVisible={index === carouselIndex} muted={videoMuted} paused={isPaused} posterUrl={getBunnyThumbnailUrl(url) || getThumbnailUrl(url)} />
                     ) : (
                       <OptimizedImage uri={fullUrl} width={SCREEN_WIDTH} height={mediaHeight} resizeMode="cover" priority="high" />
                     )}
@@ -324,7 +332,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
           ) : isSingleVideo ? (
             /* Single video: tap overlay with hold-to-pause (Instagram-style) */
             <View style={{ width: '100%', height: mediaHeight }}>
-              <FeedVideoPlayer url={getDirectVideoUrl(mediaUrls[0]) || ''} height={mediaHeight} isVisible={isVisible} muted={videoMuted} paused={isPaused} />
+              <FeedVideoPlayer url={getDirectVideoUrl(mediaUrls[0]) || ''} height={mediaHeight} isVisible={isVisible} muted={videoMuted} paused={isPaused} posterUrl={getBunnyThumbnailUrl(mediaUrls[0]) || getThumbnailUrl(mediaUrls[0])} />
               <TouchableOpacity
                 style={StyleSheet.absoluteFill}
                 activeOpacity={1}

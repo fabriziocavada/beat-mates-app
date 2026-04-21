@@ -245,6 +245,10 @@ export default function HomeScreen() {
         <FlatList
           ref={listRef}
           data={buildFeedWithAds()}
+          windowSize={5}
+          initialNumToRender={3}
+          maxToRenderPerBatch={3}
+          removeClippedSubviews={true}
           renderItem={renderItem}
           keyExtractor={(item, index) => item.itemType === 'ad' ? `ad-${item.id}-${(item as any).adPosition || index}` : `post-${item.id}`}
           ListHeaderComponent={renderHeader}
