@@ -30,6 +30,8 @@ interface PostCardProps {
   onDeletePress?: (postId: string) => void;
   onSharePress?: (post: Post) => void;
   currentUserId?: string;
+  feedAudioOn?: boolean;
+  onToggleFeedAudio?: () => void;
 }
 
 function isVideoPath(path: string | null | undefined): boolean {
@@ -107,7 +109,7 @@ function FeedVideoPlayer({ url, height, isVisible, muted, paused = false }: { ur
   );
 }
 
-export default function PostCard({ post, onUserPress, onCommentPress, onDeletePress, onSharePress, currentUserId, isVisible = true }: PostCardProps & { isVisible?: boolean }) {
+export default function PostCard({ post, onUserPress, onCommentPress, onDeletePress, onSharePress, currentUserId, isVisible = true, feedAudioOn, onToggleFeedAudio }: PostCardProps & { isVisible?: boolean }) {
   const [isLiked, setIsLiked] = useState(post.is_liked);
   const [likesCount, setLikesCount] = useState(post.likes_count);
   const [isSaved, setIsSaved] = useState(false);
@@ -116,15 +118,19 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
   const lastTap = useRef(0);
   const heartScale = useRef(new Animated.Value(0)).current;
   const heartOpacity = useRef(new Animated.Value(0)).current;
-  const [videoMuted, setVideoMuted] = useState(true);
+  // If parent provided feedAudioOn (Home feed → Instagram-like shared state), use it.
+  // Otherwise fall back to local muted state (e.g. when used in single post view).
+  const usingSharedAudio = typeof feedAudioOn === 'boolean' && typeof onToggleFeedAudio === 'function';
+  const [localMuted, setLocalMuted] = useState(true);
+  const videoMuted = usingSharedAudio ? !feedAudioOn : localMuted;
+  const toggleMute = () => {
+    if (usingSharedAudio) onToggleFeedAudio!();
+    else setLocalMuted(v => !v);
+  };
   const router = useRouter();
   
-  // Mute audio when post goes off-screen
-  useEffect(() => {
-    if (!isVisible && !videoMuted) {
-      setVideoMuted(true);
-    }
-  }, [isVisible]);
+  // When post goes off-screen, don't fight the shared state — the video is paused anyway
+  // (no need to force-mute because other visible posts will inherit feedAudioOn)
   
   // Hold-to-pause state (Instagram-style)
   const [isPaused, setIsPaused] = useState(false);
@@ -323,7 +329,7 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
                 data-testid={`video-tap-${post.id}`}
               />
               <TouchableOpacity
-                onPress={() => setVideoMuted(!videoMuted)}
+                onPress={toggleMute}
                 style={[styles.controlBtn, { position: 'absolute', bottom: 10, right: 10, zIndex: 10 }]}
                 data-testid={`mute-btn-${post.id}`}
               >

@@ -159,6 +159,8 @@ export default function HomeScreen() {
 
   const [visiblePostIds, setVisiblePostIds] = useState<Set<string>>(new Set());
   const [isScreenFocused, setIsScreenFocused] = useState(true);
+  // Instagram-like global feed audio: if you unmute one post, next posts inherit unmuted state
+  const [feedAudioOn, setFeedAudioOn] = useState(false);
   
   // CRITICAL: Pause ALL videos when user navigates away from Home (to Reels, Profile, etc.)
   // Without this, the video audio keeps playing in background because expo-router keeps tabs mounted.
@@ -191,6 +193,8 @@ export default function HomeScreen() {
         post={item}
         currentUserId={user?.id}
         isVisible={isScreenFocused && visiblePostIds.has(item.id)}
+        feedAudioOn={feedAudioOn}
+        onToggleFeedAudio={() => setFeedAudioOn(v => !v)}
         onUserPress={(userId) => router.push(`/(main)/user/${userId}`)}
         onCommentPress={(postId) => router.push(`/(main)/post/${postId}`)}
         onDeletePress={handleDeletePost}

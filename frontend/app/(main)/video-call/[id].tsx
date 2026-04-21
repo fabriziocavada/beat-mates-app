@@ -322,7 +322,7 @@ export default function VideoCallScreen() {
         // Waiting for teacher to accept - poll every 2 seconds
         setError(null);
         setLoading(true);
-        if (retryCount.current < 30) { // Max 60 seconds waiting
+        if (retryCount.current < 60) { // Max 2 minutes waiting
           retryCount.current++;
           setTimeout(loadSession, 2000);
           return;
@@ -330,7 +330,23 @@ export default function VideoCallScreen() {
         setError('L\'insegnante non ha risposto. Riprova più tardi.');
       } else if (s.status === 'completed' || s.status === 'expired') {
         setError('Questa lezione è già terminata.');
+      } else if (s.status === 'rejected') {
+        setError('L\'insegnante ha rifiutato la richiesta.');
+      } else if (s.status === 'active' && !s.room_url) {
+        // Active but room not yet ready - retry shortly
+        if (retryCount.current < 10) {
+          retryCount.current++;
+          setTimeout(loadSession, 1500);
+          return;
+        }
+        setError('La stanza non è ancora pronta. Riprova.');
       } else {
+        // Unknown state - keep polling a few times before giving up
+        if (retryCount.current < 15) {
+          retryCount.current++;
+          setTimeout(loadSession, 2000);
+          return;
+        }
         setError('La sessione non è ancora attiva');
       }
     } catch {

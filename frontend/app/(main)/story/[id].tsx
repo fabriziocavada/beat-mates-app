@@ -297,59 +297,57 @@ function StoryOverlays({ editorData }: { editorData?: EditorData }) {
   );
 }
 
-// Video player with pause support and optional music overlay
-function StoryVideoPlayer({ url, isActive, isPaused, musicUrl }: { url: string; isActive: boolean; isPaused?: boolean; musicUrl?: string }) {
-  const [loading, setLoading] = useState(true);
-  const [musicSound, setMusicSound] = useState<any>(null);
-  
-  // Debug log
+// Standalone background music player for stories (works for both images and videos)
+function StoryMusicPlayer({ musicUrl, isActive, isPaused }: { musicUrl?: string; isActive: boolean; isPaused?: boolean }) {
+  const soundRef = useRef<any>(null);
+
+  // Load music when musicUrl changes
   useEffect(() => {
-    if (musicUrl) {
-      console.log('Story has music URL:', musicUrl);
-    }
-  }, [musicUrl]);
-  
-  // Handle music playback using Audio API
-  useEffect(() => {
-    let sound: any = null;
-    
-    const loadAndPlayMusic = async () => {
+    let cancelled = false;
+    const load = async () => {
       if (!musicUrl) return;
-      
       try {
         const { Audio } = require('expo-av');
-        const { sound: audioSound } = await Audio.Sound.createAsync(
+        // Configure audio to play even in silent mode (iOS)
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: true,
+        }).catch(() => {});
+        const { sound } = await Audio.Sound.createAsync(
           { uri: musicUrl },
           { shouldPlay: isActive && !isPaused, isLooping: true, volume: 1.0 }
         );
-        sound = audioSound;
-        setMusicSound(audioSound);
-        console.log('Music loaded successfully');
-      } catch (error) {
-        console.error('Failed to load music:', error);
+        if (cancelled) { sound.unloadAsync().catch(() => {}); return; }
+        soundRef.current = sound;
+      } catch (e) {
+        console.error('Failed to load story music:', e);
       }
     };
-    
-    loadAndPlayMusic();
-    
+    load();
     return () => {
-      if (sound) {
-        sound.unloadAsync();
-      }
+      cancelled = true;
+      if (soundRef.current) { soundRef.current.unloadAsync().catch(() => {}); soundRef.current = null; }
     };
   }, [musicUrl]);
-  
-  // Control music playback based on active/paused state
+
+  // React to active/paused state
   useEffect(() => {
-    if (musicSound) {
-      if (isActive && !isPaused) {
-        musicSound.playAsync().catch(console.error);
-      } else {
-        musicSound.pauseAsync().catch(console.error);
-      }
+    if (!soundRef.current) return;
+    if (isActive && !isPaused) {
+      soundRef.current.playAsync().catch(() => {});
+    } else {
+      soundRef.current.pauseAsync().catch(() => {});
     }
-  }, [isActive, isPaused, musicSound]);
-  
+  }, [isActive, isPaused]);
+
+  return null;
+}
+
+// Video player with pause support and optional music overlay
+function StoryVideoPlayer({ url, isActive, isPaused, hasMusic }: { url: string; isActive: boolean; isPaused?: boolean; hasMusic?: boolean }) {
+  const [loading, setLoading] = useState(true);
+
   return (
     <View style={StyleSheet.absoluteFill}>
       <Video
@@ -358,7 +356,7 @@ function StoryVideoPlayer({ url, isActive, isPaused, musicUrl }: { url: string; 
         resizeMode={ResizeMode.COVER}
         shouldPlay={isActive && !isPaused}
         isLooping
-        isMuted={!!musicUrl} // Mute video if there's background music
+        isMuted={!!hasMusic} // Mute video if there's background music
         onLoad={() => setLoading(false)}
         onPlaybackStatusUpdate={(s: any) => { if (s.isLoaded && loading) setLoading(false); }}
       />
@@ -518,11 +516,17 @@ function UserStoryPage({
             url={mediaUrl} 
             isActive={isActive} 
             isPaused={isPaused}
-            musicUrl={story.editor_data?.music?.file_url ? getMediaUrl(story.editor_data.music.file_url) || undefined : undefined}
+            hasMusic={!!story.editor_data?.music?.file_url}
           />
         ) : (
           <StoryImageLoader key={story.id} url={mediaUrl} />
         )}
+        {/* Background music plays for BOTH images and videos */}
+        <StoryMusicPlayer
+          musicUrl={story.editor_data?.music?.file_url ? getMediaUrl(story.editor_data.music.file_url) || undefined : undefined}
+          isActive={isActive}
+          isPaused={isPaused}
+        />
       </View>
 
       {/* Story overlays (texts, stickers, drawings from editor) */}

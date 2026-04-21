@@ -2670,17 +2670,22 @@ async def upload_song(
 
 @api_router.get("/music/songs")
 async def get_songs(genre: Optional[str] = None, playlist_id: Optional[str] = None, liked_only: bool = False, search: Optional[str] = None, current_user: dict = Depends(get_current_user)):
-    # Include both user's songs and demo/public songs (user_id contains 'demo' or matches current user)
-    query = {"$or": [{"user_id": current_user["id"]}, {"user_id": {"$regex": ".*"}}]}  # Show all songs for now
+    # Show only songs uploaded by the current user (private library).
+    # Shared/premium playlists use a separate endpoint.
+    query: dict = {"user_id": current_user["id"]}
     if genre and genre != "ALL":
         query["genre"] = genre
     if playlist_id:
         query["playlist_id"] = playlist_id
     if search and search.strip():
-        query["$or"] = [
-            {"title": {"$regex": search, "$options": "i"}},
-            {"artist": {"$regex": search, "$options": "i"}}
+        query["$and"] = [
+            {"user_id": current_user["id"]},
+            {"$or": [
+                {"title": {"$regex": search, "$options": "i"}},
+                {"artist": {"$regex": search, "$options": "i"}},
+            ]},
         ]
+        query.pop("user_id", None)
 
     songs = await db.songs.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
 
