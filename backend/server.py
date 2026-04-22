@@ -1824,9 +1824,31 @@ async def upload_coaching_clip(session_id: str, file: UploadFile = File(...), cu
     with open(filepath, "wb") as f:
         f.write(content)
     
-    # Compress for web compatibility (run in thread to avoid blocking event loop)
+    # Coaching clips MUST be transcoded to H.264 baseline for cross-platform WebView playback.
+    # iPhones capture HEVC/H.265 which renders as a black video in embedded web players.
+    # Force conversion (bypassing the <3MB skip in compress_video).
     import asyncio
-    compressed = await asyncio.to_thread(compress_video, str(filepath))
+    base = str(filepath).rsplit('.', 1)[0]
+    converted_path = f"{base}_h264.mp4"
+    def _force_h264():
+        cmd = [
+            FFMPEG_PATH, '-y', '-i', str(filepath),
+            '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.1',
+            '-pix_fmt', 'yuv420p',
+            '-preset', 'veryfast', '-crf', '23',
+            '-c:a', 'aac', '-b:a', '96k',
+            '-movflags', '+faststart',
+            '-vf', 'scale=-2:720',
+            converted_path
+        ]
+        r = subprocess.run(cmd, capture_output=True, timeout=60)
+        return r.returncode == 0 and os.path.exists(converted_path)
+    ok = await asyncio.to_thread(_force_h264)
+    if ok:
+        try: os.remove(str(filepath))
+        except Exception: pass
+        os.rename(converted_path, str(filepath))
+    compressed = filename
     media_url = f"/api/uploads/{compressed}"
     
     # Generate poster thumbnail from first frame
