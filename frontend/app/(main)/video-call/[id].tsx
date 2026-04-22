@@ -318,13 +318,15 @@ export default function VideoCallScreen() {
       } else if (s.status === 'pending') {
         // Waiting for teacher to accept - poll every 2 seconds
         setError(null);
-        setLoading(true);
+        // Keep loading=true during polling so UI shows spinner, not error screen
         if (retryCount.current < 90) { // Max 3 minutes waiting (matches backend)
           retryCount.current++;
           setTimeout(loadSession, 2000);
           return;
         }
+        setLoading(false);
         setError('L\'insegnante non ha risposto. Riprova più tardi.');
+        return;
       } else if (s.status === 'completed' || s.status === 'expired') {
         // Session already ended - clean up and go home (avoid stuck screen)
         console.log('[VideoCall] session', s.status, '- auto redirecting home');
@@ -332,7 +334,9 @@ export default function VideoCallScreen() {
         router.replace('/(main)/home');
         return;
       } else if (s.status === 'rejected') {
+        setLoading(false);
         setError('L\'insegnante ha rifiutato la richiesta.');
+        return;
       } else if (s.status === 'active' && !s.room_url) {
         // Active but room not yet ready - retry shortly (Daily.co may be slow)
         if (retryCount.current < 20) {
@@ -340,7 +344,9 @@ export default function VideoCallScreen() {
           setTimeout(loadSession, 1500);
           return;
         }
+        setLoading(false);
         setError('La stanza Daily non si è creata. Riprova o contatta il supporto.');
+        return;
       } else {
         // Unknown state - keep polling a few times before giving up
         console.log('[VideoCall] UNKNOWN status:', s.status, 'retry', retryCount.current);
@@ -349,8 +355,12 @@ export default function VideoCallScreen() {
           setTimeout(loadSession, 2000);
           return;
         }
+        setLoading(false);
         setError(`Stato sessione non riconosciuto: ${s.status || 'nessuno'}`);
+        return;
       }
+      // Success path: room loaded
+      setLoading(false);
     } catch (e: any) {
       console.log('[VideoCall] loadSession error', e?.response?.status, e?.message);
       if (e?.response?.status === 404) {
@@ -360,8 +370,9 @@ export default function VideoCallScreen() {
         return;
       }
       if (retryCount.current < 3) { retryCount.current++; setTimeout(loadSession, 2000); return; }
+      setLoading(false);
       setError('Impossibile caricare la sessione.');
-    } finally { setLoading(false); }
+    }
   };
 
   const handleEndCall = useCallback(() => {
@@ -421,16 +432,24 @@ export default function VideoCallScreen() {
   );
 
   // --- ERROR ---
-  if (error || !roomUrl) return (
+  if (error) return (
     <View style={st.center}><StatusBar barStyle="light-content" />
       <Ionicons name="videocam-off-outline" size={64} color="#666" />
-      <Text style={st.statusText}>{error || 'Stanza non disponibile'}</Text>
+      <Text style={st.statusText}>{error}</Text>
       <TouchableOpacity style={st.primaryBtn} onPress={() => { retryCount.current = 0; loadSession(); }}>
         <Text style={st.primaryBtnText}>Riprova</Text>
       </TouchableOpacity>
       <TouchableOpacity style={st.secondaryBtn} onPress={() => { clearActiveSession(); router.replace('/(main)/home'); }}>
         <Text style={st.secondaryBtnText}>Torna alla home</Text>
       </TouchableOpacity>
+    </View>
+  );
+
+  // --- NO ROOM YET (but no explicit error): keep waiting ---
+  if (!roomUrl) return (
+    <View style={st.center}><StatusBar barStyle="light-content" />
+      <ActivityIndicator size="large" color={Colors.primary} />
+      <Text style={st.statusText}>In attesa della risposta...</Text>
     </View>
   );
 
