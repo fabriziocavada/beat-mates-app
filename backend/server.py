@@ -1691,11 +1691,12 @@ async def accept_live_session(session_id: str, current_user: dict = Depends(get_
     # Create Daily.co room for the video call (15 min limit)
     room_url = None
     room_name = None
+    daily_error = None
     if DAILY_API_KEY:
         try:
             room_name = f"beatmates-{uuid.uuid4().hex[:12]}"
             exp_timestamp = int((datetime.utcnow() + timedelta(minutes=15)).timestamp())
-            async with httpx.AsyncClient() as client_http:
+            async with httpx.AsyncClient(timeout=15.0) as client_http:
                 response = await client_http.post(
                     f"{DAILY_API_URL}/rooms",
                     headers={"Authorization": f"Bearer {DAILY_API_KEY}", "Content-Type": "application/json"},
@@ -1709,9 +1710,27 @@ async def accept_live_session(session_id: str, current_user: dict = Depends(get_
                     room_data = response.json()
                     room_url = room_data["url"]
                 else:
-                    logger.error(f"Daily.co room creation failed: {response.text}")
+                    daily_error = f"Daily API {response.status_code}: {response.text[:200]}"
+                    logger.error(f"Daily.co room creation failed: {daily_error}")
         except Exception as e:
+            daily_error = f"Daily API exception: {str(e)[:200]}"
             logger.error(f"Daily.co error: {e}")
+    else:
+        daily_error = "DAILY_API_KEY is not configured on server"
+    
+    # CRITICAL: if Daily.co failed, do NOT mark session active.
+    # Return 503 so frontend can show a real error ("riprova") instead of a stuck empty screen.
+    if not room_url:
+        logger.error(f"Cannot accept session {session_id} - Daily.co room unavailable: {daily_error}")
+        # Revert session back to pending so student can retry
+        await db.live_sessions.update_one(
+            {"id": session_id},
+            {"$set": {"status": "pending"}}
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=f"Impossibile creare la videochiamata ora. Riprova tra qualche secondo. ({daily_error or 'server busy'})"
+        )
     
     await db.live_sessions.update_one(
         {"id": session_id},
