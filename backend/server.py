@@ -1416,6 +1416,23 @@ async def get_available_teachers(current_user: dict = Depends(get_current_user))
     
     # Show ALL users, mark online status
     five_min_ago = datetime.utcnow() - timedelta(minutes=5)
+    fifteen_min_ago = datetime.utcnow() - timedelta(minutes=15)
+    three_min_ago = datetime.utcnow() - timedelta(minutes=3)
+    
+    # Auto-close dead sessions BEFORE computing busy state (fixes "teachers stuck as busy" bug)
+    await db.live_sessions.update_many(
+        {"status": "active", "started_at": {"$lt": fifteen_min_ago}},
+        {"$set": {"status": "expired", "ended_at": datetime.utcnow()}}
+    )
+    await db.live_sessions.update_many(
+        {"status": "active", "started_at": None, "created_at": {"$lt": fifteen_min_ago}},
+        {"$set": {"status": "expired", "ended_at": datetime.utcnow()}}
+    )
+    await db.live_sessions.update_many(
+        {"status": "pending", "created_at": {"$lt": three_min_ago}},
+        {"$set": {"status": "expired", "ended_at": datetime.utcnow()}}
+    )
+    
     query = {"id": {"$ne": current_user["id"]}}
     if user_categories:
         query["dance_categories"] = {"$in": user_categories}
@@ -1703,7 +1720,15 @@ async def accept_live_session(session_id: str, current_user: dict = Depends(get_
                     json={
                         "name": room_name,
                         "privacy": "public",
-                        "properties": {"exp": exp_timestamp, "enable_chat": True, "max_participants": 2}
+                        "properties": {
+                            "exp": exp_timestamp,
+                            "enable_chat": True,
+                            "max_participants": 2,
+                            "enable_prejoin_ui": False,
+                            "enable_knocking": False,
+                            "start_video_off": False,
+                            "start_audio_off": False
+                        }
                     }
                 )
                 if response.status_code == 200:

@@ -174,22 +174,33 @@ export default function LessonNotificationBanner() {
     } catch {}
   };
 
+  const acceptingRef = useRef(false);
+
   const handleAccept = async () => {
+    // Guard against double-click (the real cause of "devo cliccare 2 volte")
+    if (acceptingRef.current) return;
+    acceptingRef.current = true;
+    
     stopAlerts();
+    const sessionId = pendingRequest?.id;
     setShowModal(false);
     setPendingRequest(null);
     lastCountRef.current = 0;
     
-    if (pendingRequest?.id) {
+    if (sessionId) {
       try {
-        // Actually accept the session via API
-        const res = await api.post(`/live-sessions/${pendingRequest.id}/accept`);
-        // Navigate directly to video call
-        router.push(`/(main)/video-call/${pendingRequest.id}`);
+        // Accept the session via API, then navigate
+        await api.post(`/live-sessions/${sessionId}/accept`);
+        router.push(`/(main)/video-call/${sessionId}`);
       } catch (e) {
         // If accept fails, navigate to lesson-requests as fallback
         router.push('/(main)/lesson-requests');
+      } finally {
+        // Release guard after a short delay so the screen transition completes
+        setTimeout(() => { acceptingRef.current = false; }, 2000);
       }
+    } else {
+      acceptingRef.current = false;
     }
   };
 
