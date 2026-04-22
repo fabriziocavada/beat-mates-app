@@ -298,6 +298,7 @@ export default function VideoCallScreen() {
       }
       const res = await api.get(`/live-sessions/${sessionId}`);
       const s = res.data;
+      console.log('[VideoCall] session', sessionId, 'status=', s.status, 'room_url=', s.room_url ? 'YES' : 'NO', 'retryCount=', retryCount.current);
       if (s.teacher) {
         setTeacherName(s.teacher.name || s.teacher.username || 'Insegnante');
         setIsTeacher(currentUser?.id === s.teacher_id);
@@ -322,34 +323,46 @@ export default function VideoCallScreen() {
         // Waiting for teacher to accept - poll every 2 seconds
         setError(null);
         setLoading(true);
-        if (retryCount.current < 60) { // Max 2 minutes waiting
+        if (retryCount.current < 90) { // Max 3 minutes waiting (matches backend)
           retryCount.current++;
           setTimeout(loadSession, 2000);
           return;
         }
         setError('L\'insegnante non ha risposto. Riprova più tardi.');
       } else if (s.status === 'completed' || s.status === 'expired') {
-        setError('Questa lezione è già terminata.');
+        // Session already ended - clean up and go home (avoid stuck screen)
+        console.log('[VideoCall] session', s.status, '- auto redirecting home');
+        await clearActiveSession();
+        router.replace('/(main)/home');
+        return;
       } else if (s.status === 'rejected') {
         setError('L\'insegnante ha rifiutato la richiesta.');
       } else if (s.status === 'active' && !s.room_url) {
-        // Active but room not yet ready - retry shortly
-        if (retryCount.current < 10) {
+        // Active but room not yet ready - retry shortly (Daily.co may be slow)
+        if (retryCount.current < 20) {
           retryCount.current++;
           setTimeout(loadSession, 1500);
           return;
         }
-        setError('La stanza non è ancora pronta. Riprova.');
+        setError('La stanza Daily non si è creata. Riprova o contatta il supporto.');
       } else {
         // Unknown state - keep polling a few times before giving up
+        console.log('[VideoCall] UNKNOWN status:', s.status, 'retry', retryCount.current);
         if (retryCount.current < 15) {
           retryCount.current++;
           setTimeout(loadSession, 2000);
           return;
         }
-        setError('La sessione non è ancora attiva');
+        setError(`Stato sessione non riconosciuto: ${s.status || 'nessuno'}`);
       }
-    } catch {
+    } catch (e: any) {
+      console.log('[VideoCall] loadSession error', e?.response?.status, e?.message);
+      if (e?.response?.status === 404) {
+        // Session doesn't exist - clean up and go home
+        await clearActiveSession();
+        router.replace('/(main)/home');
+        return;
+      }
       if (retryCount.current < 3) { retryCount.current++; setTimeout(loadSession, 2000); return; }
       setError('Impossibile caricare la sessione.');
     } finally { setLoading(false); }
