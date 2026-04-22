@@ -273,10 +273,12 @@ export default function VideoCallScreen() {
 
   const buildRoomUrl = async (session: any): Promise<string | null> => {
     if (!session.room_url) return null;
-    // Daily.co rooms are created as PUBLIC, so no token needed.
-    // Adding a token can actually break access if /video-call/token endpoint fails.
-    // Keep the raw room_url which works out-of-the-box.
-    return session.room_url;
+    // Add user name + skip prejoin as URL params so Daily doesn't ask again.
+    const displayName = encodeURIComponent(
+      currentUser?.name || currentUser?.username || 'User'
+    );
+    const separator = session.room_url.includes('?') ? '&' : '?';
+    return `${session.room_url}${separator}userName=${displayName}`;
   };
 
   useEffect(() => {
