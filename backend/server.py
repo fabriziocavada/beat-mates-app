@@ -1402,10 +1402,10 @@ async def get_available_teachers(current_user: dict = Depends(get_current_user))
     
     MAX_CALL_MINUTES = 15
     
-    # Auto-close stale sessions: pending > 60s, active > 15 min
-    one_min_ago = datetime.utcnow() - timedelta(seconds=60)
+    # Auto-close stale sessions: pending > 3 min, active > 15 min
+    three_min_ago = datetime.utcnow() - timedelta(minutes=3)
     await db.live_sessions.update_many(
-        {"status": "pending", "created_at": {"$lt": one_min_ago}},
+        {"status": "pending", "created_at": {"$lt": three_min_ago}},
         {"$set": {"status": "expired", "ended_at": datetime.utcnow()}}
     )
     max_call_ago = datetime.utcnow() - timedelta(minutes=MAX_CALL_MINUTES)
