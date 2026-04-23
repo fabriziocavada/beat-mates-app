@@ -1718,11 +1718,11 @@ async def accept_live_session(session_id: str, current_user: dict = Depends(get_
         }
         return LiveSessionResponse(**clean_doc(session))
     
-    # Create Daily.co room for the video call (15 min limit)
+    # Create Daily.co room for the video call (2h limit for safety, matching March version)
     room_url = None
     room_name = None
     daily_error = None
-    exp_timestamp = int((datetime.utcnow() + timedelta(minutes=15)).timestamp())
+    exp_timestamp = int((datetime.utcnow() + timedelta(hours=2)).timestamp())
     if DAILY_API_KEY:
         try:
             room_name = f"beatmates-{uuid.uuid4().hex[:12]}"
@@ -1733,13 +1733,7 @@ async def accept_live_session(session_id: str, current_user: dict = Depends(get_
                     json={
                         "name": room_name,
                         "privacy": "public",
-                        "properties": {
-                            "exp": exp_timestamp,
-                            "enable_chat": True,
-                            "max_participants": 2,
-                            "enable_prejoin_ui": False,
-                            "enable_knocking": False,
-                        }
+                        "properties": {"exp": exp_timestamp, "enable_chat": True, "max_participants": 2}
                     }
                 )
                 if response.status_code == 200:
