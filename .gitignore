@@ -549,3 +549,12 @@ credentials.json
 *.pem
 *.key
 .credentials
+
+# Test files with hardcoded credentials
+additional_backend_tests.py
+backend_test.py
+backend/tests/
+test_*.py
+
+# Uploaded media (must not be versioned)
+backend/uploads/
