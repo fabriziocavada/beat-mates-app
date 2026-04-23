@@ -1838,32 +1838,23 @@ async def upload_coaching_clip(session_id: str, file: UploadFile = File(...), cu
     with open(filepath, "wb") as f:
         f.write(content)
     
-    # Coaching clips MUST be transcoded to H.264 baseline for cross-platform WebView playback.
-    # iPhones capture HEVC/H.265 which renders as a black video in embedded web players.
-    # Force conversion (bypassing the <3MB skip in compress_video).
+    # Compress/re-encode to web-compatible H.264 (fixes iPhone HEVC black video bug)
     import asyncio
-    base = str(filepath).rsplit('.', 1)[0]
-    converted_path = f"{base}_h264.mp4"
-    def _force_h264():
-        cmd = [
-            FFMPEG_PATH, '-y', '-i', str(filepath),
-            '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.1',
-            '-pix_fmt', 'yuv420p',
-            '-preset', 'veryfast', '-crf', '23',
-            '-c:a', 'aac', '-b:a', '96k',
-            '-movflags', '+faststart',
-            '-vf', 'scale=-2:720',
-            converted_path
-        ]
-        r = subprocess.run(cmd, capture_output=True, timeout=60)
-        return r.returncode == 0 and os.path.exists(converted_path)
-    ok = await asyncio.to_thread(_force_h264)
-    if ok:
-        try: os.remove(str(filepath))
-        except Exception: pass
-        os.rename(converted_path, str(filepath))
-    compressed = filename
+    compressed = await asyncio.to_thread(compress_video, str(filepath))
     media_url = f"/api/uploads/{compressed}"
+    
+    # Generate poster thumbnail from first frame (avoids 404 in video player)
+    poster_name = f"poster_{compressed.replace('.mp4', '.jpg')}"
+    poster_path = UPLOADS_DIR / poster_name
+    try:
+        await asyncio.to_thread(
+            lambda: subprocess.run(
+                [FFMPEG_PATH, "-i", str(UPLOADS_DIR / compressed), "-vframes", "1", "-an", "-ss", "0.01", "-update", "1", str(poster_path), "-y"],
+                capture_output=True, timeout=15
+            )
+        )
+    except Exception as e:
+        logger.warning(f"Poster generation failed: {e}")
     
     # Generate poster thumbnail from first frame
     poster_name = f"poster_{compressed.replace('.mp4', '.jpg')}"
@@ -2198,24 +2189,24 @@ def compress_video(input_path: str) -> str:
         base = os.path.splitext(input_path)[0]
         output_path = f"{base}_web.mp4"
         
-        # Skip compression if already small (<3MB)
-        if file_size < 3 * 1024 * 1024:
-            logger.info(f"Video already small ({file_size//1024}KB), skipping compression")
-            return os.path.basename(input_path)
+        # ALWAYS re-encode to H.264 8-bit Main profile for web/WebView compatibility.
+        # DO NOT skip small files: iPhone HEVC (H.265) clips stay in HEVC if not re-encoded,
+        # which renders black in embedded web players (coaching video bug).
+        crf = '28' if file_size > 3 * 1024 * 1024 else '23'
         
         cmd = [
             FFMPEG_PATH, '-y', '-i', input_path,
             '-c:v', 'libx264', '-profile:v', 'main', '-level', '4.0',
             '-pix_fmt', 'yuv420p',
-            '-preset', 'fast', '-crf', '26',
+            '-preset', 'fast', '-crf', crf,
             '-c:a', 'aac', '-b:a', '96k',
             '-movflags', '+faststart',
-            '-vf', 'scale=-2:1080',
+            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
             '-threads', '0',
             '-max_muxing_queue_size', '1024',
             output_path
         ]
-        result = subprocess.run(cmd, capture_output=True, timeout=60)
+        result = subprocess.run(cmd, capture_output=True, timeout=180)
         
         if result.returncode == 0 and os.path.exists(output_path):
             new_size = os.path.getsize(output_path)
@@ -2223,7 +2214,7 @@ def compress_video(input_path: str) -> str:
             new_name = os.path.basename(input_path)
             new_path = os.path.join(os.path.dirname(output_path), new_name)
             os.rename(output_path, new_path)
-            logger.info(f"Compressed video: {file_size//1024}KB -> {new_size//1024}KB ({new_size*100//file_size}%)")
+            logger.info(f"Re-encoded video: {file_size//1024}KB -> {new_size//1024}KB (H.264 8-bit Main)")
             return new_name
         logger.warning(f"Compression failed (rc={result.returncode}). stderr: {(result.stderr or b'')[-300:].decode(errors='replace')}")
         return os.path.basename(input_path)
