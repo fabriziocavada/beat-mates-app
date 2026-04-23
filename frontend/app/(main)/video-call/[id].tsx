@@ -29,6 +29,19 @@ const DAILY_INJECT = `
   document.head.appendChild(css);
 
   function tweakUI() {
+    // AUTO-CLICK the Join button so users enter the call with a single tap
+    // (Daily's prejoin UI still appears because room-level enable_prejoin_ui isn't always honored in WebView).
+    try {
+      var joinButtons = document.querySelectorAll('button');
+      joinButtons.forEach(function(b) {
+        var txt = (b.textContent || b.innerText || '').toLowerCase().trim();
+        if (!b.__autoClicked && (txt === 'join' || txt === 'join meeting' || txt.includes('join meeting') || txt.includes('entra') || txt === 'entra')) {
+          b.__autoClicked = true;
+          setTimeout(function(){ try { b.click(); } catch(e){} }, 200);
+        }
+      });
+    } catch (e) {}
+    
     // Find ALL video elements
     var videos = document.querySelectorAll('video');
     var mainVideo = null;
