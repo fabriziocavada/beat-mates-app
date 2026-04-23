@@ -2465,8 +2465,9 @@ async def video_player_page(filename: str, controls: str = "0", muted: str = "1"
     # Check if file exists locally or use Bunny CDN
     filepath = UPLOADS_DIR / filename
     
-    # Use Bunny CDN if available, otherwise local
-    if BUNNY_CDN_URL:
+    # Coaching clips are saved locally on the backend, not uploaded to Bunny CDN.
+    # Fall back to local /api/media/ endpoint for files that exist on disk.
+    if BUNNY_CDN_URL and not filepath.exists():
         video_url = f"{BUNNY_CDN_URL}/{filename}"
     else:
         video_url = f"/api/media/{filename}"
