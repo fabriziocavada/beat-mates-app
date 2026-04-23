@@ -1707,14 +1707,25 @@ async def accept_live_session(session_id: str, current_user: dict = Depends(get_
     if session["teacher_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
+    # IDEMPOTENT: if session is already active with a valid room, return it (prevents double-click creating 2 rooms).
+    if session.get("status") == "active" and session.get("room_url"):
+        teacher = await db.users.find_one({"id": session["teacher_id"]})
+        session["teacher"] = {
+            "id": teacher["id"],
+            "username": teacher["username"],
+            "name": teacher["name"],
+            "profile_image": teacher.get("profile_image")
+        }
+        return LiveSessionResponse(**clean_doc(session))
+    
     # Create Daily.co room for the video call (15 min limit)
     room_url = None
     room_name = None
     daily_error = None
+    exp_timestamp = int((datetime.utcnow() + timedelta(minutes=15)).timestamp())
     if DAILY_API_KEY:
         try:
             room_name = f"beatmates-{uuid.uuid4().hex[:12]}"
-            exp_timestamp = int((datetime.utcnow() + timedelta(minutes=15)).timestamp())
             async with httpx.AsyncClient(timeout=15.0) as client_http:
                 response = await client_http.post(
                     f"{DAILY_API_URL}/rooms",
@@ -1728,8 +1739,6 @@ async def accept_live_session(session_id: str, current_user: dict = Depends(get_
                             "max_participants": 2,
                             "enable_prejoin_ui": False,
                             "enable_knocking": False,
-                            "start_video_off": False,
-                            "start_audio_off": False
                         }
                     }
                 )
@@ -1769,41 +1778,11 @@ async def accept_live_session(session_id: str, current_user: dict = Depends(get_
         }}
     )
     
-    # Create meeting tokens for student and teacher so Daily skips the prejoin UI.
-    # Without a token, Daily ignores the room-level enable_prejoin_ui=false setting.
-    teacher = await db.users.find_one({"id": session["teacher_id"]})
-    student = await db.users.find_one({"id": session["student_id"]})
-    tokens = {}
-    if DAILY_API_KEY and room_name:
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client_http:
-                for role, user in [("teacher", teacher), ("student", student)]:
-                    if not user: continue
-                    tr = await client_http.post(
-                        f"{DAILY_API_URL}/meeting-tokens",
-                        headers={"Authorization": f"Bearer {DAILY_API_KEY}", "Content-Type": "application/json"},
-                        json={"properties": {
-                            "room_name": room_name,
-                            "user_name": user.get("name") or user.get("username") or role.title(),
-                            "user_id": user["id"],
-                            "exp": exp_timestamp,
-                            "enable_prejoin_ui": False,
-                            "start_video_off": False,
-                            "start_audio_off": False,
-                        }}
-                    )
-                    if tr.status_code == 200:
-                        tokens[f"{role}_token"] = tr.json().get("token")
-        except Exception as e:
-            logger.warning(f"Meeting token creation failed: {e}")
-    
-    if tokens:
-        await db.live_sessions.update_one(
-            {"id": session_id},
-            {"$set": tokens}
-        )
+    # NO MEETING TOKENS for public rooms: they caused auth mismatches and grey video.
+    # Public room + URL param userName is the simplest, most reliable flow.
     
     session = await db.live_sessions.find_one({"id": session_id})
+    teacher = await db.users.find_one({"id": session["teacher_id"]})
     session["teacher"] = {
         "id": teacher["id"],
         "username": teacher["username"],
