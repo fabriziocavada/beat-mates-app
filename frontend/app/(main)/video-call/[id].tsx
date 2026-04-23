@@ -273,12 +273,17 @@ export default function VideoCallScreen() {
 
   const buildRoomUrl = async (session: any): Promise<string | null> => {
     if (!session.room_url) return null;
-    // Add user name + skip prejoin as URL params so Daily doesn't ask again.
     const displayName = encodeURIComponent(
       currentUser?.name || currentUser?.username || 'User'
     );
+    // Pick the correct meeting token based on role.
+    // With a token, Daily skips the prejoin UI (the big "Join" button users complained about).
+    const isTeacher = currentUser?.id === session.teacher_id;
+    const token = isTeacher ? session.teacher_token : session.student_token;
+    const params: string[] = [`userName=${displayName}`];
+    if (token) params.push(`t=${token}`);
     const separator = session.room_url.includes('?') ? '&' : '?';
-    return `${session.room_url}${separator}userName=${displayName}`;
+    return `${session.room_url}${separator}${params.join('&')}`;
   };
 
   useEffect(() => {

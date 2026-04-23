@@ -362,6 +362,8 @@ class LiveSessionResponse(BaseModel):
     amount: float
     room_url: Optional[str] = None
     room_name: Optional[str] = None
+    teacher_token: Optional[str] = None
+    student_token: Optional[str] = None
     started_at: Optional[datetime] = None
     ended_at: Optional[datetime] = None
     created_at: datetime
@@ -1767,8 +1769,41 @@ async def accept_live_session(session_id: str, current_user: dict = Depends(get_
         }}
     )
     
-    session = await db.live_sessions.find_one({"id": session_id})
+    # Create meeting tokens for student and teacher so Daily skips the prejoin UI.
+    # Without a token, Daily ignores the room-level enable_prejoin_ui=false setting.
     teacher = await db.users.find_one({"id": session["teacher_id"]})
+    student = await db.users.find_one({"id": session["student_id"]})
+    tokens = {}
+    if DAILY_API_KEY and room_name:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client_http:
+                for role, user in [("teacher", teacher), ("student", student)]:
+                    if not user: continue
+                    tr = await client_http.post(
+                        f"{DAILY_API_URL}/meeting-tokens",
+                        headers={"Authorization": f"Bearer {DAILY_API_KEY}", "Content-Type": "application/json"},
+                        json={"properties": {
+                            "room_name": room_name,
+                            "user_name": user.get("name") or user.get("username") or role.title(),
+                            "user_id": user["id"],
+                            "exp": exp_timestamp,
+                            "enable_prejoin_ui": False,
+                            "start_video_off": False,
+                            "start_audio_off": False,
+                        }}
+                    )
+                    if tr.status_code == 200:
+                        tokens[f"{role}_token"] = tr.json().get("token")
+        except Exception as e:
+            logger.warning(f"Meeting token creation failed: {e}")
+    
+    if tokens:
+        await db.live_sessions.update_one(
+            {"id": session_id},
+            {"$set": tokens}
+        )
+    
+    session = await db.live_sessions.find_one({"id": session_id})
     session["teacher"] = {
         "id": teacher["id"],
         "username": teacher["username"],
