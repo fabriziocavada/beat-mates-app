@@ -1835,35 +1835,40 @@ async def upload_coaching_clip(session_id: str, file: UploadFile = File(...), cu
     # Compress/re-encode to web-compatible H.264 (fixes iPhone HEVC black video bug)
     import asyncio
     compressed = await asyncio.to_thread(compress_video, str(filepath))
-    media_url = f"/api/uploads/{compressed}"
-    
+    compressed_path = UPLOADS_DIR / compressed
+    media_url = f"/api/uploads/{compressed}"  # Fallback local URL
+
     # Generate poster thumbnail from first frame (avoids 404 in video player)
     poster_name = f"poster_{compressed.replace('.mp4', '.jpg')}"
     poster_path = UPLOADS_DIR / poster_name
     try:
         await asyncio.to_thread(
             lambda: subprocess.run(
-                [FFMPEG_PATH, "-i", str(UPLOADS_DIR / compressed), "-vframes", "1", "-an", "-ss", "0.01", "-update", "1", str(poster_path), "-y"],
+                [FFMPEG_PATH, "-i", str(compressed_path), "-vframes", "1", "-an", "-ss", "0.01", "-update", "1", str(poster_path), "-y"],
                 capture_output=True, timeout=15
             )
         )
     except Exception as e:
         logger.warning(f"Poster generation failed: {e}")
-    
-    # Generate poster thumbnail from first frame
-    poster_name = f"poster_{compressed.replace('.mp4', '.jpg')}"
-    poster_path = UPLOADS_DIR / poster_name
-    try:
-        await asyncio.to_thread(
-            lambda: subprocess.run(
-                [FFMPEG_PATH, "-i", str(UPLOADS_DIR / compressed), "-vframes", "1", "-an", "-ss", "0.01", "-update", "1", str(poster_path), "-y"],
-                capture_output=True, timeout=15
-            )
-        )
-    except Exception as e:
-        logger.warning(f"Poster generation failed: {e}")
-    
+
     poster_url = f"/api/uploads/{poster_name}" if poster_path.exists() else None
+
+    # Upload compressed coaching clip to Bunny CDN for global edge delivery
+    # (fixes black screen for students in Asia/US due to latency from OVH Europe)
+    try:
+        if compressed_path.exists():
+            video_bytes = compressed_path.read_bytes()
+            cdn_url = await upload_image_to_bunny_storage(video_bytes, compressed)
+            if cdn_url:
+                media_url = cdn_url
+                logger.info(f"Coaching clip uploaded to Bunny CDN: {cdn_url}")
+        if poster_path.exists():
+            poster_bytes = poster_path.read_bytes()
+            poster_cdn_url = await upload_image_to_bunny_storage(poster_bytes, poster_name)
+            if poster_cdn_url:
+                poster_url = poster_cdn_url
+    except Exception as e:
+        logger.warning(f"Bunny CDN upload failed for coaching clip, using local URL: {e}")
     
     # Store coaching state
     await db.coaching_sessions.update_one(
