@@ -2252,16 +2252,24 @@ async def upload_file(
     
     # ========== BUNNY CDN UPLOAD ==========
     if is_video:
-        # COMPRESS video with ffmpeg BEFORE uploading to CDN
-        logger.info(f"Compressing video before CDN upload: {filename} ({len(content)} bytes)")
+        # For stories/posts, skip compression if file is already small (<5MB)
+        # Small iPhone clips are already well-compressed; re-encoding wastes 15-20s of user wait time.
+        # Coaching clips still re-encode always (different upload endpoint).
+        logger.info(f"Processing video for CDN upload: {filename} ({len(content)} bytes)")
         temp_input = UPLOADS_DIR / f"temp_{filename}"
         with open(temp_input, 'wb') as f:
             f.write(content)
         
         thumb_cdn_url = None
         try:
-            compressed_name = await asyncio.to_thread(compress_video, str(temp_input))
-            compressed_path = UPLOADS_DIR / compressed_name
+            # Skip FFmpeg re-encoding for small files (fast-path for stories/posts)
+            if len(content) < 5 * 1024 * 1024:
+                logger.info(f"Small video ({len(content)//1024}KB): skipping re-encoding for fast upload")
+                compressed_name = temp_input.name
+                compressed_path = temp_input
+            else:
+                compressed_name = await asyncio.to_thread(compress_video, str(temp_input))
+                compressed_path = UPLOADS_DIR / compressed_name
             if compressed_path.exists():
                 compressed_content = compressed_path.read_bytes()
                 logger.info(f"Compressed: {len(content)} -> {len(compressed_content)} bytes ({len(compressed_content)*100//len(content)}%)")
