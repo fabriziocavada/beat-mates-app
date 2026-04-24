@@ -1,66 +1,65 @@
 # BEAT MATES - Product Requirements Document
 
-## Overview
-Social media mobile app for dancers built with Expo (React Native) + FastAPI + MongoDB.
+## Original Problem Statement
+Social media mobile app per ballerini ("BEAT MATES"):
+- Registrazione/login (Email/Google)
+- Social feed filtrabile per discipline di danza, video autoplay, caroselli
+- Stories Instagram-like e messaggi diretti (Chat)
+- Profili utente con griglia post e shop e-commerce di video lezioni
+- Video lezioni 1-to-1 Live con strumenti di coaching (drawing su video)
+- Lezioni di gruppo con scheduling insegnanti e ingresso via Daily.co
+- Sezione Music con playlist e controlli velocità
+- Push Notifications e Stripe (pagamenti reali + split 80/20 teachers)
+- Ad system (Sponsorizzate) in Feed, Stories e Prerolls
 
-## Core Features Implemented
-- Authentication (Email/JWT)
-- Social Feed with autoplay videos (audio cleanup on unmount)
-- Stories (Instagram-like) with editor, background upload, thumbnail generation
-- Reels (TikTok-style vertical scroll with expo-av)
-- Search/Explore (Instagram grid + category chips + suggestions + video thumbnails)
-- Direct Messaging
-- User Profiles with grid + video thumbnails
-- Video Calls via Daily.co (15 min limit, 60s pending timeout, busy status)
-- Lessons System (Live/Group/Recorded)
-- Bunny CDN for all media (global delivery including Asia)
-- Background upload with progress banner (Instagram-style)
+**Lingua primaria utente**: Italiano
 
-## Performance Architecture
+## Tech Stack
+- **Frontend**: React Native + Expo SDK, TestFlight per produzione, Expo Go per dev
+- **Backend**: FastAPI + MongoDB, deployato su OVH VPS (Ubuntu) via Docker
+- **Media**: BunnyCDN (Storage + Stream) per global edge delivery
+- **Video calls**: Daily.co WebRTC (WebView injection)
+- **Deploy SSH**: `ssh ubuntu@57.128.225.167`, cartella `/home/ubuntu/beat-mates-app`
 
-### Upload Flow (Instagram-style)
-1. User presses "Publish" → App returns to feed IMMEDIATELY
-2. Banner shows "Pubblicazione storia/post..." 
-3. Video sent to VPS `/api/upload` → compressed with ffmpeg (1080p, CRF 26) → uploaded to CDN
-4. Thumbnail auto-generated from first frame
-5. Banner shows "Pubblicato!" when done
+## Completed (Feb 2026 session)
+- ✅ Fix velocità upload storie/post: limite re-encoding FFmpeg alzato da 5MB → 50MB (fast-path per video iPhone HEVC moderni)
+- ✅ Fix coaching black screen Asia: upload clip coaching anche su Bunny CDN (edge globale, latenza 5-10ms Hong Kong vs 250ms OVH)
+- ✅ Deploy backend OVH sbloccato (risolti conflitti git + docker-compose 1.29.2 bug ContainerConfig)
 
-### Video Calls (Robust system)
-- Pending sessions auto-expire after 60 seconds
-- Active sessions max 15 minutes (Daily.co room + DB)
-- Teachers in call or with pending call = busy (red in list)
-- Remaining minutes shown in teacher list
-- Frontend polls every 2s while waiting for teacher to accept
+## Currently Active Fixes (Deployed)
+- Backend OVH: `docker-compose up --build -d` con server.py patchato in loco
+- Coaching uploads ora usano Bunny CDN con fallback locale
 
-### Media Delivery
-- All media on Bunny CDN (beatmates-cd.b-cdn.net) with PoPs in EU, US, Asia
-- Videos compressed server-side to 1080p/CRF26/H.264 Main
-- Thumbnails: thumb_FILENAME.jpg convention on CDN
-- getThumbnailUrl() resolves CDN thumbnails for video posts
+## Known Issues (Pending / Backlog)
+- P1: Mentions list vuota in Story Editor
+- P1: ReviewsPopup.tsx Carousel swipe rotto
+- P1: Share Modal (airplane icon) non funziona
+- P2: Migrazione completa da `expo-av` → `expo-video` (installato ma non usato ovunque)
+- P2: Daily.co brittle WebView injection → dovrebbe migrare a `@daily-co/react-native-daily-js`
 
-## Deployment
-- Backend: OVH VPS (api.beatmates.app) via Docker
-- App: TestFlight (iOS) via EAS Build
-- Database: MongoDB (production on VPS)
-- CDN: Bunny CDN (beatmates-cd.b-cdn.net)
+## Roadmap
+### P1 (prossimi)
+- Stripe Connect integration (pagamenti reali, split 80/20 teachers)
+- Admin Dashboard web (React/Next.js) per gestione utenti/ads/finanze
 
-## Known Issues Fixed This Session
-- Expo Go crash (missing expo-image-manipulator)
-- Reels not playing (embed URLs → direct mp4)
-- Search thumbnails black (now uses getThumbnailUrl)
-- Profile thumbnails black (same fix)
-- Story thumbnails black (ffmpeg first-frame extraction)
-- Photos opening Reels (single tap now only for videos)
-- Music stuck when changing pages (video unload on unmount)
-- Video call "session not active" (polling + timeout)
-- Upload taking 88s (background upload + optimized compression)
-- Video quality too low (480p → 1080p)
-- media_urls with stale embed URLs (admin fix endpoint)
+### P2 (future)
+- Push Notifications native (Expo Notifications / APNs)
+- Social Login Google/Meta
+- AI moderation contenuti inappropriati
+- Refactoring `backend/server.py` (>4400 righe) in router modulari
 
-## Next Tasks (Priority)
-1. Stripe Connect for payments (80/20 split teachers)
-2. Social Login (Google/Apple)
-3. Push Notifications (APNs via Expo)
-4. Admin Dashboard Web App
-5. Story Editor improvements (text/sticker/drawing)
-6. Refactor server.py into modular routers
+## Credentials (Test)
+- Admin/Student: `fabriziocavada@gmail.com` / `abc123!`
+- Teacher: `teacher2@beatmates.app` / `Test1234`
+
+## Key Architecture Notes
+- `backend/server.py` è monolitico (~4400 righe) — da rifattorizzare in router
+- `frontend/app/(main)/video-call/[id].tsx` rollback a versione stabile Marzo 2026 (timer 15min + bottone Annulla)
+- Endpoint coaching: `POST /api/coaching/{session_id}/upload` ora carica su Bunny CDN
+- Endpoint storie: `POST /api/upload` con fast-path <50MB per video
+
+## Deployment Flow (OVH)
+1. Modifica `backend/server.py` locale o via patch script
+2. `sudo docker-compose down && sudo docker-compose up --build -d`
+3. `sudo docker-compose logs --tail=30 backend` per verifica
+4. Test da Expo Go (dev) o TestFlight (prod)
