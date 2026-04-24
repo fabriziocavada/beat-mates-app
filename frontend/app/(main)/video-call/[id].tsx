@@ -217,6 +217,24 @@ export default function VideoCallScreen() {
   const loadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const coachPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const webViewRef = useRef<WebView>(null);
+  
+  // 15-minute session timer (starts when WebView loads, ends the call automatically)
+  const [secondsLeft, setSecondsLeft] = useState(15 * 60);
+  useEffect(() => {
+    if (!webViewReady) return;
+    const tick = setInterval(() => {
+      setSecondsLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(tick);
+          handleEndCall();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [webViewReady]);
+  const formatTime = (s: number) => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
 
   // Block hardware back button (WhatsApp-like)
   useEffect(() => {
@@ -465,6 +483,10 @@ export default function VideoCallScreen() {
       {/* LAYER 2: Our controls - TOP ONLY, no overlap with Daily.co bottom */}
       {!showCoaching && webViewReady && (
         <View style={st.topControls} pointerEvents="box-none">
+          <View style={st.timerBadge} pointerEvents="none">
+            <Ionicons name="time-outline" size={13} color="#FFF" />
+            <Text style={st.timerText}>{formatTime(secondsLeft)}</Text>
+          </View>
           <TouchableOpacity onPress={openCoaching} style={st.topControlBtn} data-testid="coaching-btn">
             <Ionicons name="analytics" size={20} color="#FFF" />
             <Text style={st.topControlLabel}>Coach</Text>
@@ -518,10 +540,25 @@ const st = StyleSheet.create({
     left: 12,
     right: 12,
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     alignItems: 'center',
     gap: 10,
     zIndex: 20,
+  },
+  timerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  timerText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
   topControlBtn: {
     flexDirection: 'row',

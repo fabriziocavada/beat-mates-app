@@ -353,6 +353,11 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
     return (
       <View style={st.container}>
         <View style={st.header}>
+          <TouchableOpacity onPress={onClose} style={st.liveHeaderBtn} data-testid="coaching-cancel-top">
+            <View style={st.liveHeaderDot} />
+            <Ionicons name="videocam" size={14} color="#FFF" />
+            <Text style={st.liveHeaderText}>LIVE</Text>
+          </TouchableOpacity>
           <Text style={st.title} numberOfLines={1}>Coaching Review</Text>
           <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
             {onNewSession && (
@@ -368,6 +373,10 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
               <ActivityIndicator size="large" color={Colors.primary} />
               <Text style={st.emptyText}>Caricamento e compressione video...</Text>
               <Text style={st.emptySubText}>Potrebbe richiedere qualche secondo</Text>
+              <TouchableOpacity style={[st.uploadBtn, { marginTop: 20, backgroundColor: '#333' }]} onPress={onClose} data-testid="coaching-cancel-upload">
+                <Ionicons name="close" size={18} color="#FFF" />
+                <Text style={st.uploadBtnText}>Annulla e torna alla live</Text>
+              </TouchableOpacity>
             </>
           ) : remoteUploading ? (
             <>
@@ -386,6 +395,10 @@ export default function CoachingReview({ sessionId, isTeacher, onClose, onNewSes
               <TouchableOpacity style={st.uploadBtn} onPress={handleUpload} data-testid="coaching-upload-btn">
                 <Ionicons name="cloud-upload-outline" size={18} color="#FFF" />
                 <Text style={st.uploadBtnText}>Carica dalla galleria</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[st.uploadBtn, { marginTop: 12, backgroundColor: '#333' }]} onPress={onClose} data-testid="coaching-cancel-empty">
+                <Ionicons name="arrow-back" size={18} color="#FFF" />
+                <Text style={st.uploadBtnText}>Annulla e torna alla live</Text>
               </TouchableOpacity>
             </>
           )}
