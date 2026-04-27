@@ -20,7 +20,10 @@ interface StoriesBarProps {
 
 export default function StoriesBar({ stories, onStoryPress, onAddStoryPress }: StoriesBarProps) {
   const user = useAuthStore((state) => state.user);
-  
+  const myStoryGroup = stories.find((s) => s.user_id === user?.id);
+  const hasMyStory = !!myStoryGroup;
+  const otherStories = stories.filter((s) => s.user_id !== user?.id);
+
   return (
     <ScrollView
       horizontal
@@ -28,9 +31,18 @@ export default function StoriesBar({ stories, onStoryPress, onAddStoryPress }: S
       style={styles.container}
       contentContainerStyle={styles.content}
     >
-      {/* Add Story */}
-      <TouchableOpacity style={styles.storyItem} onPress={onAddStoryPress}>
-        <View style={styles.addStoryThumb}>
+      {/* Add / Your Story */}
+      <TouchableOpacity
+        style={styles.storyItem}
+        onPress={() => {
+          if (hasMyStory && onStoryPress) onStoryPress(user!.id);
+          else onAddStoryPress?.();
+        }}
+      >
+        <View style={[
+          styles.addStoryThumb,
+          hasMyStory && styles.storyThumbOwn,
+        ]}>
           {user?.profile_image ? (
             <Image
               source={{ uri: getMediaUrl(user.profile_image) || '' }}
@@ -45,11 +57,11 @@ export default function StoriesBar({ stories, onStoryPress, onAddStoryPress }: S
             <Ionicons name="add" size={14} color="#FFF" />
           </View>
         </View>
-        <Text style={styles.storyUsername} numberOfLines={1}>Your Story</Text>
+        <Text style={styles.storyUsername} numberOfLines={1}>{hasMyStory ? 'La tua storia' : 'Aggiungi'}</Text>
       </TouchableOpacity>
       
       {/* Other Stories - Rectangular vertical format */}
-      {stories.map((story) => {
+      {otherStories.map((story) => {
         const firstStory = story.stories?.[0];
         const thumbUri = firstStory?.thumbnail 
           ? getMediaUrl(firstStory.thumbnail)
@@ -150,6 +162,11 @@ const styles = StyleSheet.create({
   },
   storyThumbSeen: {
     borderColor: '#3A3A3C',
+  },
+  storyThumbOwn: {
+    borderColor: '#FF6978',
+    borderStyle: 'solid',
+    borderWidth: 3,
   },
   storyImage: {
     width: '100%',

@@ -183,6 +183,20 @@ function InteractiveQuestionWidget({ content }: { content: string }) {
   );
 }
 
+// Instagram-style time-ago formatter
+function formatTimeAgo(iso?: string): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  const diffMs = Date.now() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'ora';
+  if (diffMin < 60) return `${diffMin}m`;
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return `${diffH}h`;
+  const diffD = Math.floor(diffH / 24);
+  return `${diffD}g`;
+}
+
 type EditorData = {
   texts?: { id: string; text: string; x: number; y: number; color: string; fontSize: number; fontStyle: string; backgroundColor: string | null }[];
   stickers?: { id: string; type: string; content: string; icon?: string; x: number; y: number; scale: number }[];
@@ -345,7 +359,7 @@ function StoryMusicPlayer({ musicUrl, isActive, isPaused }: { musicUrl?: string;
 }
 
 // Video player with pause support and optional music overlay
-function StoryVideoPlayer({ url, isActive, isPaused, hasMusic }: { url: string; isActive: boolean; isPaused?: boolean; hasMusic?: boolean }) {
+function StoryVideoPlayer({ url, isActive, isPaused, hasMusic, onLoadDuration, onEnd }: { url: string; isActive: boolean; isPaused?: boolean; hasMusic?: boolean; onLoadDuration?: (sec: number) => void; onEnd?: () => void }) {
   const [loading, setLoading] = useState(true);
 
   return (
@@ -355,10 +369,18 @@ function StoryVideoPlayer({ url, isActive, isPaused, hasMusic }: { url: string; 
         style={StyleSheet.absoluteFill}
         resizeMode={ResizeMode.COVER}
         shouldPlay={isActive && !isPaused}
-        isLooping
+        isLooping={false}
         isMuted={!!hasMusic} // Mute video if there's background music
-        onLoad={() => setLoading(false)}
-        onPlaybackStatusUpdate={(s: any) => { if (s.isLoaded && loading) setLoading(false); }}
+        onLoad={(s: any) => {
+          setLoading(false);
+          if (s?.durationMillis && onLoadDuration) {
+            onLoadDuration(s.durationMillis / 1000);
+          }
+        }}
+        onPlaybackStatusUpdate={(s: any) => {
+          if (s.isLoaded && loading) setLoading(false);
+          if (s.isLoaded && s.didJustFinish && onEnd) onEnd();
+        }}
       />
       {loading && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
@@ -403,13 +425,16 @@ function StoryImageLoader({ url }: { url: string }) {
 
 // Single user's story page (rendered inside the horizontal pager)
 function UserStoryPage({
-  userStories, storyIdx, progress, isActive, onTap, onClose, onSwipeUp, onSwipeDown, onSendMessage, onLike, onShare, onHoldStart, onHoldEnd, isPaused
+  userStories, storyIdx, progress, isActive, onTap, onClose, onSwipeUp, onSwipeDown, onSendMessage, onLike, onShare, onHoldStart, onHoldEnd, isPaused, isOwner, onVideoLoaded, onVideoEnded
 }: {
   userStories: UserStories; storyIdx: number; progress: number;
   isActive: boolean; onTap: (side: 'left' | 'right') => void; onClose: () => void;
   onSwipeUp: () => void; onSwipeDown: () => void;
   onSendMessage: (message: string) => void; onLike: () => void; onShare: () => void;
   onHoldStart: () => void; onHoldEnd: () => void; isPaused: boolean;
+  isOwner: boolean;
+  onVideoLoaded?: (durationSec: number) => void;
+  onVideoEnded?: () => void;
 }) {
   const story = userStories.stories[storyIdx];
   const [messageText, setMessageText] = useState('');
@@ -517,6 +542,8 @@ function UserStoryPage({
             isActive={isActive} 
             isPaused={isPaused}
             hasMusic={!!story.editor_data?.music?.file_url}
+            onLoadDuration={onVideoLoaded}
+            onEnd={onVideoEnded}
           />
         ) : (
           <StoryImageLoader key={story.id} url={mediaUrl} />
@@ -582,6 +609,7 @@ function UserStoryPage({
             </View>
           )}
           <Text style={styles.username}>{userStories.username}</Text>
+          <Text style={styles.timeAgo}>{formatTimeAgo(story.created_at)}</Text>
           <TouchableOpacity onPress={onClose} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
             <Ionicons name="close" size={28} color="#fff" />
           </TouchableOpacity>
@@ -610,6 +638,23 @@ function UserStoryPage({
               {reactions[currentReactionIdx]?.emoji || '❤️'} {reactions[currentReactionIdx]?.user?.username || ''}
             </Text>
           </View>
+          {isOwner && reactions[currentReactionIdx]?.id && (
+            <TouchableOpacity
+              style={styles.reactionDeleteBtn}
+              onPress={async () => {
+                const r = reactions[currentReactionIdx];
+                if (!r?.id) return;
+                try {
+                  await api.delete(`/stories/${story.id}/reactions/${r.id}`);
+                  setReactions(prev => prev.filter(x => x.id !== r.id));
+                  setCurrentReactionIdx(0);
+                } catch (e) {}
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="trash-outline" size={18} color="#fff" />
+            </TouchableOpacity>
+          )}
         </Animated.View>
       )}
 
@@ -667,6 +712,21 @@ export default function StoryViewerScreen() {
   const [storyAd, setStoryAd] = useState<any>(null);
   const usersViewedBeforeAd = useRef(0);
 
+  // Current user id (for owner-only actions like delete reaction)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  // Real video duration in milliseconds (for accurate progress timing)
+  const videoDurationMs = useRef<number | null>(null);
+
+  // Load current user id once
+  useEffect(() => {
+    (async () => {
+      try {
+        const me = await api.get('/users/me');
+        setCurrentUserId(me.data?.id || null);
+      } catch {}
+    })();
+  }, []);
+
   // Load stories
   useEffect(() => {
     (async () => {
@@ -696,7 +756,8 @@ export default function StoryViewerScreen() {
     setProgress(0);
     const story = allUserStories[currentUserIdx]?.stories[currentStoryIdx];
     const isVid = story?.type === 'video';
-    const duration = isVid ? VIDEO_DURATION : PHOTO_DURATION;
+    // For video stories, use the real video duration if known, otherwise default cap.
+    const duration = isVid ? (videoDurationMs.current || VIDEO_DURATION) : PHOTO_DURATION;
     const interval = 50;
     let elapsed = 0;
     timerRef.current = setInterval(() => {
@@ -709,7 +770,11 @@ export default function StoryViewerScreen() {
   };
 
   useEffect(() => {
-    if (!isLoading && allUserStories.length > 0 && !isScrolling.current) startTimer();
+    if (!isLoading && allUserStories.length > 0 && !isScrolling.current) {
+      // Reset video duration ref when story changes (will be set when video loads)
+      videoDurationMs.current = null;
+      startTimer();
+    }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [currentUserIdx, currentStoryIdx, isLoading, allUserStories]);
 
@@ -977,6 +1042,16 @@ export default function StoryViewerScreen() {
                 onHoldStart={onHoldStart}
                 onHoldEnd={onHoldEnd}
                 isPaused={isPaused}
+                isOwner={!!currentUserId && item.user_id === currentUserId}
+                onVideoLoaded={(durSec) => {
+                  if (index !== currentUserIdx) return;
+                  videoDurationMs.current = Math.max(1000, Math.round(durSec * 1000));
+                  // Restart timer with the real duration
+                  startTimer();
+                }}
+                onVideoEnded={() => {
+                  if (index === currentUserIdx) goNextStory();
+                }}
               />
             </Animated.View>
           );
@@ -1042,7 +1117,8 @@ const styles = StyleSheet.create({
   progressBarFill: { height: '100%', backgroundColor: '#fff', borderRadius: 2 },
   userRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 10 },
   avatar: { width: 32, height: 32, borderRadius: 16, marginRight: 8, borderWidth: 1, borderColor: '#fff' },
-  username: { color: '#fff', fontSize: 14, fontWeight: '600', flex: 1 },
+  username: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  timeAgo: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginLeft: 6, flex: 1 },
   arrowLeft: {
     position: 'absolute', left: 4, top: '50%', marginTop: -25,
     width: 50, height: 50, borderRadius: 25,
@@ -1175,6 +1251,15 @@ const styles = StyleSheet.create({
   },
   reactionsText: {
     fontSize: 14,
+  },
+  reactionDeleteBtn: {
+    marginLeft: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // Story overlay styles
   overlayText: {

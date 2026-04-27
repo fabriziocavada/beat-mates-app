@@ -1271,7 +1271,7 @@ async def get_stories(current_user: dict = Depends(get_current_user)):
     now = datetime.utcnow()
     stories = await db.stories.find({
         "expires_at": {"$gt": now}
-    }, {"_id": 0}).sort("created_at", -1).to_list(100)
+    }, {"_id": 0}).sort("created_at", 1).to_list(100)
     
     # Batch-load all unique users in one query
     user_ids = list(set(s["user_id"] for s in stories))
@@ -1394,6 +1394,20 @@ async def get_story_reactions(story_id: str, current_user: dict = Depends(get_cu
         "reactions": reactions,
         "views_count": story.get("views_count", 0)
     }
+
+
+@api_router.delete("/stories/{story_id}/reactions/{reaction_id}")
+async def delete_story_reaction(story_id: str, reaction_id: str, current_user: dict = Depends(get_current_user)):
+    """Story owner can delete an emoji reaction received on their story."""
+    story = await db.stories.find_one({"id": story_id}, {"_id": 0})
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    if story.get("user_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Only the story owner can delete reactions")
+    result = await db.story_reactions.delete_one({"id": reaction_id, "story_id": story_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Reaction not found")
+    return {"message": "Reaction deleted"}
 
 
 # ==================== AVAILABILITY & BOOKINGS ====================
@@ -2478,9 +2492,10 @@ async def video_player_page(filename: str, controls: str = "0", muted: str = "1"
     # Check if file exists locally or use Bunny CDN
     filepath = UPLOADS_DIR / filename
     
-    # Coaching clips are saved locally on the backend, not uploaded to Bunny CDN.
-    # Fall back to local /api/media/ endpoint for files that exist on disk.
-    if BUNNY_CDN_URL and not filepath.exists():
+    # Coaching clips and stories/posts are uploaded to Bunny CDN (global edge).
+    # Always prefer Bunny CDN to avoid latency for users far from OVH (Asia, US).
+    # Fall back to local /api/media/ only if Bunny is not configured.
+    if BUNNY_CDN_URL:
         video_url = f"{BUNNY_CDN_URL}/{filename}"
     else:
         video_url = f"/api/media/{filename}"
