@@ -151,6 +151,42 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
   // Share modal state
   const [showShareModal, setShowShareModal] = useState(false);
 
+  // Rotating comments preview (Instagram/Meta style)
+  const [previewComments, setPreviewComments] = useState<any[]>([]);
+  const [previewIdx, setPreviewIdx] = useState(0);
+  const previewFade = useRef(new Animated.Value(1)).current;
+
+  // Fetch latest comments to show as preview avatars + rotating text
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!post.comments_count || post.comments_count === 0) {
+        setPreviewComments([]);
+        return;
+      }
+      try {
+        const res = await api.get(`/posts/${post.id}/comments`);
+        if (cancelled) return;
+        const list = Array.isArray(res.data) ? res.data : [];
+        // Take last 5 most recent
+        setPreviewComments(list.slice(0, 5));
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [post.id, post.comments_count]);
+
+  // Rotate through comments every 2.5s
+  useEffect(() => {
+    if (previewComments.length <= 1) return;
+    const interval = setInterval(() => {
+      Animated.timing(previewFade, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+        setPreviewIdx(p => (p + 1) % previewComments.length);
+        Animated.timing(previewFade, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+      });
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [previewComments.length]);
+
   // Build media URLs list - prefer 'media' field for videos (has correct CDN URL)
   // media_urls may contain stale embed URLs from Bunny Stream
   const mediaUrls = (() => {
@@ -394,6 +430,30 @@ export default function PostCard({ post, onUserPress, onCommentPress, onDeletePr
       {/* Footer */}
       <View style={styles.footer}>
         {likesCount > 0 && <Text style={styles.likes}>{likesCount} like</Text>}
+
+        {/* Rotating comments preview (Instagram/Meta style) */}
+        {previewComments.length > 0 && (
+          <Animated.View style={[styles.commentsPreview, { opacity: previewFade }]}>
+            <View style={styles.previewAvatars}>
+              {previewComments.slice(0, 3).map((c, i) => (
+                <View key={c.id || i} style={[styles.previewAvatar, { zIndex: 3 - i, marginLeft: i > 0 ? -8 : 0 }]}>
+                  {c.user?.profile_image ? (
+                    <Image source={{ uri: getMediaUrl(c.user.profile_image) || '' }} style={styles.previewAvatarImg} />
+                  ) : (
+                    <View style={[styles.previewAvatarImg, { backgroundColor: ['#FF6B6B', '#4ECDC4', '#45B7D1'][i] }]} />
+                  )}
+                </View>
+              ))}
+            </View>
+            <TouchableOpacity onPress={() => onCommentPress?.(post.id)} style={{ flex: 1 }}>
+              <Text style={styles.previewText} numberOfLines={1}>
+                <Text style={styles.previewUser}>{previewComments[previewIdx]?.user?.username || ''}</Text>
+                {' '}{previewComments[previewIdx]?.text || ''}
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
+
         {post.caption ? (
           <Text style={styles.caption}><Text style={styles.captionUser}>{post.user?.username} </Text>{post.caption}</Text>
         ) : null}
@@ -442,4 +502,37 @@ const styles = StyleSheet.create({
   caption: { color: '#FFF', fontSize: 13, lineHeight: 18 },
   captionUser: { fontWeight: '600' },
   viewComments: { color: '#888', fontSize: 13, marginTop: 4 },
+  // Rotating comments preview (Instagram/Meta style)
+  commentsPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  previewAvatars: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  previewAvatar: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: '#0a0a1a',
+    overflow: 'hidden',
+  },
+  previewAvatarImg: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 11,
+  },
+  previewText: {
+    color: '#FFF',
+    fontSize: 13,
+    flex: 1,
+  },
+  previewUser: {
+    fontWeight: '600',
+  },
 });
