@@ -183,10 +183,13 @@ function InteractiveQuestionWidget({ content }: { content: string }) {
   );
 }
 
-// Instagram-style time-ago formatter
+// Instagram-style time-ago formatter (treats backend ISO timestamps as UTC)
 function formatTimeAgo(iso?: string): string {
   if (!iso) return '';
-  const date = new Date(iso);
+  // Backend serializes datetime.utcnow() without timezone suffix.
+  // Force UTC by appending 'Z' if no tz info present.
+  const hasTz = /Z|[+-]\d{2}:?\d{2}$/.test(iso);
+  const date = new Date(hasTz ? iso : iso + 'Z');
   const diffMs = Date.now() - date.getTime();
   const diffMin = Math.floor(diffMs / 60000);
   if (diffMin < 1) return 'ora';

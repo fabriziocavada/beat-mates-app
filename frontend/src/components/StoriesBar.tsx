@@ -31,18 +31,9 @@ export default function StoriesBar({ stories, onStoryPress, onAddStoryPress }: S
       style={styles.container}
       contentContainerStyle={styles.content}
     >
-      {/* Add / Your Story */}
-      <TouchableOpacity
-        style={styles.storyItem}
-        onPress={() => {
-          if (hasMyStory && onStoryPress) onStoryPress(user!.id);
-          else onAddStoryPress?.();
-        }}
-      >
-        <View style={[
-          styles.addStoryThumb,
-          hasMyStory && styles.storyThumbOwn,
-        ]}>
+      {/* Add Story (+) - always opens story creator */}
+      <TouchableOpacity style={styles.storyItem} onPress={onAddStoryPress}>
+        <View style={styles.addStoryThumb}>
           {user?.profile_image ? (
             <Image
               source={{ uri: getMediaUrl(user.profile_image) || '' }}
@@ -57,9 +48,38 @@ export default function StoriesBar({ stories, onStoryPress, onAddStoryPress }: S
             <Ionicons name="add" size={14} color="#FFF" />
           </View>
         </View>
-        <Text style={styles.storyUsername} numberOfLines={1}>{hasMyStory ? 'La tua storia' : 'Aggiungi'}</Text>
+        <Text style={styles.storyUsername} numberOfLines={1}>Aggiungi</Text>
       </TouchableOpacity>
-      
+
+      {/* My Story (separate thumb to view own stories) */}
+      {hasMyStory && (
+        <TouchableOpacity
+          style={styles.storyItem}
+          onPress={() => onStoryPress?.(user!.id)}
+        >
+          <View style={[styles.storyThumb, styles.storyThumbOwn]}>
+            {(() => {
+              const first = myStoryGroup!.stories?.[0];
+              const thumbUri = first?.thumbnail
+                ? getMediaUrl(first.thumbnail)
+                : first?.media
+                  ? getMediaUrl(first.media)
+                  : user?.profile_image
+                    ? getMediaUrl(user.profile_image)
+                    : null;
+              return thumbUri ? (
+                <Image source={{ uri: thumbUri, cache: 'force-cache' }} style={styles.storyImage} />
+              ) : (
+                <View style={styles.placeholderImage}>
+                  <Ionicons name="person" size={24} color="#8E8E93" />
+                </View>
+              );
+            })()}
+          </View>
+          <Text style={styles.storyUsername} numberOfLines={1}>La tua storia</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Other Stories - Rectangular vertical format */}
       {otherStories.map((story) => {
         const firstStory = story.stories?.[0];
